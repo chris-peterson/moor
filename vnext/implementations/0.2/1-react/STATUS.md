@@ -58,12 +58,3 @@
 | [UP-2] | Tab width 4 spaces | Done |
 | [UP-3] | Dark theme with distinct hues | Done |
 | [UP-4] | Word wrap off | Done |
-
-## Bonus (not in v0.2 spec)
-
-Carried forward from v0.1 exploration — functional but not specced:
-
-- Directory comparison mode (`kdiff4 dir1 dir2`) with sidebar, bottom navbar, guided review flow
-- 3-way merge engine (diff3.js) and merge UI (MergeView.jsx)
-- Welcome screen with directory/file browse
-- `git difftool --dir-diff` support

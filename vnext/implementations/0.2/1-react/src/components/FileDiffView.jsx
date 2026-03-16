@@ -145,7 +145,7 @@ function CharDiffSpans({ oldStr, newStr, side }) {
   );
 }
 
-function DiffRow({ row, active }) {
+function DiffRow({ row, active, scrollLeft }) {
   const lineNumStyle = {
     width: '48px',
     minWidth: '48px',
@@ -167,6 +167,7 @@ function DiffRow({ row, active }) {
       flex: 1,
       display: 'flex',
       minWidth: 0,
+      overflow: 'hidden',
       background: bg,
     };
   };
@@ -179,6 +180,7 @@ function DiffRow({ row, active }) {
     overflow: 'hidden',
     flex: 1,
     paddingLeft: '8px',
+    transform: scrollLeft ? `translateX(-${scrollLeft}px)` : undefined,
   };
 
   const isModify = row.type === 'modify';
@@ -218,7 +220,7 @@ function DiffRow({ row, active }) {
 
 const BINARY_SENTINEL = '\x00BINARY';
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent }) {
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, onNavigateNext, onNavigatePrev, startAtEnd, onHunkChange }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
@@ -232,9 +234,21 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent })
   const totalHeight = rows.length * ROW_HEIGHT;
   const containerRef = useRef(null);
   const [scrollTop, setScrollTop] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [currentHunk, setCurrentHunk] = useState(0);
   const pendingKey = useRef(null);
+
+  const maxContentWidth = useMemo(() => {
+    const charWidth = 7.8;
+    let maxLen = 0;
+    for (const row of rows) {
+      const leftLen = row.leftLine ? expandTabs(row.leftLine).length : 0;
+      const rightLen = row.rightLine ? expandTabs(row.rightLine).length : 0;
+      maxLen = Math.max(maxLen, leftLen, rightLen);
+    }
+    return maxLen * charWidth + 8;
+  }, [rows]);
 
   const hunkRanges = useMemo(() => {
     const ranges = [];
@@ -261,6 +275,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent })
     return set;
   }, [hunkRanges, currentHunk]);
 
+  useEffect(() => {
+    if (onHunkChange) onHunkChange(currentHunk, hunkRanges.length);
+  }, [currentHunk, hunkRanges.length, onHunkChange]);
+
   const scrollToRow = useCallback((rowIdx) => {
     if (!containerRef.current) return;
     const top = rowIdx * ROW_HEIGHT;
@@ -276,15 +294,24 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent })
 
   useEffect(() => {
     setScrollTop(0);
-    setCurrentHunk(0);
+    setScrollLeft(0);
     if (containerRef.current) containerRef.current.scrollTop = 0;
   }, [leftContent, rightContent]);
 
   useEffect(() => {
     if (hunkStarts.length > 0 && !isBinary) {
-      scrollToRow(hunkStarts[0], true);
+      if (startAtEnd) {
+        const lastIdx = hunkStarts.length - 1;
+        setCurrentHunk(lastIdx);
+        scrollToRow(hunkStarts[lastIdx], true);
+      } else {
+        setCurrentHunk(0);
+        scrollToRow(hunkStarts[0], true);
+      }
+    } else {
+      setCurrentHunk(0);
     }
-  }, [hunkStarts, isBinary, scrollToRow]);
+  }, [hunkStarts, isBinary, scrollToRow, startAtEnd]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -305,25 +332,29 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent })
       switch (e.key) {
         case 'j':
         case 'J':
-        case 'ArrowRight':
-        case 'ArrowDown': {
+        case 'ArrowDown':
+        case 'ArrowRight': {
           e.preventDefault();
           if (currentHunk < hunkStarts.length - 1) {
             const next = currentHunk + 1;
             setCurrentHunk(next);
             scrollToRow(hunkStarts[next], true);
+          } else if (onNavigateNext) {
+            onNavigateNext();
           }
           break;
         }
         case 'k':
         case 'K':
-        case 'ArrowLeft':
-        case 'ArrowUp': {
+        case 'ArrowUp':
+        case 'ArrowLeft': {
           e.preventDefault();
           if (currentHunk > 0) {
             const prev = currentHunk - 1;
             setCurrentHunk(prev);
             scrollToRow(hunkStarts[prev], true);
+          } else if (onNavigatePrev) {
+            onNavigatePrev();
           }
           break;
         }
@@ -336,8 +367,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent })
         }
         case 'q':
         case 'Escape': {
-          e.preventDefault();
-          window.close();
+          if (!onNavigateNext) {
+            e.preventDefault();
+            window.close();
+          }
           break;
         }
       }
@@ -345,7 +378,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent })
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hunkStarts, currentHunk, scrollToRow, totalHeight]);
+  }, [hunkStarts, currentHunk, scrollToRow, totalHeight, onNavigateNext, onNavigatePrev]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -360,6 +393,23 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent })
   const handleScroll = useCallback((e) => {
     setScrollTop(e.target.scrollTop);
   }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      if (e.deltaX !== 0) {
+        e.preventDefault();
+        setScrollLeft(prev => {
+          const panelWidth = (el.clientWidth - 49) / 2;
+          const maxScroll = Math.max(0, maxContentWidth - panelWidth);
+          return Math.max(0, Math.min(maxScroll, prev + e.deltaX));
+        });
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [maxContentWidth]);
 
   const handleMinimapScroll = useCallback((newScrollTop) => {
     if (containerRef.current) {
@@ -411,7 +461,8 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent })
           onScroll={handleScroll}
           style={{
             flex: 1,
-            overflow: 'auto',
+            overflowY: 'auto',
+            overflowX: 'hidden',
             background: 'var(--bg-deep)',
           }}
         >
@@ -423,7 +474,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent })
               right: 0,
             }}>
               {visibleRows.map((row, i) => (
-                <DiffRow key={startIdx + i} row={row} active={activeRowSet.has(startIdx + i)} />
+                <DiffRow key={startIdx + i} row={row} active={activeRowSet.has(startIdx + i)} scrollLeft={scrollLeft} />
               ))}
             </div>
           </div>

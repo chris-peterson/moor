@@ -9,19 +9,27 @@
 
 A fast, beautiful diff viewer optimized for `git difftool`. Opens instantly, shows the diff clearly, closes when done. Keyboard-driven, vim-style navigation.
 
-**Not a merge tool.** Not a directory browser. Those are solved problems (VS Code `--merge`, kdiff3 directory mode). kdiff4 does one thing well: show a two-file diff.
+**Not a merge tool.** That's a solved problem (VS Code `--merge`, kdiff3). kdiff4 does one thing well: show diffs clearly — whether a single file pair or every changed file in a directory.
 
 ---
 
 ## Core Workflow
 
-Git launches kdiff4 for each changed file:
+**Single file:** Git launches kdiff4 for each changed file:
 
 ```bash
 git difftool  # opens kdiff4 once per file, sequentially
 ```
 
 kdiff4 opens, shows the diff, user reviews it, presses `q` to close. Git moves to the next file.
+
+**Directory diff:** Git launches kdiff4 once with all changed files:
+
+```bash
+git difftool --dir-diff  # opens kdiff4 once with all changes
+```
+
+kdiff4 opens a sidebar listing changed files. User navigates between files, reviews each diff, and closes when done.
 
 ---
 
@@ -43,12 +51,24 @@ kdiff4 opens, shows the diff, user reviews it, presses `q` to close. Git moves t
 Vim-style, keyboard-first:
 
 - **[NV-1]** `j` / `k` — next / previous diff hunk
-- **[NV-2]** `J` / `K` (shift) — jump to next / previous diff hunk and center it on screen
-- **[NV-3]** `gg` — jump to top of file
-- **[NV-4]** `G` — jump to bottom of file
-- **[NV-5]** `q` or `Escape` — close (exit with code 0)
-- **[NV-6]** Scroll wheel and trackpad work naturally
-- **[NV-7]** On open, auto-scroll to the first diff hunk
+- **[NV-2]** `gg` — jump to top of file
+- **[NV-3]** `G` — jump to bottom of file
+- **[NV-4]** `q` or `Escape` — close (exit with code 0)
+- **[NV-5]** Scroll wheel and trackpad work naturally
+- **[NV-6]** On open, auto-scroll to the first diff hunk
+
+### Directory Diff (DD)
+
+When launched with two directories (`git difftool --dir-diff`):
+
+- **[DD-1]** Sidebar listing all changed files as a collapsible tree
+- **[DD-2]** File status indicators: modified (M), left-only (L), right-only (R)
+- **[DD-3]** Click a file in the sidebar to view its diff
+- **[DD-4]** `j` / `k` navigate between diff hunks; at the last/first hunk, advance to the next/previous file
+- **[DD-5]** Track which files have been viewed (checkmark in sidebar)
+- **[DD-6]** Progress bar showing changes viewed vs total
+- **[DD-7]** `q` or `Escape` closes only after all files have been viewed
+- **[DD-8]** Ignore common non-content directories (`.git`, `node_modules`, etc.)
 
 ### Diff Algorithm (DA)
 
@@ -80,7 +100,6 @@ Fixed for now, configurable later:
 
 ## Out of Scope
 
-- Directory comparison / tree view (use kdiff3 or VS Code)
 - 3-way merge (use `code --merge` or kdiff3)
 - Configuration UI / settings dialog
 - Remote file access
@@ -98,16 +117,15 @@ git config --global diff.tool kdiff4
 git config --global difftool.kdiff4.cmd '/path/to/kdiff4 "$LOCAL" "$REMOTE"'
 
 # Usage
-git difftool           # review changes file-by-file
-git difftool HEAD~3    # compare against 3 commits ago
-git difftool branch    # compare against a branch
+git difftool              # review changes file-by-file
+git difftool --dir-diff   # review all changes in a single session
+git difftool HEAD~3       # compare against 3 commits ago
+git difftool branch       # compare against a branch
 ```
 
 ---
 
 ## Deferred (Future Versions)
 
-- **Directory comparison mode** — compare two arbitrary directory trees with guided review flow (the 0.1 implementation proved this is valuable but separable)
 - **Syntax highlighting** — language-aware coloring in diff panels
 - **Configurable preferences** — font, colors, ignored patterns
-- **`git difftool --dir-diff` support** — open all changed files in a single session with the review flow from v0.1

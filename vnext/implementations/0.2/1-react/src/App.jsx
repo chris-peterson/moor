@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import FileDiffView from './components/FileDiffView.jsx';
+import ReviewShell from './components/ReviewShell.jsx';
 
 export function App() {
+  const [mode, setMode] = useState('loading');
   const [leftPath, setLeftPath] = useState('');
   const [rightPath, setRightPath] = useState('');
   const [leftContent, setLeftContent] = useState('');
   const [rightContent, setRightContent] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [directoryTree, setDirectoryTree] = useState(null);
 
   const api = window.kdiff4;
 
@@ -16,13 +18,20 @@ export function App() {
       if (!paths?.left || !paths?.right) return;
       setLeftPath(paths.left);
       setRightPath(paths.right);
-      const [l, r] = await Promise.all([
-        api.readFile(paths.left),
-        api.readFile(paths.right),
-      ]);
-      setLeftContent(l);
-      setRightContent(r);
-      setLoading(false);
+
+      if (paths.isDirectory) {
+        const tree = await api.compareDirectories(paths.left, paths.right);
+        setDirectoryTree(tree);
+        setMode('directory');
+      } else {
+        const [l, r] = await Promise.all([
+          api.readFile(paths.left),
+          api.readFile(paths.right),
+        ]);
+        setLeftContent(l);
+        setRightContent(r);
+        setMode('diff');
+      }
     });
   }, [api]);
 
@@ -34,12 +43,26 @@ export function App() {
     overflow: 'hidden',
   };
 
-  if (loading) {
+  if (mode === 'loading') {
     return (
       <div style={{ ...containerStyle, alignItems: 'center', justifyContent: 'center' }}>
         <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-ui)' }}>
           {api ? 'Loading...' : 'Usage: kdiff4 file1 file2'}
         </span>
+      </div>
+    );
+  }
+
+  if (mode === 'directory' && directoryTree) {
+    return (
+      <div style={containerStyle}>
+        <ReviewShell
+          tree={directoryTree}
+          leftPath={leftPath}
+          rightPath={rightPath}
+          api={api}
+          onClose={() => window.close()}
+        />
       </div>
     );
   }

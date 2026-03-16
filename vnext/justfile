@@ -20,9 +20,9 @@ diff *flags: sample-data build (_diff flags)
 
 _diff flags:
     #!/usr/bin/env bash
-    ./bin/kdiff4 {{sample_dir}}/left/src/utils.js {{sample_dir}}/right/src/utils.js &
+    ./bin/kdiff4 {{sample_dir}}/left.js {{sample_dir}}/right.js &
     if echo "{{flags}}" | grep -q -- "--legacy"; then
-        kdiff3 {{sample_dir}}/left/src/utils.js {{sample_dir}}/right/src/utils.js &
+        kdiff3 {{sample_dir}}/left.js {{sample_dir}}/right.js &
     fi
     wait
 
