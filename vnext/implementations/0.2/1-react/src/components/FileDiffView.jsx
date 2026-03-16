@@ -218,7 +218,7 @@ function DiffRow({ row, active }) {
 
 const BINARY_SENTINEL = '\x00BINARY';
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, standalone = true }) {
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
@@ -287,8 +287,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, s
   }, [hunkStarts, isBinary, scrollToRow]);
 
   useEffect(() => {
-    if (!standalone) return;
-
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
 
@@ -347,7 +345,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, s
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [standalone, hunkStarts, currentHunk, scrollToRow, totalHeight]);
+  }, [hunkStarts, currentHunk, scrollToRow, totalHeight]);
 
   useEffect(() => {
     const el = containerRef.current;
