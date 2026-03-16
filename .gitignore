@@ -24,6 +24,11 @@ massif.*
 callgrind.*
 perf.data*
 
+# vnext
+vnext/sample_data/
+vnext/implementations/**/node_modules/
+vnext/implementations/**/dist/
+
 # from kdiff3
 *.BACKUP.*
 *.BASE.*

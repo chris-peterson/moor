@@ -1,0 +1,65 @@
+spec := "0.1"
+impl := "1-react"
+
+impl_dir := "implementations" / spec / impl
+sample_dir := justfile_directory() / "sample_data"
+
+install:
+    cd {{impl_dir}} && npm install
+
+build:
+    cd {{impl_dir}} && ./node_modules/.bin/vite build
+
+test:
+    cd {{impl_dir}} && npm test
+
+run:
+    cd {{impl_dir}} && npx concurrently "npx vite" "npx wait-on http://localhost:5173 && npx electron ."
+
+sample-data:
+    bash scripts/create-sample-data.sh
+
+compare *flags: sample-data (_compare flags)
+
+_compare flags:
+    #!/usr/bin/env bash
+    cd {{impl_dir}} && npx concurrently "npx vite" "npx wait-on http://localhost:5173 && npx electron . -- {{sample_dir}}/left {{sample_dir}}/right" &
+    if echo "{{flags}}" | grep -q -- "--legacy"; then
+        kdiff3 {{sample_dir}}/left {{sample_dir}}/right &
+    fi
+    wait
+
+merge *flags: sample-data (_merge flags)
+
+_merge flags:
+    #!/usr/bin/env bash
+    cd {{impl_dir}} && npx concurrently "npx vite" "npx wait-on http://localhost:5173 && npx electron . -- -m {{sample_dir}}/merge/base.txt {{sample_dir}}/merge/left.txt {{sample_dir}}/merge/right.txt -o {{sample_dir}}/merge/output.txt" &
+    if echo "{{flags}}" | grep -q -- "--legacy"; then
+        kdiff3 {{sample_dir}}/merge/base.txt {{sample_dir}}/merge/left.txt {{sample_dir}}/merge/right.txt -o {{sample_dir}}/merge/output.txt &
+    fi
+    wait
+
+legacy-compare: sample-data
+    kdiff3 {{sample_dir}}/left {{sample_dir}}/right
+
+legacy-merge: sample-data
+    kdiff3 {{sample_dir}}/merge/base.txt {{sample_dir}}/merge/left.txt {{sample_dir}}/merge/right.txt -o {{sample_dir}}/merge/output.txt
+
+gitconfig_repo := home_directory() / "src/getty/cpeterson/gitconfig"
+
+# Install kdiff4 as git's diff and merge tool
+git-install: build
+    git config --global diff.tool kdiff4
+    git config --global difftool.kdiff4.cmd '{{justfile_directory()}}/bin/kdiff4 "$LOCAL" "$REMOTE"'
+    git config --global merge.tool kdiff4
+    git config --global mergetool.kdiff4.cmd '{{justfile_directory()}}/bin/kdiff4 -m "$BASE" "$LOCAL" "$REMOTE" -o "$MERGED"'
+    git config --global mergetool.kdiff4.trustExitCode true
+    @echo "kdiff4 installed as git difftool and mergetool"
+    @echo "Usage: git difftool, git mergetool"
+
+# Restore git config from source-controlled gitconfig repo
+git-uninstall:
+    git config --global --remove-section difftool.kdiff4 2>/dev/null || true
+    git config --global --remove-section mergetool.kdiff4 2>/dev/null || true
+    cd {{gitconfig_repo}} && bash update.sh
+    @echo "Restored git config from {{gitconfig_repo}}"
