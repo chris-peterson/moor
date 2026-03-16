@@ -8,11 +8,11 @@
   --text-muted: #3d4f6a;
   --border: #1e2d44;
   --color-left: #e8a849;
-  --color-left-bg: #e8a84915;
+  --color-left-bg: #e8a84930;
   --color-right: #4ec9b0;
-  --color-right-bg: #4ec9b015;
+  --color-right-bg: #4ec9b030;
   --color-conflict: #f14c4c;
-  --color-conflict-bg: #f14c4c15;
+  --color-conflict-bg: #f14c4c30;
   --color-equal: #2d7d46;
   --color-accent: #7b93db;
   --font-ui: 'Instrument Sans', sans-serif;

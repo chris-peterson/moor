@@ -28,6 +28,7 @@ perf.data*
 vnext/sample_data/
 vnext/implementations/**/node_modules/
 vnext/implementations/**/dist/
+vnext/implementations/**/.vite/
 
 # from kdiff3
 *.BACKUP.*

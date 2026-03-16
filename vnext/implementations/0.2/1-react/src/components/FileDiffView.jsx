@@ -145,7 +145,7 @@ function CharDiffSpans({ oldStr, newStr, side }) {
   );
 }
 
-function DiffRow({ row }) {
+function DiffRow({ row, active }) {
   const lineNumStyle = {
     width: '48px',
     minWidth: '48px',
@@ -186,6 +186,13 @@ function DiffRow({ row }) {
 
   return (
     <div style={{ display: 'flex', height: ROW_HEIGHT + 'px' }}>
+      {active && (
+        <div style={{
+          width: '3px',
+          flexShrink: 0,
+          background: 'var(--color-accent)',
+        }} />
+      )}
       <div style={cellStyle(isModify ? 'delete' : row.type, 'left')}>
         <span style={lineNumStyle}>{row.leftNum ?? ''}</span>
         <span style={codeStyle}>
@@ -222,16 +229,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, s
   const hunks = useMemo(() => isBinary ? [] : computeLineChanges(leftLines, rightLines), [leftLines, rightLines, isBinary]);
   const rows = useMemo(() => isBinary ? [] : buildDisplayRows(leftLines, rightLines, hunks), [leftLines, rightLines, hunks, isBinary]);
 
-  const hunkStarts = useMemo(() => {
-    const starts = [];
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i].type !== 'equal' && (i === 0 || rows[i - 1].type === 'equal')) {
-        starts.push(i);
-      }
-    }
-    return starts;
-  }, [rows]);
-
   const totalHeight = rows.length * ROW_HEIGHT;
   const containerRef = useRef(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -239,20 +236,41 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, s
   const [currentHunk, setCurrentHunk] = useState(0);
   const pendingKey = useRef(null);
 
-  const scrollToRow = useCallback((rowIdx, center) => {
-    if (!containerRef.current) return;
-    if (center) {
-      containerRef.current.scrollTop = Math.max(0, rowIdx * ROW_HEIGHT - viewportHeight / 2);
-    } else {
-      const top = rowIdx * ROW_HEIGHT;
-      const bottom = top + ROW_HEIGHT;
-      const visibleTop = containerRef.current.scrollTop;
-      const visibleBottom = visibleTop + viewportHeight;
-      if (top < visibleTop) {
-        containerRef.current.scrollTop = top;
-      } else if (bottom > visibleBottom) {
-        containerRef.current.scrollTop = bottom - viewportHeight;
+  const hunkRanges = useMemo(() => {
+    const ranges = [];
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i].type !== 'equal' && (i === 0 || rows[i - 1].type === 'equal')) {
+        ranges.push({ start: i, end: i });
+      } else if (rows[i].type !== 'equal' && ranges.length > 0) {
+        ranges[ranges.length - 1].end = i;
       }
+    }
+    return ranges;
+  }, [rows]);
+
+  const hunkStarts = useMemo(() => {
+    return hunkRanges.map(r => r.start);
+  }, [hunkRanges]);
+
+  const activeRowSet = useMemo(() => {
+    if (hunkRanges.length === 0) return new Set();
+    const range = hunkRanges[currentHunk];
+    if (!range) return new Set();
+    const set = new Set();
+    for (let i = range.start; i <= range.end; i++) set.add(i);
+    return set;
+  }, [hunkRanges, currentHunk]);
+
+  const scrollToRow = useCallback((rowIdx) => {
+    if (!containerRef.current) return;
+    const top = rowIdx * ROW_HEIGHT;
+    const bottom = top + ROW_HEIGHT;
+    const visibleTop = containerRef.current.scrollTop;
+    const visibleBottom = visibleTop + viewportHeight;
+    if (top < visibleTop) {
+      containerRef.current.scrollTop = top;
+    } else if (bottom > visibleBottom) {
+      containerRef.current.scrollTop = bottom - viewportHeight;
     }
   }, [viewportHeight]);
 
@@ -288,44 +306,27 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, s
 
       switch (e.key) {
         case 'j':
-        case 'ArrowRight': {
+        case 'J':
+        case 'ArrowRight':
+        case 'ArrowDown': {
           e.preventDefault();
-          const next = hunkStarts.findIndex(s => s * ROW_HEIGHT > containerRef.current.scrollTop + ROW_HEIGHT);
-          if (next !== -1) {
+          if (currentHunk < hunkStarts.length - 1) {
+            const next = currentHunk + 1;
             setCurrentHunk(next);
-            scrollToRow(hunkStarts[next], e.shiftKey || e.key === 'ArrowRight');
+            scrollToRow(hunkStarts[next], true);
           }
           break;
         }
         case 'k':
-        case 'ArrowLeft': {
+        case 'K':
+        case 'ArrowLeft':
+        case 'ArrowUp': {
           e.preventDefault();
-          const scrollPos = containerRef.current.scrollTop;
-          let prev = -1;
-          for (let i = hunkStarts.length - 1; i >= 0; i--) {
-            if (hunkStarts[i] * ROW_HEIGHT < scrollPos - 1) {
-              prev = i;
-              break;
-            }
-          }
-          if (prev !== -1) {
+          if (currentHunk > 0) {
+            const prev = currentHunk - 1;
             setCurrentHunk(prev);
-            scrollToRow(hunkStarts[prev], e.shiftKey || e.key === 'ArrowLeft');
+            scrollToRow(hunkStarts[prev], true);
           }
-          break;
-        }
-        case 'J': {
-          e.preventDefault();
-          const next = Math.min(currentHunk + 1, hunkStarts.length - 1);
-          setCurrentHunk(next);
-          scrollToRow(hunkStarts[next], true);
-          break;
-        }
-        case 'K': {
-          e.preventDefault();
-          const prev = Math.max(currentHunk - 1, 0);
-          setCurrentHunk(prev);
-          scrollToRow(hunkStarts[prev], true);
           break;
         }
         case 'G': {
@@ -424,7 +425,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, s
               right: 0,
             }}>
               {visibleRows.map((row, i) => (
-                <DiffRow key={startIdx + i} row={row} />
+                <DiffRow key={startIdx + i} row={row} active={activeRowSet.has(startIdx + i)} />
               ))}
             </div>
           </div>

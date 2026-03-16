@@ -6,7 +6,7 @@
 #   kdiff4 -m base left right -o output        # 3-way merge
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-IMPL_DIR="$SCRIPT_DIR/../implementations/0.1/1-react"
+IMPL_DIR="$SCRIPT_DIR/../implementations/0.2/1-react"
 
 # Build if dist doesn't exist
 if [ ! -d "$IMPL_DIR/dist" ]; then
