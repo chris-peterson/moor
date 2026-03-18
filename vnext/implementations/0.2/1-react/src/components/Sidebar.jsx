@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 
 const statusColor = (status) => {
   switch (status) {
@@ -116,6 +116,33 @@ export function Sidebar({ tree, files, currentIndex, viewed, onSelect }) {
     if (tree) expandAll(tree);
     return set;
   });
+
+  useEffect(() => {
+    const file = files[currentIndex];
+    if (!file) return;
+    const filePath = file.leftPath || file.rightPath || '';
+    const ancestors = [];
+    const findAncestors = (node, path) => {
+      if (node.type !== 'directory') return false;
+      const key = node.leftPath || node.rightPath || node.name;
+      for (const child of node.children || []) {
+        if (child === file || findAncestors(child, path)) {
+          ancestors.push(key);
+          return true;
+        }
+      }
+      return false;
+    };
+    if (tree) findAncestors(tree);
+    if (ancestors.length > 0) {
+      setExpanded(prev => {
+        if (ancestors.every(k => prev.has(k))) return prev;
+        const next = new Set(prev);
+        for (const k of ancestors) next.add(k);
+        return next;
+      });
+    }
+  }, [currentIndex, files, tree]);
 
   const onToggle = useCallback((key) => {
     setExpanded((prev) => {

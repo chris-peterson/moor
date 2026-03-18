@@ -45,8 +45,9 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
   const [rightContent, setRightContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [navigatedBackward, setNavigatedBackward] = useState(false);
-  const [hunkInfo, setHunkInfo] = useState({ current: 0, total: 0 });
+  const [showToast, setShowToast] = useState(false);
   const [hunkCounts, setHunkCounts] = useState({});
+  const [perFileReviewedHunks, setPerFileReviewedHunks] = useState({});
   const shellRef = useRef(null);
 
   useEffect(() => {
@@ -121,7 +122,38 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     }
   }, [currentIndex, navigateTo]);
 
-  const allViewed = viewed.size >= files.length;
+  const currentReviewedHunks = perFileReviewedHunks[currentIndex] || null;
+  const handleReviewedHunksChange = useCallback((updater) => {
+    setPerFileReviewedHunks(prev => ({
+      ...prev,
+      [currentIndex]: typeof updater === 'function' ? updater(prev[currentIndex] || new Set()) : updater,
+    }));
+  }, [currentIndex]);
+
+  const totalChanges = Object.values(hunkCounts).reduce((a, b) => a + b, 0);
+  const reviewedChanges = (() => {
+    let n = 0;
+    for (let i = 0; i < files.length; i++) {
+      if (viewed.has(i)) {
+        n += hunkCounts[i] || 0;
+      } else {
+        const fileReviewed = perFileReviewedHunks[i];
+        if (fileReviewed) n += fileReviewed.size;
+      }
+    }
+    return n;
+  })();
+  const allReviewed = totalChanges > 0 && reviewedChanges >= totalChanges;
+
+  const prevAllReviewed = useRef(false);
+  useEffect(() => {
+    if (allReviewed && !prevAllReviewed.current && totalChanges > 0) {
+      setShowToast(true);
+      const timer = setTimeout(() => setShowToast(false), 3000);
+      return () => clearTimeout(timer);
+    }
+    prevAllReviewed.current = allReviewed;
+  }, [allReviewed, totalChanges]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -131,8 +163,14 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
         case 'q':
         case 'Escape':
           e.preventDefault();
-          if (allViewed || files.length === 0) {
+          if (allReviewed) {
             onClose();
+          } else {
+            const remaining = totalChanges - reviewedChanges;
+            const confirmed = window.confirm(
+              `${remaining} change${remaining === 1 ? '' : 's'} not yet reviewed. Quit anyway?`
+            );
+            if (confirmed) onClose();
           }
           break;
       }
@@ -140,7 +178,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [allViewed, files.length, onClose]);
+  }, [allReviewed, totalChanges, reviewedChanges, onClose]);
 
   useEffect(() => {
     if (shellRef.current) shellRef.current.focus();
@@ -166,6 +204,25 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
         outline: 'none',
       }}
     >
+      {showToast && (
+        <div style={{
+          position: 'fixed',
+          top: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'var(--color-equal)',
+          color: 'var(--bg-deep)',
+          fontFamily: 'var(--font-ui)',
+          fontSize: '13px',
+          fontWeight: 600,
+          padding: '8px 20px',
+          borderRadius: '6px',
+          zIndex: 1000,
+          animation: 'toast-fade 3s ease-in-out',
+        }}>
+          Review Complete!
+        </div>
+      )}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <Sidebar
           tree={tree}
@@ -195,7 +252,9 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
               onNavigateNext={navigateNext}
               onNavigatePrev={navigatePrev}
               startAtEnd={navigatedBackward}
-              onHunkChange={(current, total) => setHunkInfo({ current, total })}
+              onHunkChange={() => {}}
+              reviewedHunks={currentReviewedHunks}
+              onReviewedHunksChange={handleReviewedHunksChange}
             />
           ) : (
             <div style={{
@@ -214,10 +273,11 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
       <FileNavbar
         files={files}
         currentIndex={currentIndex}
-        allViewed={allViewed}
-        currentHunk={hunkInfo.current}
+        allViewed={allReviewed}
         hunkCounts={hunkCounts}
         viewed={viewed}
+        perFileReviewedHunks={perFileReviewedHunks}
+        currentFilePath={currentFile ? relativePath(currentFile.rightPath || currentFile.leftPath, rightPath || leftPath) : ''}
       />
     </div>
   );

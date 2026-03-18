@@ -1,6 +1,6 @@
 # Implementation 1: React — Status
 
-**Spec:** v0.2 | **Coverage:** 30/30 (100%)
+**Spec:** v0.2 | **Coverage:** 32/32 (100%)
 
 ## Requirement Coverage
 
@@ -17,7 +17,7 @@
 | [FD-7] | Virtual scrolling | Done |
 | [FD-8] | Binary file detection | Done |
 
-### Navigation (NV) — 7/7
+### Navigation (NV) — 9/9
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -28,6 +28,8 @@
 | [NV-5] | q/Escape close | Done |
 | [NV-6] | Scroll wheel/trackpad | Done |
 | [NV-7] | Auto-scroll to first hunk | Done |
+| [NV-8] | Reviewed hunks persist across file navigation | Done |
+| [NV-9] | Reviewed hunks dimmed in code panels and minimap | Done |
 
 ### Diff Algorithm (DA) — 4/4
 

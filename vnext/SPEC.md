@@ -45,6 +45,7 @@ kdiff4 opens a sidebar listing changed files. User navigates between files, revi
 - **[FD-6]** Overview minimap showing location of all changes
 - **[FD-7]** Handle large files efficiently (virtual scrolling)
 - **[FD-8]** Detect binary files and display "Binary files differ" instead of garbled text
+- **[FD-9]** Dim already-reviewed hunks so the eye is drawn to unreviewed changes
 
 ### Navigation (NV)
 
@@ -56,6 +57,7 @@ Vim-style, keyboard-first:
 - **[NV-4]** `q` or `Escape` — close (exit with code 0)
 - **[NV-5]** Scroll wheel and trackpad work naturally
 - **[NV-6]** On open, auto-scroll to the first diff hunk
+- **[NV-7]** `n` — jump to next unreviewed hunk (skipping already-reviewed ones)
 
 ### Directory Diff (DD)
 
@@ -65,10 +67,11 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[DD-2]** File status indicators: modified (M), left-only (L), right-only (R)
 - **[DD-3]** Click a file in the sidebar to view its diff
 - **[DD-4]** `j` / `k` navigate between diff hunks; at the last/first hunk, advance to the next/previous file
-- **[DD-5]** Track which files have been viewed (checkmark in sidebar)
-- **[DD-6]** Progress bar showing changes viewed vs total
-- **[DD-7]** `q` or `Escape` closes only after all files have been viewed
+- **[DD-5]** Track which files have been visited (checkmark in sidebar) — files are a navigation aid, not the primary unit of review
+- **[DD-6]** Progress bar and all status messaging tracks **changes** (diff hunks) reviewed vs total — a file with 10 hunks counts for 10, not 1
+- **[DD-7]** `q` or `Escape` prompts based on **unreviewed changes**, not unvisited files; always allows closing
 - **[DD-8]** Ignore common non-content directories (`.git`, `node_modules`, etc.)
+- **[DD-9]** Display the full file path in the lower-left of the view
 
 ### Diff Algorithm (DA)
 

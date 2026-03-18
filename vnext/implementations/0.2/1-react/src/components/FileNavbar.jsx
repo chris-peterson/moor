@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function FileNavbar({ files, currentIndex, allViewed, currentHunk, hunkCounts, viewed }) {
+export function FileNavbar({ files, currentIndex, allViewed, hunkCounts, viewed, perFileReviewedHunks, currentFilePath }) {
   let viewedChanges = 0;
   let totalChanges = 0;
   for (let i = 0; i < files.length; i++) {
@@ -8,8 +8,9 @@ export function FileNavbar({ files, currentIndex, allViewed, currentHunk, hunkCo
     totalChanges += count;
     if (viewed.has(i)) {
       viewedChanges += count;
-    } else if (i === currentIndex) {
-      viewedChanges += currentHunk;
+    } else {
+      const fileReviewed = perFileReviewedHunks?.[i];
+      if (fileReviewed) viewedChanges += fileReviewed.size;
     }
   }
   const progress = totalChanges > 0 ? viewedChanges / totalChanges : 0;
@@ -29,12 +30,23 @@ export function FileNavbar({ files, currentIndex, allViewed, currentHunk, hunkCo
       color: 'var(--text-primary)',
       gap: '12px',
     }}>
+      {currentFilePath && (
+        <div style={{
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          color: 'var(--text-secondary)',
+          flexShrink: 1,
+          minWidth: 0,
+        }}>
+          {currentFilePath}
+        </div>
+      )}
       <div style={{
-        flex: 1,
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        justifyContent: 'flex-end',
+        flexShrink: 0,
       }}>
         <div style={{
           width: '120px',

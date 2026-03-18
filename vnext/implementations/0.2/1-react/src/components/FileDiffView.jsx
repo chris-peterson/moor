@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useCallback, useState, useEffect, useLayoutEffect } from 'react';
 import { computeLineChanges, diffChars } from '../engine/diff.js';
 import Minimap from './Minimap.jsx';
 
@@ -22,24 +22,20 @@ function areSimilarEnough(a, b) {
   return common / maxLen > 0.4;
 }
 
-const ROW_HEIGHT = Math.ceil(13 * 1.6);
+const ROW_HEIGHT = Math.ceil(15 * 1.6); // 24px — fits active font (15px)
 const OVERSCAN = 20;
+const H_SCROLL_STEP = 40;
+const V_SCROLL_STEP = ROW_HEIGHT * 3;
+const RESIZER_WIDTH = 5;
+const BAR_WIDTH = 3;
 
 function buildDisplayRows(leftLines, rightLines, hunks) {
   const rows = [];
-
   for (let h = 0; h < hunks.length; h++) {
     const hunk = hunks[h];
-
     if (hunk.type === 'equal') {
       for (let o = hunk.oldStart, n = hunk.newStart; o <= hunk.oldEnd; o++, n++) {
-        rows.push({
-          type: 'equal',
-          leftLine: leftLines[o],
-          rightLine: rightLines[n],
-          leftNum: o + 1,
-          rightNum: n + 1,
-        });
+        rows.push({ type: 'equal', leftLine: leftLines[o], rightLine: rightLines[n], leftNum: o + 1, rightNum: n + 1 });
       }
     } else if (hunk.type === 'delete') {
       const next = hunks[h + 1];
@@ -47,95 +43,48 @@ function buildDisplayRows(leftLines, rightLines, hunks) {
         const delCount = hunk.oldEnd - hunk.oldStart + 1;
         const insCount = next.newEnd - next.newStart + 1;
         const paired = Math.min(delCount, insCount);
-
         for (let i = 0; i < paired; i++) {
-          rows.push({
-            type: 'modify',
-            leftLine: leftLines[hunk.oldStart + i],
-            rightLine: rightLines[next.newStart + i],
-            leftNum: hunk.oldStart + i + 1,
-            rightNum: next.newStart + i + 1,
-          });
+          rows.push({ type: 'modify', leftLine: leftLines[hunk.oldStart + i], rightLine: rightLines[next.newStart + i], leftNum: hunk.oldStart + i + 1, rightNum: next.newStart + i + 1 });
         }
         for (let i = paired; i < delCount; i++) {
-          rows.push({
-            type: 'delete',
-            leftLine: leftLines[hunk.oldStart + i],
-            rightLine: null,
-            leftNum: hunk.oldStart + i + 1,
-            rightNum: null,
-          });
+          rows.push({ type: 'delete', leftLine: leftLines[hunk.oldStart + i], rightLine: null, leftNum: hunk.oldStart + i + 1, rightNum: null });
         }
         for (let i = paired; i < insCount; i++) {
-          rows.push({
-            type: 'insert',
-            leftLine: null,
-            rightLine: rightLines[next.newStart + i],
-            leftNum: null,
-            rightNum: next.newStart + i + 1,
-          });
+          rows.push({ type: 'insert', leftLine: null, rightLine: rightLines[next.newStart + i], leftNum: null, rightNum: next.newStart + i + 1 });
         }
         h++;
       } else {
         for (let o = hunk.oldStart; o <= hunk.oldEnd; o++) {
-          rows.push({
-            type: 'delete',
-            leftLine: leftLines[o],
-            rightLine: null,
-            leftNum: o + 1,
-            rightNum: null,
-          });
+          rows.push({ type: 'delete', leftLine: leftLines[o], rightLine: null, leftNum: o + 1, rightNum: null });
         }
       }
     } else if (hunk.type === 'insert') {
       for (let n = hunk.newStart; n <= hunk.newEnd; n++) {
-        rows.push({
-          type: 'insert',
-          leftLine: null,
-          rightLine: rightLines[n],
-          leftNum: null,
-          rightNum: n + 1,
-        });
+        rows.push({ type: 'insert', leftLine: null, rightLine: rightLines[n], leftNum: null, rightNum: n + 1 });
       }
     }
   }
-
   return rows;
 }
 
-function CharDiffSpans({ oldStr, newStr, side }) {
+function CharDiffSpans({ oldStr, newStr, side, dimmed }) {
   const parts = useMemo(() => diffChars(oldStr || '', newStr || ''), [oldStr, newStr]);
-
   return (
     <>
       {parts.map((part, i) => {
         if (side === 'left') {
           if (part.type === 'insert') return null;
-          const highlight = part.type === 'delete';
+          const highlight = !dimmed && part.type === 'delete';
           return (
-            <span
-              key={i}
-              style={highlight ? {
-                background: 'var(--color-left)',
-                color: 'var(--bg-deep)',
-                borderRadius: '2px',
-              } : undefined}
-            >
+            <span key={i} style={highlight ? { background: 'var(--color-left)', color: 'var(--bg-deep)', borderRadius: '2px' } : undefined}>
               {expandTabs(part.value)}
             </span>
           );
         } else {
           if (part.type === 'delete') return null;
-          const highlight = part.type === 'insert';
+          const highlight = !dimmed && part.type === 'insert';
           return (
-            <span
-              key={i}
-              style={highlight ? {
-                background: 'var(--color-right)',
-                color: 'var(--bg-deep)',
-                borderRadius: '2px',
-              } : undefined}
-            >
+            <span key={i} style={highlight ? { background: 'var(--color-right)', color: 'var(--bg-deep)', borderRadius: '2px' } : undefined}>
               {expandTabs(part.value)}
             </span>
           );
@@ -145,37 +94,34 @@ function CharDiffSpans({ oldStr, newStr, side }) {
   );
 }
 
-function DiffRow({ row, active, scrollLeft }) {
+function DiffRow({ row, active, reviewed, scrollLeft, leftWidth, rightWidth, onResizerMouseDown }) {
+  const fontSize = active ? '15px' : '13px';
+  const dimmed = reviewed && !active;
+
   const lineNumStyle = {
     width: '48px',
     minWidth: '48px',
     textAlign: 'right',
     paddingRight: '8px',
     fontFamily: 'var(--font-mono)',
-    fontSize: 'var(--font-size-code)',
-    lineHeight: 'var(--line-height-code)',
+    fontSize,
+    lineHeight: ROW_HEIGHT + 'px',
     color: 'var(--text-muted)',
     userSelect: 'none',
     flexShrink: 0,
   };
 
-  const cellStyle = (type, side) => {
-    let bg = 'transparent';
-    if (type === 'delete' && side === 'left') bg = 'var(--color-left-bg)';
-    if (type === 'insert' && side === 'right') bg = 'var(--color-right-bg)';
-    return {
-      flex: 1,
-      display: 'flex',
-      minWidth: 0,
-      overflow: 'hidden',
-      background: bg,
-    };
+  const cellBg = (type, side) => {
+    if (dimmed) return 'var(--bg-reviewed)';
+    if (type === 'delete' && side === 'left') return 'var(--color-left-bg)';
+    if (type === 'insert' && side === 'right') return 'var(--color-right-bg)';
+    return 'transparent';
   };
 
   const codeStyle = {
     fontFamily: 'var(--font-mono)',
-    fontSize: 'var(--font-size-code)',
-    lineHeight: 'var(--line-height-code)',
+    fontSize,
+    lineHeight: ROW_HEIGHT + 'px',
     whiteSpace: 'pre',
     overflow: 'hidden',
     flex: 1,
@@ -185,33 +131,23 @@ function DiffRow({ row, active, scrollLeft }) {
 
   const isModify = row.type === 'modify';
   const showCharDiff = isModify && areSimilarEnough(row.leftLine, row.rightLine);
+  const leftType = isModify ? 'delete' : row.type;
+  const rightType = isModify ? 'insert' : row.type;
 
   return (
     <div style={{ display: 'flex', height: ROW_HEIGHT + 'px' }}>
-      {active && (
-        <div style={{
-          width: '3px',
-          flexShrink: 0,
-          background: 'var(--color-accent)',
-        }} />
-      )}
-      <div style={cellStyle(isModify ? 'delete' : row.type, 'left')}>
+      <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0, background: active ? 'var(--color-accent)' : 'transparent' }} />
+      <div style={{ width: leftWidth + 'px', display: 'flex', overflow: 'hidden', background: cellBg(leftType, 'left') }}>
         <span style={lineNumStyle}>{row.leftNum ?? ''}</span>
         <span style={codeStyle}>
-          {showCharDiff
-            ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="left" />
-            : expandTabs(row.leftLine)
-          }
+          {showCharDiff ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="left" dimmed={dimmed} /> : expandTabs(row.leftLine)}
         </span>
       </div>
-      <div style={{ width: '1px', background: 'var(--border)', flexShrink: 0 }} />
-      <div style={cellStyle(isModify ? 'insert' : row.type, 'right')}>
+      <div onMouseDown={onResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
+      <div style={{ width: rightWidth + 'px', display: 'flex', overflow: 'hidden', background: cellBg(rightType, 'right') }}>
         <span style={lineNumStyle}>{row.rightNum ?? ''}</span>
         <span style={codeStyle}>
-          {showCharDiff
-            ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="right" />
-            : expandTabs(row.rightLine)
-          }
+          {showCharDiff ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="right" dimmed={dimmed} /> : expandTabs(row.rightLine)}
         </span>
       </div>
     </div>
@@ -220,7 +156,7 @@ function DiffRow({ row, active, scrollLeft }) {
 
 const BINARY_SENTINEL = '\x00BINARY';
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, onNavigateNext, onNavigatePrev, startAtEnd, onHunkChange }) {
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, onNavigateNext, onNavigatePrev, startAtEnd, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
@@ -231,13 +167,25 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
   const hunks = useMemo(() => isBinary ? [] : computeLineChanges(leftLines, rightLines), [leftLines, rightLines, isBinary]);
   const rows = useMemo(() => isBinary ? [] : buildDisplayRows(leftLines, rightLines, hunks), [leftLines, rightLines, hunks, isBinary]);
 
-  const totalHeight = rows.length * ROW_HEIGHT;
-  const containerRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const contentAreaRef = useRef(null);
+  const headerRef = useRef(null);
+  const hScrollRef = useRef(null);
+
   const [scrollTop, setScrollTop] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const [headerHeight, setHeaderHeight] = useState(0);
   const [currentHunk, setCurrentHunk] = useState(0);
+  const [internalReviewedHunks, setInternalReviewedHunks] = useState(() => new Set());
+  const reviewedHunks = externalReviewedHunks || internalReviewedHunks;
+  const setReviewedHunks = onReviewedHunksChange || setInternalReviewedHunks;
+  const [splitPercent, setSplitPercent] = useState(50);
+  const [draggingResizer, setDraggingResizer] = useState(false);
   const pendingKey = useRef(null);
+
+  const totalHeight = rows.length * ROW_HEIGHT;
 
   const maxContentWidth = useMemo(() => {
     const charWidth = 7.8;
@@ -262,9 +210,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
     return ranges;
   }, [rows]);
 
-  const hunkStarts = useMemo(() => {
-    return hunkRanges.map(r => r.start);
-  }, [hunkRanges]);
+  const hunkStarts = useMemo(() => hunkRanges.map(r => r.start), [hunkRanges]);
 
   const activeRowSet = useMemo(() => {
     if (hunkRanges.length === 0) return new Set();
@@ -275,43 +221,66 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
     return set;
   }, [hunkRanges, currentHunk]);
 
+  const reviewedRowSet = useMemo(() => {
+    const set = new Set();
+    for (const hIdx of reviewedHunks) {
+      const range = hunkRanges[hIdx];
+      if (range) {
+        for (let i = range.start; i <= range.end; i++) set.add(i);
+      }
+    }
+    return set;
+  }, [hunkRanges, reviewedHunks]);
+
+  const panelWidth = useMemo(() => {
+    if (!viewportWidth) return 0;
+    return Math.round((viewportWidth - BAR_WIDTH - RESIZER_WIDTH) * splitPercent / 100);
+  }, [viewportWidth, splitPercent]);
+
+  const maxScroll = useMemo(() => Math.max(0, maxContentWidth - panelWidth), [maxContentWidth, panelWidth]);
+
   useEffect(() => {
     if (onHunkChange) onHunkChange(currentHunk, hunkRanges.length);
   }, [currentHunk, hunkRanges.length, onHunkChange]);
 
-  const scrollToRow = useCallback((rowIdx) => {
-    if (!containerRef.current) return;
+  // Scroll to current hunk after render (useLayoutEffect = uses updated state, fires before paint)
+  useLayoutEffect(() => {
+    if (!scrollContainerRef.current || hunkStarts.length === 0) return;
+    const rowIdx = hunkStarts[currentHunk];
+    if (rowIdx == null) return;
     const top = rowIdx * ROW_HEIGHT;
     const bottom = top + ROW_HEIGHT;
-    const visibleTop = containerRef.current.scrollTop;
-    const visibleBottom = visibleTop + viewportHeight;
+    const ev = Math.max(0, viewportHeight - headerHeight);
+    const visibleTop = Math.max(0, scrollContainerRef.current.scrollTop - headerHeight);
+    const visibleBottom = visibleTop + ev;
     if (top < visibleTop) {
-      containerRef.current.scrollTop = top;
+      scrollContainerRef.current.scrollTop = top + headerHeight;
     } else if (bottom > visibleBottom) {
-      containerRef.current.scrollTop = bottom - viewportHeight;
+      scrollContainerRef.current.scrollTop = bottom - ev + headerHeight;
     }
-  }, [viewportHeight]);
+  }, [currentHunk, hunkStarts, viewportHeight, headerHeight]);
+
+  const markCurrentReviewed = useCallback(() => {
+    setReviewedHunks(prev => {
+      const next = new Set(prev);
+      next.add(currentHunk);
+      return next;
+    });
+  }, [currentHunk]);
 
   useEffect(() => {
     setScrollTop(0);
     setScrollLeft(0);
-    if (containerRef.current) containerRef.current.scrollTop = 0;
+    if (!externalReviewedHunks) setInternalReviewedHunks(new Set());
+    setCurrentHunk(startAtEnd && hunkStarts.length > 0 ? hunkStarts.length - 1 : 0);
+    if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
   }, [leftContent, rightContent]);
 
   useEffect(() => {
-    if (hunkStarts.length > 0 && !isBinary) {
-      if (startAtEnd) {
-        const lastIdx = hunkStarts.length - 1;
-        setCurrentHunk(lastIdx);
-        scrollToRow(hunkStarts[lastIdx], true);
-      } else {
-        setCurrentHunk(0);
-        scrollToRow(hunkStarts[0], true);
-      }
-    } else {
-      setCurrentHunk(0);
+    if (hScrollRef.current && hScrollRef.current.scrollLeft !== scrollLeft) {
+      hScrollRef.current.scrollLeft = scrollLeft;
     }
-  }, [hunkStarts, isBinary, scrollToRow, startAtEnd]);
+  }, [scrollLeft]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -320,7 +289,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
       if (e.key === 'g' && !e.shiftKey) {
         if (pendingKey.current === 'g') {
           pendingKey.current = null;
-          scrollToRow(0, false);
+          if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
           return;
         }
         pendingKey.current = 'g';
@@ -331,38 +300,70 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
 
       switch (e.key) {
         case 'j':
-        case 'J':
-        case 'ArrowDown':
-        case 'ArrowRight': {
+        case 'J': {
           e.preventDefault();
+          markCurrentReviewed();
           if (currentHunk < hunkStarts.length - 1) {
-            const next = currentHunk + 1;
-            setCurrentHunk(next);
-            scrollToRow(hunkStarts[next], true);
+            setCurrentHunk(currentHunk + 1);
           } else if (onNavigateNext) {
             onNavigateNext();
           }
           break;
         }
         case 'k':
-        case 'K':
-        case 'ArrowUp':
-        case 'ArrowLeft': {
+        case 'K': {
           e.preventDefault();
+          markCurrentReviewed();
           if (currentHunk > 0) {
-            const prev = currentHunk - 1;
-            setCurrentHunk(prev);
-            scrollToRow(hunkStarts[prev], true);
+            setCurrentHunk(currentHunk - 1);
           } else if (onNavigatePrev) {
             onNavigatePrev();
           }
           break;
         }
+        case 'n':
+        case 'N': {
+          e.preventDefault();
+          let next = -1;
+          for (let i = currentHunk + 1; i < hunkRanges.length; i++) {
+            if (!reviewedHunks.has(i)) { next = i; break; }
+          }
+          if (next >= 0) {
+            markCurrentReviewed();
+            setCurrentHunk(next);
+          } else if (onNavigateNext) {
+            markCurrentReviewed();
+            onNavigateNext();
+          }
+          break;
+        }
+        case 'ArrowDown': {
+          e.preventDefault();
+          if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = Math.min(scrollContainerRef.current.scrollTop + V_SCROLL_STEP, totalHeight);
+          }
+          break;
+        }
+        case 'ArrowUp': {
+          e.preventDefault();
+          if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = Math.max(scrollContainerRef.current.scrollTop - V_SCROLL_STEP, 0);
+          }
+          break;
+        }
+        case 'ArrowRight': {
+          e.preventDefault();
+          setScrollLeft(prev => Math.min(prev + H_SCROLL_STEP, maxScroll));
+          break;
+        }
+        case 'ArrowLeft': {
+          e.preventDefault();
+          setScrollLeft(prev => Math.max(prev - H_SCROLL_STEP, 0));
+          break;
+        }
         case 'G': {
           e.preventDefault();
-          if (containerRef.current) {
-            containerRef.current.scrollTop = totalHeight;
-          }
+          if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = totalHeight;
           break;
         }
         case 'q':
@@ -378,13 +379,15 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hunkStarts, currentHunk, scrollToRow, totalHeight, onNavigateNext, onNavigatePrev]);
+  }, [hunkStarts, hunkRanges, currentHunk, reviewedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev]);
 
   useEffect(() => {
-    const el = containerRef.current;
+    const el = scrollContainerRef.current;
     if (!el) return;
     const observer = new ResizeObserver(() => {
       setViewportHeight(el.clientHeight);
+      setViewportWidth(el.clientWidth);
+      if (headerRef.current) setHeaderHeight(headerRef.current.offsetHeight);
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -395,38 +398,64 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
   }, []);
 
   useEffect(() => {
-    const el = containerRef.current;
+    const el = scrollContainerRef.current;
     if (!el) return;
     const onWheel = (e) => {
       if (e.deltaX !== 0) {
         e.preventDefault();
-        setScrollLeft(prev => {
-          const panelWidth = (el.clientWidth - 49) / 2;
-          const maxScroll = Math.max(0, maxContentWidth - panelWidth);
-          return Math.max(0, Math.min(maxScroll, prev + e.deltaX));
-        });
+        setScrollLeft(prev => Math.max(0, Math.min(maxScroll, prev + e.deltaX)));
       }
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [maxContentWidth]);
+  }, [maxScroll]);
 
   const handleMinimapScroll = useCallback((newScrollTop) => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = newScrollTop;
-    }
+    if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = newScrollTop;
   }, []);
 
-  const startIdx = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-  const endIdx = Math.min(rows.length, Math.ceil((scrollTop + viewportHeight) / ROW_HEIGHT) + OVERSCAN);
+  const handleHScroll = useCallback((e) => {
+    setScrollLeft(e.target.scrollLeft);
+  }, []);
+
+  const handleResizerMouseDown = useCallback((e) => {
+    e.preventDefault();
+    setDraggingResizer(true);
+    const onMouseMove = (e) => {
+      const el = scrollContainerRef.current || contentAreaRef.current;
+      if (!el) return;
+      const left = el.getBoundingClientRect().left;
+      const width = el.clientWidth;
+      const flexSpace = width - BAR_WIDTH - RESIZER_WIDTH;
+      const pct = Math.max(20, Math.min(80, (e.clientX - left - BAR_WIDTH) / flexSpace * 100));
+      setSplitPercent(pct);
+    };
+    const onMouseUp = () => {
+      setDraggingResizer(false);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, []);
+
+  const effectiveViewport = Math.max(0, viewportHeight - headerHeight);
+  const rowScrollTop = Math.max(0, scrollTop - headerHeight);
+  const startIdx = Math.max(0, Math.floor(rowScrollTop / ROW_HEIGHT) - OVERSCAN);
+  const endIdx = Math.min(rows.length, Math.ceil((rowScrollTop + effectiveViewport) / ROW_HEIGHT) + OVERSCAN);
   const visibleRows = rows.slice(startIdx, endIdx);
 
-  const headerStyle = (color) => ({
-    flex: 1,
+  const availableWidth = Math.max(0, viewportWidth - BAR_WIDTH - RESIZER_WIDTH);
+  const leftWidth = Math.round(availableWidth * splitPercent / 100);
+  const rightWidth = availableWidth - leftWidth;
+
+  const headerCellStyle = (color, width) => ({
+    width: width + 'px',
     padding: '5px 16px',
+    boxSizing: 'border-box',
     fontFamily: 'var(--font-mono)',
     fontSize: '11px',
-    color: color,
+    color,
     background: 'var(--bg-panel)',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
@@ -434,60 +463,90 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <div style={headerStyle('var(--color-left)')}>{leftPath || '(empty)'}</div>
-        <div style={{ width: '1px', background: 'var(--border)' }} />
-        <div style={headerStyle('var(--color-right)')}>{rightPath || '(empty)'}</div>
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+      {/* Main column: scroll container (with sticky header) + hscrollbar */}
+      <div ref={contentAreaRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+
+        {/* Full-screen overlay during resizer drag to capture mouse everywhere */}
+        {draggingResizer && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize' }} />
+        )}
+
+        {isBinary ? (
+          <>
+            <div ref={headerRef} style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+              <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0 }} />
+              <div style={headerCellStyle(leftPath === rightPath ? 'transparent' : 'var(--color-left)', leftWidth)}>
+                {leftPath === rightPath ? '' : (leftPath || '(empty)')}
+              </div>
+              <div style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0 }} />
+              <div style={headerCellStyle('var(--color-right)', rightWidth)}>{rightPath || '(empty)'}</div>
+            </div>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-deep)', color: 'var(--text-secondary)', fontFamily: 'var(--font-ui)', fontSize: '14px' }}>
+              Binary files differ
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Scroll container with sticky header inside — guarantees header and rows share same width */}
+            <div
+              ref={scrollContainerRef}
+              onScroll={handleScroll}
+              style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', background: 'var(--bg-deep)' }}
+            >
+              {/* Sticky file path header */}
+              <div ref={headerRef} style={{ position: 'sticky', top: 0, zIndex: 5, display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg-panel)' }}>
+                <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0 }} />
+                <div style={headerCellStyle(leftPath === rightPath ? 'transparent' : 'var(--color-left)', leftWidth)}>
+                  {leftPath === rightPath ? '' : (leftPath || '(empty)')}
+                </div>
+                <div onMouseDown={handleResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
+                <div style={headerCellStyle('var(--color-right)', rightWidth)}>{rightPath || '(empty)'}</div>
+              </div>
+
+              {/* Virtual scroll content */}
+              <div style={{ height: totalHeight + 'px', position: 'relative' }}>
+                <div style={{ position: 'absolute', top: startIdx * ROW_HEIGHT + 'px', left: 0, right: 0 }}>
+                  {visibleRows.map((row, i) => (
+                    <DiffRow
+                      key={startIdx + i}
+                      row={row}
+                      active={activeRowSet.has(startIdx + i)}
+                      reviewed={reviewedRowSet.has(startIdx + i)}
+                      scrollLeft={scrollLeft}
+                      leftWidth={leftWidth}
+                      rightWidth={rightWidth}
+                      onResizerMouseDown={handleResizerMouseDown}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Horizontal scrollbar */}
+            {maxScroll > 0 && (
+              <div
+                ref={hScrollRef}
+                onScroll={handleHScroll}
+                style={{ overflowX: 'scroll', overflowY: 'hidden', height: '12px', flexShrink: 0, background: 'var(--bg-deep)' }}
+              >
+                <div style={{ width: viewportWidth + maxScroll + 'px', height: '1px' }} />
+              </div>
+            )}
+          </>
+        )}
       </div>
 
-      {isBinary ? (
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'var(--bg-deep)',
-          color: 'var(--text-secondary)',
-          fontFamily: 'var(--font-ui)',
-          fontSize: '14px',
-        }}>
-          Binary files differ
-        </div>
-      ) : (
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <div
-          ref={containerRef}
-          onScroll={handleScroll}
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            background: 'var(--bg-deep)',
-          }}
-        >
-          <div style={{ height: totalHeight + 'px', position: 'relative' }}>
-            <div style={{
-              position: 'absolute',
-              top: startIdx * ROW_HEIGHT + 'px',
-              left: 0,
-              right: 0,
-            }}>
-              {visibleRows.map((row, i) => (
-                <DiffRow key={startIdx + i} row={row} active={activeRowSet.has(startIdx + i)} scrollLeft={scrollLeft} />
-              ))}
-            </div>
-          </div>
-        </div>
-
+      {/* Minimap — sibling of the main column, not inside it */}
+      {!isBinary && (
         <Minimap
           rows={rows}
           totalHeight={totalHeight}
           viewportHeight={viewportHeight}
           scrollTop={scrollTop}
           onScrollTo={handleMinimapScroll}
+          reviewedRows={reviewedRowSet}
         />
-      </div>
       )}
     </div>
   );

@@ -10,7 +10,7 @@ const typeToColor = {
   equal: 'transparent',
 };
 
-export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, onScrollTo }) {
+export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, onScrollTo, reviewedRows }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const [containerHeight, setContainerHeight] = useState(0);
@@ -53,12 +53,14 @@ export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, onScroll
       const color = style.getPropertyValue(varName).trim();
       if (!color) continue;
 
+      ctx.globalAlpha = reviewedRows && reviewedRows.has(i) ? 0.5 : 1;
       ctx.fillStyle = color;
       const y = i * rowHeight;
       const h = Math.max(1, rowHeight);
       ctx.fillRect(0, y, MINIMAP_WIDTH, h);
     }
-  }, [colorMap, containerHeight, rows.length]);
+    ctx.globalAlpha = 1;
+  }, [colorMap, containerHeight, rows.length, reviewedRows]);
 
   const viewportIndicatorTop = scrollTop * scale;
   const viewportIndicatorHeight = Math.max(10, viewportHeight * scale);
