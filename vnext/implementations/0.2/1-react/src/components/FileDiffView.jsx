@@ -94,7 +94,7 @@ function CharDiffSpans({ oldStr, newStr, side, dimmed }) {
   );
 }
 
-function DiffRow({ row, active, reviewed, scrollLeft, leftWidth, rightWidth, onResizerMouseDown }) {
+function DiffRow({ row, active, reviewed, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick }) {
   const fontSize = active ? '15px' : '13px';
   const dimmed = reviewed && !active;
 
@@ -135,7 +135,7 @@ function DiffRow({ row, active, reviewed, scrollLeft, leftWidth, rightWidth, onR
   const rightType = isModify ? 'insert' : row.type;
 
   return (
-    <div style={{ display: 'flex', height: ROW_HEIGHT + 'px' }}>
+    <div onClick={row.type !== 'equal' ? onClick : undefined} style={{ display: 'flex', height: ROW_HEIGHT + 'px', cursor: row.type !== 'equal' ? 'pointer' : 'default' }}>
       <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0, background: active ? 'var(--color-accent)' : 'transparent' }} />
       <div style={{ width: leftWidth + 'px', display: 'flex', overflow: 'hidden', background: cellBg(leftType, 'left') }}>
         <span style={lineNumStyle}>{row.leftNum ?? ''}</span>
@@ -171,6 +171,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
   const contentAreaRef = useRef(null);
   const headerRef = useRef(null);
   const hScrollRef = useRef(null);
+  const lastReviewedHunk = useRef(null);
 
   const [scrollTop, setScrollTop] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
@@ -183,8 +184,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
   const setReviewedHunks = onReviewedHunksChange || setInternalReviewedHunks;
   const [splitPercent, setSplitPercent] = useState(50);
   const [draggingResizer, setDraggingResizer] = useState(false);
-  const pendingKey = useRef(null);
-
   const totalHeight = rows.length * ROW_HEIGHT;
 
   const maxContentWidth = useMemo(() => {
@@ -211,6 +210,16 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
   }, [rows]);
 
   const hunkStarts = useMemo(() => hunkRanges.map(r => r.start), [hunkRanges]);
+
+  const rowToHunk = useMemo(() => {
+    const map = new Map();
+    for (let h = 0; h < hunkRanges.length; h++) {
+      for (let i = hunkRanges[h].start; i <= hunkRanges[h].end; i++) {
+        map.set(i, h);
+      }
+    }
+    return map;
+  }, [hunkRanges]);
 
   const activeRowSet = useMemo(() => {
     if (hunkRanges.length === 0) return new Set();
@@ -261,12 +270,27 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
   }, [currentHunk, hunkStarts, viewportHeight, headerHeight]);
 
   const markCurrentReviewed = useCallback(() => {
+    lastReviewedHunk.current = currentHunk;
     setReviewedHunks(prev => {
       const next = new Set(prev);
       next.add(currentHunk);
       return next;
     });
   }, [currentHunk]);
+
+  const handleRowClick = useCallback((rowIdx) => {
+    const hIdx = rowToHunk.get(rowIdx);
+    if (hIdx == null) return;
+    if (hIdx === currentHunk) {
+      setReviewedHunks(prev => {
+        const next = new Set(prev);
+        next.add(currentHunk);
+        return next;
+      });
+    } else {
+      setCurrentHunk(hIdx);
+    }
+  }, [rowToHunk, currentHunk, setReviewedHunks]);
 
   useEffect(() => {
     setScrollTop(0);
@@ -285,18 +309,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
-
-      if (e.key === 'g' && !e.shiftKey) {
-        if (pendingKey.current === 'g') {
-          pendingKey.current = null;
-          if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
-          return;
-        }
-        pendingKey.current = 'g';
-        setTimeout(() => { pendingKey.current = null; }, 500);
-        return;
-      }
-      pendingKey.current = null;
 
       switch (e.key) {
         case 'j':
@@ -318,22 +330,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
             setCurrentHunk(currentHunk - 1);
           } else if (onNavigatePrev) {
             onNavigatePrev();
-          }
-          break;
-        }
-        case 'n':
-        case 'N': {
-          e.preventDefault();
-          let next = -1;
-          for (let i = currentHunk + 1; i < hunkRanges.length; i++) {
-            if (!reviewedHunks.has(i)) { next = i; break; }
-          }
-          if (next >= 0) {
-            markCurrentReviewed();
-            setCurrentHunk(next);
-          } else if (onNavigateNext) {
-            markCurrentReviewed();
-            onNavigateNext();
           }
           break;
         }
@@ -361,9 +357,18 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
           setScrollLeft(prev => Math.max(prev - H_SCROLL_STEP, 0));
           break;
         }
-        case 'G': {
+        case 'u': {
           e.preventDefault();
-          if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = totalHeight;
+          if (lastReviewedHunk.current != null) {
+            const target = lastReviewedHunk.current;
+            setReviewedHunks(prev => {
+              const next = new Set(prev);
+              next.delete(target);
+              return next;
+            });
+            setCurrentHunk(target);
+            lastReviewedHunk.current = null;
+          }
           break;
         }
         case 'q':
@@ -507,18 +512,22 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
               {/* Virtual scroll content */}
               <div style={{ height: totalHeight + 'px', position: 'relative' }}>
                 <div style={{ position: 'absolute', top: startIdx * ROW_HEIGHT + 'px', left: 0, right: 0 }}>
-                  {visibleRows.map((row, i) => (
-                    <DiffRow
-                      key={startIdx + i}
-                      row={row}
-                      active={activeRowSet.has(startIdx + i)}
-                      reviewed={reviewedRowSet.has(startIdx + i)}
-                      scrollLeft={scrollLeft}
-                      leftWidth={leftWidth}
-                      rightWidth={rightWidth}
-                      onResizerMouseDown={handleResizerMouseDown}
-                    />
-                  ))}
+                  {visibleRows.map((row, i) => {
+                    const idx = startIdx + i;
+                    return (
+                      <DiffRow
+                        key={idx}
+                        row={row}
+                        active={activeRowSet.has(idx)}
+                        reviewed={reviewedRowSet.has(idx)}
+                        scrollLeft={scrollLeft}
+                        leftWidth={leftWidth}
+                        rightWidth={rightWidth}
+                        onResizerMouseDown={handleResizerMouseDown}
+                        onClick={() => handleRowClick(idx)}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             </div>

@@ -31,11 +31,7 @@ gitconfig_repo := home_directory() / "src/getty/cpeterson/gitconfig"
 git-install: build
     git config --global diff.tool kdiff4
     git config --global difftool.kdiff4.cmd '{{justfile_directory()}}/bin/kdiff4 "$LOCAL" "$REMOTE"'
-    git config --global merge.tool vscode
-    git config --global mergetool.vscode.cmd 'code --wait $MERGED'
-    @echo "Installed: diff.tool=kdiff4, merge.tool=vscode"
 
 git-uninstall:
     git config --global --remove-section difftool.kdiff4 2>/dev/null || true
     cd {{gitconfig_repo}} && bash update.sh
-    @echo "Restored git config from {{gitconfig_repo}}"

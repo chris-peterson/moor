@@ -1,6 +1,6 @@
 # Implementation 1: React — Status
 
-**Spec:** v0.2 | **Coverage:** 32/32 (100%)
+**Spec:** v0.2 | **Coverage:** 30/30 (100%)
 
 ## Requirement Coverage
 
@@ -17,19 +17,17 @@
 | [FD-7] | Virtual scrolling | Done |
 | [FD-8] | Binary file detection | Done |
 
-### Navigation (NV) — 9/9
+### Navigation (NV) — 7/7
 
 | Req | Description | Status |
 |-----|-------------|--------|
 | [NV-1] | j/k next/prev hunk | Done |
-| [NV-2] | J/K jump + center | Done |
-| [NV-3] | gg top of file | Done |
-| [NV-4] | G bottom of file | Done |
-| [NV-5] | q/Escape close | Done |
-| [NV-6] | Scroll wheel/trackpad | Done |
-| [NV-7] | Auto-scroll to first hunk | Done |
-| [NV-8] | Reviewed hunks persist across file navigation | Done |
-| [NV-9] | Reviewed hunks dimmed in code panels and minimap | Done |
+| [NV-2] | q/Escape close | Done |
+| [NV-3] | Scroll wheel/trackpad | Done |
+| [NV-4] | Auto-scroll to first hunk | Done |
+| [NV-5] | Reviewed hunks persist across file navigation | Done |
+| [NV-6] | Reviewed hunks dimmed in code panels and minimap | Done |
+| [NV-7] | u undo (mark current hunk unreviewed) | Done |
 
 ### Diff Algorithm (DA) — 4/4
 

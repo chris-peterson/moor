@@ -52,12 +52,10 @@ kdiff4 opens a sidebar listing changed files. User navigates between files, revi
 Vim-style, keyboard-first:
 
 - **[NV-1]** `j` / `k` — next / previous diff hunk
-- **[NV-2]** `gg` — jump to top of file
-- **[NV-3]** `G` — jump to bottom of file
-- **[NV-4]** `q` or `Escape` — close (exit with code 0)
-- **[NV-5]** Scroll wheel and trackpad work naturally
-- **[NV-6]** On open, auto-scroll to the first diff hunk
-- **[NV-7]** `n` — jump to next unreviewed hunk (skipping already-reviewed ones)
+- **[NV-2]** `q` or `Escape` — close (exit with code 0)
+- **[NV-3]** Scroll wheel and trackpad work naturally
+- **[NV-4]** On open, auto-scroll to the first diff hunk
+- **[NV-5]** `u` — undo: mark the current hunk as unreviewed
 
 ### Directory Diff (DD)
 
