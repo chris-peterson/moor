@@ -156,6 +156,29 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
   }, [allReviewed, totalChanges]);
 
   useEffect(() => {
+    const unreviewed = totalChanges - reviewedChanges - totalRejected;
+    window.__kdiff4QuitState = {
+      rejected: totalRejected,
+      unreviewed: Math.max(0, unreviewed),
+    };
+    return () => { window.__kdiff4QuitState = null; };
+  }, [totalChanges, reviewedChanges, totalRejected]);
+
+  const confirmAndClose = useCallback(() => {
+    const state = window.__kdiff4QuitState;
+    const parts = [];
+    if (state?.rejected > 0) parts.push(`${state.rejected} rejected`);
+    if (state?.unreviewed > 0) parts.push(`${state.unreviewed} unreviewed`);
+    if (parts.length === 0 || window.confirm(`${parts.join(', ')} change${(state.rejected + state.unreviewed) === 1 ? '' : 's'}.\n\nQuit anyway?`)) {
+      if (window.kdiff4?.forceClose) {
+        window.kdiff4.forceClose();
+      } else {
+        onClose();
+      }
+    }
+  }, [onClose]);
+
+  useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
 
@@ -163,24 +186,14 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
         case 'q':
         case 'Escape':
           e.preventDefault();
-          if (totalRejected > 0) {
-            window.alert(`${totalRejected} rejected change${totalRejected === 1 ? '' : 's'} — resolve with Shift+R before closing.`);
-          } else if (allReviewed) {
-            onClose();
-          } else {
-            const remaining = totalChanges - reviewedChanges;
-            const confirmed = window.confirm(
-              `${remaining} change${remaining === 1 ? '' : 's'} not yet reviewed. Quit anyway?`
-            );
-            if (confirmed) onClose();
-          }
+          confirmAndClose();
           break;
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [allReviewed, totalChanges, reviewedChanges, totalRejected, onClose]);
+  }, [confirmAndClose]);
 
   useEffect(() => {
     if (shellRef.current) shellRef.current.focus();

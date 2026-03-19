@@ -2,6 +2,21 @@ import React, { useState, useEffect, useCallback } from 'react';
 import FileDiffView from './components/FileDiffView.jsx';
 import ReviewShell from './components/ReviewShell.jsx';
 
+function buildQuitMessage() {
+  const state = window.__kdiff4QuitState;
+  if (!state) return null;
+
+  const parts = [];
+  if (state.rejected > 0) {
+    parts.push(`${state.rejected} rejected`);
+  }
+  if (state.unreviewed > 0) {
+    parts.push(`${state.unreviewed} unreviewed`);
+  }
+  if (parts.length === 0) return null;
+  return `${parts.join(', ')} change${(state.rejected + state.unreviewed) === 1 ? '' : 's'}.\n\nQuit anyway?`;
+}
+
 export function App() {
   const [mode, setMode] = useState('loading');
   const [leftPath, setLeftPath] = useState('');
@@ -31,6 +46,16 @@ export function App() {
         setLeftContent(l);
         setRightContent(r);
         setMode('diff');
+      }
+    });
+  }, [api]);
+
+  useEffect(() => {
+    if (!api?.onCloseRequested) return;
+    api.onCloseRequested(() => {
+      const message = buildQuitMessage();
+      if (!message || window.confirm(message)) {
+        api.forceClose();
       }
     });
   }, [api]);
