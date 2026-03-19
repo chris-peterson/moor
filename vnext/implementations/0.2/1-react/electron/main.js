@@ -21,6 +21,9 @@ function parseLaunchArgs() {
 }
 
 app.whenReady().then(async () => {
+  const { VSCodeNavigator } = await import('./vscode-navigator.js');
+  const navigator = new VSCodeNavigator();
+
   ipcMain.handle('read-file', async (_event, { filePath }) => {
     const buf = await fs.readFile(filePath);
     if (buf.includes(0)) return '\x00BINARY';
@@ -30,6 +33,13 @@ app.whenReady().then(async () => {
   ipcMain.handle('compare-directories', async (_event, { leftPath, rightPath }) => {
     const { compareDirectories } = await import('../src/engine/directory.js');
     return compareDirectories(leftPath, rightPath);
+  });
+
+  ipcMain.handle('open-in-editor', async (_event, { filePath, line, column }) => {
+    if (path.isAbsolute(filePath)) {
+      return navigator.openAbsolutePath(filePath, line, column);
+    }
+    return navigator.openAtLine(filePath, line, column);
   });
 
   mainWindow = new BrowserWindow({
@@ -63,6 +73,19 @@ app.whenReady().then(async () => {
   } else {
     await mainWindow.loadURL('http://localhost:5173');
   }
+
+  let forceClose = false;
+  ipcMain.on('force-close', () => {
+    forceClose = true;
+    mainWindow.close();
+  });
+
+  mainWindow.on('close', (e) => {
+    if (!forceClose) {
+      e.preventDefault();
+      mainWindow.webContents.send('close-requested');
+    }
+  });
 
   mainWindow.maximize();
   mainWindow.show();

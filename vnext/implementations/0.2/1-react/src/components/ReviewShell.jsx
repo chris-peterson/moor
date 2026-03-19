@@ -40,7 +40,6 @@ function flattenTree(node, list = []) {
 export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
   const files = useMemo(() => flattenTree(tree), [tree]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [viewed, setViewed] = useState(() => new Set());
   const [leftContent, setLeftContent] = useState('');
   const [rightContent, setRightContent] = useState('');
   const [loading, setLoading] = useState(true);
@@ -48,6 +47,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
   const [showToast, setShowToast] = useState(false);
   const [hunkCounts, setHunkCounts] = useState({});
   const [perFileReviewedHunks, setPerFileReviewedHunks] = useState({});
+  const [perFileRejectedHunks, setPerFileRejectedHunks] = useState({});
   const shellRef = useRef(null);
 
   useEffect(() => {
@@ -92,26 +92,27 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     }
   }, [currentFile, loadFile]);
 
+  const viewed = useMemo(() => {
+    const set = new Set();
+    for (let i = 0; i < files.length; i++) {
+      const count = hunkCounts[i];
+      const reviewed = perFileReviewedHunks[i];
+      if (count > 0 && reviewed && reviewed.size >= count) {
+        set.add(i);
+      }
+    }
+    return set;
+  }, [files, hunkCounts, perFileReviewedHunks]);
+
   const navigateTo = useCallback((index) => {
     if (index < 0 || index >= files.length) return;
-    setViewed((prev) => {
-      const next = new Set(prev);
-      next.add(currentIndex);
-      return next;
-    });
     setCurrentIndex(index);
-  }, [files.length, currentIndex]);
+  }, [files.length]);
 
   const navigateNext = useCallback(() => {
     setNavigatedBackward(false);
     if (currentIndex < files.length - 1) {
       navigateTo(currentIndex + 1);
-    } else {
-      setViewed((prev) => {
-        const next = new Set(prev);
-        next.add(currentIndex);
-        return next;
-      });
     }
   }, [currentIndex, files.length, navigateTo]);
 
@@ -130,19 +131,18 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     }));
   }, [currentIndex]);
 
+  const currentRejectedHunks = perFileRejectedHunks[currentIndex] || null;
+  const handleRejectedHunksChange = useCallback((updater) => {
+    setPerFileRejectedHunks(prev => ({
+      ...prev,
+      [currentIndex]: typeof updater === 'function' ? updater(prev[currentIndex] || new Set()) : updater,
+    }));
+  }, [currentIndex]);
+
+  const totalRejected = Object.values(perFileRejectedHunks).reduce((n, s) => n + s.size, 0);
+
   const totalChanges = Object.values(hunkCounts).reduce((a, b) => a + b, 0);
-  const reviewedChanges = (() => {
-    let n = 0;
-    for (let i = 0; i < files.length; i++) {
-      if (viewed.has(i)) {
-        n += hunkCounts[i] || 0;
-      } else {
-        const fileReviewed = perFileReviewedHunks[i];
-        if (fileReviewed) n += fileReviewed.size;
-      }
-    }
-    return n;
-  })();
+  const reviewedChanges = Object.values(perFileReviewedHunks).reduce((n, s) => n + s.size, 0);
   const allReviewed = totalChanges > 0 && reviewedChanges >= totalChanges;
 
   const prevAllReviewed = useRef(false);
@@ -163,7 +163,9 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
         case 'q':
         case 'Escape':
           e.preventDefault();
-          if (allReviewed) {
+          if (totalRejected > 0) {
+            window.alert(`${totalRejected} rejected change${totalRejected === 1 ? '' : 's'} — resolve with Shift+R before closing.`);
+          } else if (allReviewed) {
             onClose();
           } else {
             const remaining = totalChanges - reviewedChanges;
@@ -178,7 +180,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [allReviewed, totalChanges, reviewedChanges, onClose]);
+  }, [allReviewed, totalChanges, reviewedChanges, totalRejected, onClose]);
 
   useEffect(() => {
     if (shellRef.current) shellRef.current.focus();
@@ -255,6 +257,8 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
               onHunkChange={() => {}}
               reviewedHunks={currentReviewedHunks}
               onReviewedHunksChange={handleReviewedHunksChange}
+              rejectedHunks={currentRejectedHunks}
+              onRejectedHunksChange={handleRejectedHunksChange}
             />
           ) : (
             <div style={{

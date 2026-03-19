@@ -94,9 +94,13 @@ function CharDiffSpans({ oldStr, newStr, side, dimmed }) {
   );
 }
 
-function DiffRow({ row, active, reviewed, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick }) {
+function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick }) {
   const fontSize = active ? '15px' : '13px';
   const dimmed = reviewed && !active;
+
+  const barColor = active
+    ? (rejected ? 'var(--color-conflict)' : 'var(--color-accent)')
+    : (rejected ? 'var(--color-conflict)' : 'transparent');
 
   const lineNumStyle = {
     width: '48px',
@@ -112,6 +116,7 @@ function DiffRow({ row, active, reviewed, scrollLeft, leftWidth, rightWidth, onR
   };
 
   const cellBg = (type, side) => {
+    if (rejected) return 'var(--color-conflict-bg)';
     if (dimmed) return 'var(--bg-reviewed)';
     if (type === 'delete' && side === 'left') return 'var(--color-left-bg)';
     if (type === 'insert' && side === 'right') return 'var(--color-right-bg)';
@@ -136,7 +141,7 @@ function DiffRow({ row, active, reviewed, scrollLeft, leftWidth, rightWidth, onR
 
   return (
     <div onClick={row.type !== 'equal' ? onClick : undefined} style={{ display: 'flex', height: ROW_HEIGHT + 'px', cursor: row.type !== 'equal' ? 'pointer' : 'default' }}>
-      <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0, background: active ? 'var(--color-accent)' : 'transparent' }} />
+      <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0, background: barColor }} />
       <div style={{ width: leftWidth + 'px', display: 'flex', overflow: 'hidden', background: cellBg(leftType, 'left') }}>
         <span style={lineNumStyle}>{row.leftNum ?? ''}</span>
         <span style={codeStyle}>
@@ -156,7 +161,7 @@ function DiffRow({ row, active, reviewed, scrollLeft, leftWidth, rightWidth, onR
 
 const BINARY_SENTINEL = '\x00BINARY';
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, onNavigateNext, onNavigatePrev, startAtEnd, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange }) {
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, onNavigateNext, onNavigatePrev, startAtEnd, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
@@ -182,6 +187,9 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
   const [internalReviewedHunks, setInternalReviewedHunks] = useState(() => new Set());
   const reviewedHunks = externalReviewedHunks || internalReviewedHunks;
   const setReviewedHunks = onReviewedHunksChange || setInternalReviewedHunks;
+  const [internalRejectedHunks, setInternalRejectedHunks] = useState(() => new Set());
+  const rejectedHunks = externalRejectedHunks || internalRejectedHunks;
+  const setRejectedHunks = onRejectedHunksChange || setInternalRejectedHunks;
   const [splitPercent, setSplitPercent] = useState(50);
   const [draggingResizer, setDraggingResizer] = useState(false);
   const totalHeight = rows.length * ROW_HEIGHT;
@@ -241,6 +249,17 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
     return set;
   }, [hunkRanges, reviewedHunks]);
 
+  const rejectedRowSet = useMemo(() => {
+    const set = new Set();
+    for (const hIdx of rejectedHunks) {
+      const range = hunkRanges[hIdx];
+      if (range) {
+        for (let i = range.start; i <= range.end; i++) set.add(i);
+      }
+    }
+    return set;
+  }, [hunkRanges, rejectedHunks]);
+
   const panelWidth = useMemo(() => {
     if (!viewportWidth) return 0;
     return Math.round((viewportWidth - BAR_WIDTH - RESIZER_WIDTH) * splitPercent / 100);
@@ -270,13 +289,14 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
   }, [currentHunk, hunkStarts, viewportHeight, headerHeight]);
 
   const markCurrentReviewed = useCallback(() => {
+    if (rejectedHunks.has(currentHunk)) return;
     lastReviewedHunk.current = currentHunk;
     setReviewedHunks(prev => {
       const next = new Set(prev);
       next.add(currentHunk);
       return next;
     });
-  }, [currentHunk]);
+  }, [currentHunk, rejectedHunks]);
 
   const handleRowClick = useCallback((rowIdx) => {
     const hIdx = rowToHunk.get(rowIdx);
@@ -371,6 +391,38 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
           }
           break;
         }
+        case 'r': {
+          e.preventDefault();
+          setRejectedHunks(prev => {
+            const next = new Set(prev);
+            next.add(currentHunk);
+            return next;
+          });
+          setReviewedHunks(prev => {
+            const next = new Set(prev);
+            next.delete(currentHunk);
+            return next;
+          });
+          break;
+        }
+        case 'R': {
+          e.preventDefault();
+          setRejectedHunks(prev => {
+            const next = new Set(prev);
+            next.delete(currentHunk);
+            return next;
+          });
+          break;
+        }
+        case 'i': {
+          e.preventDefault();
+          if (window.kdiff4?.openInEditor && rightPath && hunkRanges[currentHunk]) {
+            const row = rows[hunkRanges[currentHunk].start];
+            const line = row?.rightNum || row?.leftNum || 1;
+            window.kdiff4.openInEditor(rightPath, line, 1);
+          }
+          break;
+        }
         case 'q':
         case 'Escape': {
           if (!onNavigateNext) {
@@ -384,7 +436,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hunkStarts, hunkRanges, currentHunk, reviewedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev]);
+  }, [hunkStarts, hunkRanges, currentHunk, reviewedHunks, rejectedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -511,6 +563,19 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
 
               {/* Virtual scroll content */}
               <div style={{ height: totalHeight + 'px', position: 'relative' }}>
+                {hunkRanges[currentHunk] && (
+                  <div style={{
+                    position: 'absolute',
+                    top: hunkRanges[currentHunk].start * ROW_HEIGHT + 'px',
+                    left: 0,
+                    right: 0,
+                    height: (hunkRanges[currentHunk].end - hunkRanges[currentHunk].start + 1) * ROW_HEIGHT + 'px',
+                    border: `1px solid var(${rejectedHunks.has(currentHunk) ? '--color-conflict' : '--color-accent'})`,
+                    borderRadius: '3px',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                  }} />
+                )}
                 <div style={{ position: 'absolute', top: startIdx * ROW_HEIGHT + 'px', left: 0, right: 0 }}>
                   {visibleRows.map((row, i) => {
                     const idx = startIdx + i;
@@ -520,6 +585,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
                         row={row}
                         active={activeRowSet.has(idx)}
                         reviewed={reviewedRowSet.has(idx)}
+                        rejected={rejectedRowSet.has(idx)}
                         scrollLeft={scrollLeft}
                         leftWidth={leftWidth}
                         rightWidth={rightWidth}
@@ -555,6 +621,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
           scrollTop={scrollTop}
           onScrollTo={handleMinimapScroll}
           reviewedRows={reviewedRowSet}
+          rejectedRows={rejectedRowSet}
         />
       )}
     </div>
