@@ -49,6 +49,24 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
   const [perFileReviewedHunks, setPerFileReviewedHunks] = useState({});
   const [perFileRejectedHunks, setPerFileRejectedHunks] = useState({});
   const shellRef = useRef(null);
+  const [sidebarWidth, setSidebarWidth] = useState(220);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [draggingSidebar, setDraggingSidebar] = useState(false);
+
+  const handleSidebarResizerMouseDown = useCallback((e) => {
+    e.preventDefault();
+    setDraggingSidebar(true);
+    const onMouseMove = (e) => {
+      setSidebarWidth(Math.max(120, Math.min(500, e.clientX)));
+    };
+    const onMouseUp = () => {
+      setDraggingSidebar(false);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, []);
 
   useEffect(() => {
     if (!api || files.length === 0) return;
@@ -239,13 +257,54 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
         </div>
       )}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <Sidebar
-          tree={tree}
-          files={files}
-          currentIndex={currentIndex}
-          viewed={viewed}
-          onSelect={navigateTo}
-        />
+        {draggingSidebar && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize' }} />
+        )}
+        {sidebarCollapsed ? (
+          <div
+            onClick={() => setSidebarCollapsed(false)}
+            style={{
+              width: '28px',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'center',
+              paddingTop: '8px',
+              background: 'var(--bg-surface)',
+              borderRight: '1px solid var(--border)',
+              cursor: 'pointer',
+            }}
+            title="Show sidebar"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <rect x="1" y="1" width="12" height="12" rx="2" stroke="var(--text-muted)" strokeWidth="1.2" />
+              <line x1="5" y1="1" x2="5" y2="13" stroke="var(--text-muted)" strokeWidth="1.2" />
+            </svg>
+          </div>
+        ) : (
+          <>
+            <Sidebar
+              tree={tree}
+              files={files}
+              currentIndex={currentIndex}
+              viewed={viewed}
+              onSelect={navigateTo}
+              width={sidebarWidth}
+              onCollapse={() => setSidebarCollapsed(true)}
+            />
+            <div
+              onMouseDown={handleSidebarResizerMouseDown}
+              style={{
+                width: '4px',
+                flexShrink: 0,
+                cursor: 'col-resize',
+                background: draggingSidebar ? 'var(--color-accent)' : 'transparent',
+              }}
+              onMouseEnter={(e) => { if (!draggingSidebar) e.currentTarget.style.background = 'var(--color-accent)'; }}
+              onMouseLeave={(e) => { if (!draggingSidebar) e.currentTarget.style.background = 'transparent'; }}
+            />
+          </>
+        )}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {loading ? (
             <div style={{
@@ -262,6 +321,8 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
             <FileDiffView
               leftPath={relativePath(currentFile.leftPath, leftPath)}
               rightPath={relativePath(currentFile.rightPath, rightPath)}
+              leftFullPath={currentFile.leftPath}
+              rightFullPath={currentFile.rightPath}
               leftContent={leftContent}
               rightContent={rightContent}
               onNavigateNext={navigateNext}

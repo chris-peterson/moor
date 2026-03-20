@@ -104,7 +104,7 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, onSelect, expan
   );
 }
 
-export function Sidebar({ tree, files, currentIndex, viewed, onSelect }) {
+export function Sidebar({ tree, files, currentIndex, viewed, onSelect, width, onCollapse }) {
   const [expanded, setExpanded] = useState(() => {
     const set = new Set();
     const expandAll = (node) => {
@@ -158,7 +158,7 @@ export function Sidebar({ tree, files, currentIndex, viewed, onSelect }) {
 
   return (
     <div style={{
-      width: '220px',
+      width: width != null ? `${width}px` : '220px',
       flexShrink: 0,
       display: 'flex',
       flexDirection: 'column',
@@ -177,7 +177,21 @@ export function Sidebar({ tree, files, currentIndex, viewed, onSelect }) {
         justifyContent: 'space-between',
         alignItems: 'center',
       }}>
-        <span>FILES</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          FILES
+          {onCollapse && (
+            <svg
+              onClick={(e) => { e.stopPropagation(); onCollapse(); }}
+              width="14" height="14" viewBox="0 0 14 14" fill="none"
+              style={{ cursor: 'pointer', opacity: 0.5 }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.5'}
+            >
+              <rect x="1" y="1" width="12" height="12" rx="2" stroke="var(--text-muted)" strokeWidth="1.2" />
+              <line x1="5" y1="1" x2="5" y2="13" stroke="var(--text-muted)" strokeWidth="1.2" />
+            </svg>
+          )}
+        </span>
         <span style={{ fontWeight: 400, fontFamily: 'var(--font-mono)', fontSize: '10px' }}>
           {viewedCount}/{total}
         </span>

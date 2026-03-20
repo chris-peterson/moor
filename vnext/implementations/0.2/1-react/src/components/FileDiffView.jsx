@@ -161,10 +161,31 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
 
 const BINARY_SENTINEL = '\x00BINARY';
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, onNavigateNext, onNavigatePrev, startAtEnd, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange }) {
+const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|bmp|webp|svg|ico)$/i;
+
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, startAtEnd, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
+  const isImage = isBinary && (IMAGE_EXTENSIONS.test(leftPath || '') || IMAGE_EXTENSIONS.test(rightPath || ''));
+
+  const [leftDataUrl, setLeftDataUrl] = useState(null);
+  const [rightDataUrl, setRightDataUrl] = useState(null);
+
+  useEffect(() => {
+    if (!isImage) { setLeftDataUrl(null); setRightDataUrl(null); return; }
+    const api = window.kdiff4;
+    if (!api?.readFileAsDataUrl) return;
+    let cancelled = false;
+    (async () => {
+      const [l, r] = await Promise.all([
+        leftFullPath ? api.readFileAsDataUrl(leftFullPath) : Promise.resolve(null),
+        rightFullPath ? api.readFileAsDataUrl(rightFullPath) : Promise.resolve(null),
+      ]);
+      if (!cancelled) { setLeftDataUrl(l); setRightDataUrl(r); }
+    })();
+    return () => { cancelled = true; };
+  }, [isImage, leftFullPath, rightFullPath]);
 
   const leftLines = useMemo(() => isBinary || !leftContent ? [] : leftContent.split('\n'), [leftContent, isBinary]);
   const rightLines = useMemo(() => isBinary || !rightContent ? [] : rightContent.split('\n'), [rightContent, isBinary]);
@@ -301,16 +322,16 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
   const handleRowClick = useCallback((rowIdx) => {
     const hIdx = rowToHunk.get(rowIdx);
     if (hIdx == null) return;
-    if (hIdx === currentHunk) {
+    if (!rejectedHunks.has(hIdx)) {
+      lastReviewedHunk.current = hIdx;
       setReviewedHunks(prev => {
         const next = new Set(prev);
-        next.add(currentHunk);
+        next.add(hIdx);
         return next;
       });
-    } else {
-      setCurrentHunk(hIdx);
     }
-  }, [rowToHunk, currentHunk, setReviewedHunks]);
+    setCurrentHunk(hIdx);
+  }, [rowToHunk, rejectedHunks, setReviewedHunks]);
 
   useEffect(() => {
     setScrollTop(0);
@@ -539,8 +560,31 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, o
               <div style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0 }} />
               <div style={headerCellStyle('var(--color-right)', rightWidth)}>{rightPath || '(empty)'}</div>
             </div>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-deep)', color: 'var(--text-secondary)', fontFamily: 'var(--font-ui)', fontSize: '14px' }}>
-              Binary files differ
+            <div style={{ flex: 1, display: 'flex', background: 'var(--bg-deep)', overflow: 'auto', ...(isImage ? { alignItems: 'flex-start', justifyContent: 'center', padding: '20px', gap: '20px' } : { alignItems: 'center', justifyContent: 'center' }) }}>
+              {isImage ? (
+                <>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                    {leftDataUrl ? (
+                      <img src={leftDataUrl} style={{ maxWidth: '100%', objectFit: 'contain', border: '1px solid var(--border)', borderRadius: '4px' }} />
+                    ) : leftFullPath ? (
+                      <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-ui)', fontSize: '12px' }}>Loading...</span>
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-ui)', fontSize: '12px' }}>(empty)</span>
+                    )}
+                  </div>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                    {rightDataUrl ? (
+                      <img src={rightDataUrl} style={{ maxWidth: '100%', objectFit: 'contain', border: '1px solid var(--border)', borderRadius: '4px' }} />
+                    ) : rightFullPath ? (
+                      <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-ui)', fontSize: '12px' }}>Loading...</span>
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-ui)', fontSize: '12px' }}>(empty)</span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-ui)', fontSize: '14px' }}>Binary files differ</span>
+              )}
             </div>
           </>
         ) : (

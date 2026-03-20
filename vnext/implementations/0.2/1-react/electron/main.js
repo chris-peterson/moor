@@ -30,6 +30,17 @@ app.whenReady().then(async () => {
     return buf.toString('utf-8');
   });
 
+  const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico']);
+  const MIME_MAP = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.bmp': 'image/bmp', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
+
+  ipcMain.handle('read-file-as-data-url', async (_event, { filePath }) => {
+    const ext = path.extname(filePath).toLowerCase();
+    if (!IMAGE_EXTENSIONS.has(ext)) return null;
+    const buf = await fs.readFile(filePath);
+    const mime = MIME_MAP[ext] || 'application/octet-stream';
+    return `data:${mime};base64,${buf.toString('base64')}`;
+  });
+
   ipcMain.handle('compare-directories', async (_event, { leftPath, rightPath }) => {
     const { compareDirectories } = await import('../src/engine/directory.js');
     return compareDirectories(leftPath, rightPath);

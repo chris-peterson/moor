@@ -97,6 +97,8 @@ export function App() {
       <FileDiffView
         leftPath={leftPath}
         rightPath={rightPath}
+        leftFullPath={leftPath}
+        rightFullPath={rightPath}
         leftContent={leftContent}
         rightContent={rightContent}
       />
