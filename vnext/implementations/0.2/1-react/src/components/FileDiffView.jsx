@@ -7,6 +7,28 @@ function expandTabs(str) {
   return str == null ? '' : str.replaceAll('\t', TAB_SPACES);
 }
 
+function SearchHighlight({ text, query, isCurrent }) {
+  if (!query || !text) return expandTabs(text);
+  const expanded = expandTabs(text);
+  const lower = expanded.toLowerCase();
+  const qLower = query.toLowerCase();
+  const parts = [];
+  let lastIdx = 0;
+  let idx = lower.indexOf(qLower);
+  while (idx !== -1) {
+    if (idx > lastIdx) parts.push(expanded.slice(lastIdx, idx));
+    parts.push(
+      <span key={idx} style={{ background: 'var(--color-search)', color: 'var(--bg-deep)', borderRadius: '2px' }}>
+        {expanded.slice(idx, idx + qLower.length)}
+      </span>
+    );
+    lastIdx = idx + qLower.length;
+    idx = lower.indexOf(qLower, lastIdx);
+  }
+  if (lastIdx < expanded.length) parts.push(expanded.slice(lastIdx));
+  return parts.length > 0 ? <>{parts}</> : expandTabs(text);
+}
+
 function areSimilarEnough(a, b) {
   if (!a || !b) return false;
   const maxLen = Math.max(a.length, b.length);
@@ -94,9 +116,9 @@ function CharDiffSpans({ oldStr, newStr, side, dimmed }) {
   );
 }
 
-function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick }) {
+function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick, searchQuery, searchDimmed }) {
   const fontSize = active ? '15px' : '13px';
-  const dimmed = reviewed && !active;
+  const dimmed = (reviewed && !active) || searchDimmed;
 
   const barColor = active
     ? (rejected ? 'var(--color-conflict)' : 'var(--color-accent)')
@@ -145,14 +167,22 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
       <div style={{ width: leftWidth + 'px', display: 'flex', overflow: 'hidden', background: cellBg(leftType, 'left') }}>
         <span style={lineNumStyle}>{row.leftNum ?? ''}</span>
         <span style={codeStyle}>
-          {showCharDiff ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="left" dimmed={dimmed} /> : expandTabs(row.leftLine)}
+          {searchQuery && !dimmed
+            ? <SearchHighlight text={row.leftLine} query={searchQuery} />
+            : showCharDiff
+              ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="left" dimmed={dimmed} />
+              : expandTabs(row.leftLine)}
         </span>
       </div>
       <div onMouseDown={onResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
       <div style={{ width: rightWidth + 'px', display: 'flex', overflow: 'hidden', background: cellBg(rightType, 'right') }}>
         <span style={lineNumStyle}>{row.rightNum ?? ''}</span>
         <span style={codeStyle}>
-          {showCharDiff ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="right" dimmed={dimmed} /> : expandTabs(row.rightLine)}
+          {searchQuery && !dimmed
+            ? <SearchHighlight text={row.rightLine} query={searchQuery} />
+            : showCharDiff
+              ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="right" dimmed={dimmed} />
+              : expandTabs(row.rightLine)}
         </span>
       </div>
     </div>
@@ -163,7 +193,7 @@ const BINARY_SENTINEL = '\x00BINARY';
 
 const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|bmp|webp|svg|ico)$/i;
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, startAtEnd, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange }) {
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, startAtEnd, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange, onSearchChange }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
@@ -213,6 +243,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const setRejectedHunks = onRejectedHunksChange || setInternalRejectedHunks;
   const [splitPercent, setSplitPercent] = useState(50);
   const [draggingResizer, setDraggingResizer] = useState(false);
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
+  const searchInputRef = useRef(null);
   const totalHeight = rows.length * ROW_HEIGHT;
 
   const maxContentWidth = useMemo(() => {
@@ -288,6 +322,64 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
   const maxScroll = useMemo(() => Math.max(0, maxContentWidth - panelWidth), [maxContentWidth, panelWidth]);
 
+  const searchMatches = useMemo(() => {
+    if (!searchActive || !searchQuery) return [];
+    const q = searchQuery.toLowerCase();
+    const matches = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const leftMatch = row.leftLine && row.leftLine.toLowerCase().includes(q);
+      const rightMatch = row.rightLine && row.rightLine.toLowerCase().includes(q);
+      if (leftMatch || rightMatch) matches.push(i);
+    }
+    return matches;
+  }, [searchActive, searchQuery, rows]);
+
+  const searchMatchingHunks = useMemo(() => {
+    if (!searchActive || !searchQuery) return null;
+    const set = new Set();
+    for (const rowIdx of searchMatches) {
+      const hIdx = rowToHunk.get(rowIdx);
+      if (hIdx != null) set.add(hIdx);
+    }
+    return set;
+  }, [searchActive, searchQuery, searchMatches, rowToHunk]);
+
+  useEffect(() => {
+    if (onSearchChange) onSearchChange(searchActive ? searchQuery : null);
+  }, [searchActive, searchQuery, onSearchChange]);
+
+  useEffect(() => {
+    if (searchActive && searchInputRef.current) searchInputRef.current.focus();
+  }, [searchActive]);
+
+  const scrollToRow = useCallback((rowIdx) => {
+    if (!scrollContainerRef.current) return;
+    const top = rowIdx * ROW_HEIGHT;
+    const bottom = top + ROW_HEIGHT;
+    const ev = Math.max(0, viewportHeight - headerHeight);
+    const visibleTop = Math.max(0, scrollContainerRef.current.scrollTop - headerHeight);
+    const visibleBottom = visibleTop + ev;
+    if (top < visibleTop || bottom > visibleBottom) {
+      scrollContainerRef.current.scrollTop = top - ev / 3 + headerHeight;
+    }
+  }, [viewportHeight, headerHeight]);
+
+  const navigateMatch = useCallback((direction) => {
+    if (searchMatches.length === 0) return;
+    const nextIdx = direction === 'next'
+      ? (currentMatchIdx + 1) % searchMatches.length
+      : (currentMatchIdx - 1 + searchMatches.length) % searchMatches.length;
+    setCurrentMatchIdx(nextIdx);
+    scrollToRow(searchMatches[nextIdx]);
+  }, [searchMatches, currentMatchIdx, scrollToRow]);
+
+  const exitSearch = useCallback(() => {
+    setSearchActive(false);
+    setSearchQuery('');
+    setCurrentMatchIdx(0);
+  }, []);
+
   useEffect(() => {
     if (onHunkChange) onHunkChange(currentHunk, hunkRanges.length);
   }, [currentHunk, hunkRanges.length, onHunkChange]);
@@ -338,6 +430,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     setScrollLeft(0);
     if (!externalReviewedHunks) setInternalReviewedHunks(new Set());
     setCurrentHunk(startAtEnd && hunkStarts.length > 0 ? hunkStarts.length - 1 : 0);
+    setCurrentMatchIdx(0);
     if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
   }, [leftContent, rightContent]);
 
@@ -349,7 +442,34 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        e.preventDefault();
+        if (searchActive) {
+          if (searchInputRef.current) { searchInputRef.current.focus(); searchInputRef.current.select(); }
+        } else {
+          setSearchActive(true);
+        }
+        return;
+      }
+
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+
+      if (searchActive) {
+        switch (e.key) {
+          case 'n':
+            e.preventDefault();
+            navigateMatch('next');
+            return;
+          case 'N':
+            e.preventDefault();
+            navigateMatch('prev');
+            return;
+          case 'Escape':
+            e.preventDefault();
+            exitSearch();
+            return;
+        }
+      }
 
       switch (e.key) {
         case 'j':
@@ -457,7 +577,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hunkStarts, hunkRanges, currentHunk, reviewedHunks, rejectedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev]);
+  }, [hunkStarts, hunkRanges, currentHunk, reviewedHunks, rejectedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, searchActive, navigateMatch, exitSearch]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -596,13 +716,73 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
               style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', background: 'var(--bg-deep)' }}
             >
               {/* Sticky file path header */}
-              <div ref={headerRef} style={{ position: 'sticky', top: 0, zIndex: 5, display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg-panel)' }}>
-                <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0 }} />
-                <div style={headerCellStyle(leftPath === rightPath ? 'transparent' : 'var(--color-left)', leftWidth)}>
-                  {leftPath === rightPath ? '' : (leftPath || '(empty)')}
+              <div ref={headerRef} style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--bg-panel)' }}>
+                <div style={{ display: 'flex', borderBottom: searchActive ? 'none' : '1px solid var(--border)' }}>
+                  <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0 }} />
+                  <div style={headerCellStyle(leftPath === rightPath ? 'transparent' : 'var(--color-left)', leftWidth)}>
+                    {leftPath === rightPath ? '' : (leftPath || '(empty)')}
+                  </div>
+                  <div onMouseDown={handleResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
+                  <div style={headerCellStyle('var(--color-right)', rightWidth)}>{rightPath || '(empty)'}</div>
                 </div>
-                <div onMouseDown={handleResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
-                <div style={headerCellStyle('var(--color-right)', rightWidth)}>{rightPath || '(empty)'}</div>
+                {searchActive && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '4px 12px',
+                    background: 'var(--bg-surface)',
+                    borderBottom: '1px solid var(--border)',
+                  }}>
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => { setSearchQuery(e.target.value); setCurrentMatchIdx(0); }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); exitSearch(); }
+                        if (e.key === 'Enter') { e.preventDefault(); navigateMatch(e.shiftKey ? 'prev' : 'next'); e.target.blur(); }
+                      }}
+                      placeholder="Search..."
+                      style={{
+                        flex: 1,
+                        maxWidth: '300px',
+                        padding: '3px 8px',
+                        background: 'var(--bg-deep)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '3px',
+                        color: 'var(--text-primary)',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '12px',
+                        outline: 'none',
+                      }}
+                      onFocus={(e) => { e.target.style.borderColor = 'var(--color-accent)'; }}
+                      onBlur={(e) => { e.target.style.borderColor = 'var(--border)'; }}
+                    />
+                    <span style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '11px',
+                      color: searchMatches.length > 0 ? 'var(--text-secondary)' : 'var(--color-conflict)',
+                    }}>
+                      {searchQuery
+                        ? `${searchMatches.length > 0 ? currentMatchIdx + 1 : 0}/${searchMatches.length}`
+                        : ''}
+                    </span>
+                    <span
+                      onClick={exitSearch}
+                      style={{
+                        cursor: 'pointer',
+                        color: 'var(--text-muted)',
+                        fontSize: '16px',
+                        lineHeight: 1,
+                        padding: '0 2px',
+                      }}
+                      title="Close search (Esc)"
+                    >
+                      ✕
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Virtual scroll content */}
@@ -623,6 +803,8 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                 <div style={{ position: 'absolute', top: startIdx * ROW_HEIGHT + 'px', left: 0, right: 0 }}>
                   {visibleRows.map((row, i) => {
                     const idx = startIdx + i;
+                    const hIdx = rowToHunk.get(idx);
+                    const isSearchDimmed = searchMatchingHunks != null && hIdx != null && !searchMatchingHunks.has(hIdx);
                     return (
                       <DiffRow
                         key={idx}
@@ -635,6 +817,8 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                         rightWidth={rightWidth}
                         onResizerMouseDown={handleResizerMouseDown}
                         onClick={() => handleRowClick(idx)}
+                        searchQuery={searchActive ? searchQuery : null}
+                        searchDimmed={isSearchDimmed}
                       />
                     );
                   })}

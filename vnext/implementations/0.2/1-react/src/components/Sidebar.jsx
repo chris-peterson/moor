@@ -18,7 +18,7 @@ const statusLabel = (status) => {
   }
 };
 
-function SidebarNode({ node, depth, files, currentIndex, viewed, onSelect, expanded, onToggle }) {
+function SidebarNode({ node, depth, files, currentIndex, viewed, onSelect, expanded, onToggle, hiddenFiles }) {
   const isDir = node.type === 'directory';
   const isIdentical = node.status === 'identical';
   const nodeKey = node.leftPath || node.rightPath || node.name;
@@ -28,6 +28,7 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, onSelect, expan
   const isCurrent = fileIndex === currentIndex;
   const isViewed = viewed.has(fileIndex);
   const isClickable = !isDir && fileIndex >= 0;
+  const isHidden = hiddenFiles && fileIndex >= 0 && hiddenFiles.has(fileIndex);
 
   const handleClick = useCallback(() => {
     if (isDir) {
@@ -38,10 +39,23 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, onSelect, expan
   }, [isDir, isClickable, nodeKey, fileIndex, onToggle, onSelect]);
 
   if (isIdentical && !isDir) return null;
+  if (isHidden) return null;
 
-  const hasNonIdenticalChildren = isDir && node.children?.some(c =>
-    c.status !== 'identical' || (c.type === 'directory' && c.summary && (c.summary.modified > 0 || c.summary.leftOnly > 0 || c.summary.rightOnly > 0))
-  );
+  const hasVisibleChildren = (dirNode) => {
+    if (!dirNode.children) return false;
+    return dirNode.children.some(c => {
+      if (c.type === 'directory') return hasVisibleChildren(c);
+      if (c.status === 'identical') return false;
+      const idx = files.indexOf(c);
+      return !(hiddenFiles && idx >= 0 && hiddenFiles.has(idx));
+    });
+  };
+
+  const hasNonIdenticalChildren = isDir && (hiddenFiles
+    ? hasVisibleChildren(node)
+    : node.children?.some(c =>
+        c.status !== 'identical' || (c.type === 'directory' && c.summary && (c.summary.modified > 0 || c.summary.leftOnly > 0 || c.summary.rightOnly > 0))
+      ));
   if (isDir && !hasNonIdenticalChildren) return null;
 
   return (
@@ -98,13 +112,14 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, onSelect, expan
           onSelect={onSelect}
           expanded={expanded}
           onToggle={onToggle}
+          hiddenFiles={hiddenFiles}
         />
       ))}
     </>
   );
 }
 
-export function Sidebar({ tree, files, currentIndex, viewed, onSelect, width, onCollapse }) {
+export function Sidebar({ tree, files, currentIndex, viewed, onSelect, width, onCollapse, hiddenFiles }) {
   const [expanded, setExpanded] = useState(() => {
     const set = new Set();
     const expandAll = (node) => {
@@ -208,6 +223,7 @@ export function Sidebar({ tree, files, currentIndex, viewed, onSelect, width, on
             onSelect={onSelect}
             expanded={expanded}
             onToggle={onToggle}
+            hiddenFiles={hiddenFiles}
           />
         ))}
       </div>

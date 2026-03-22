@@ -1,6 +1,6 @@
 # Implementation 1: React — Status
 
-**Spec:** v0.2 | **Coverage:** 30/30 (100%)
+**Spec:** v0.2 | **Coverage:** 36/36 (100%)
 
 ## Requirement Coverage
 
@@ -49,6 +49,17 @@
 | [AS-5] | Fast startup | Done |
 | [AS-6] | Exit code 0 | Done |
 | [AS-7] | git difftool integration | Done |
+
+### Search Mode (SM) — 6/6
+
+| Req | Description | Status |
+|-----|-------------|--------|
+| [SM-1] | Cmd+F enters search mode | Done |
+| [SM-2] | Match all content, not just hunks | Done |
+| [SM-3] | Hide non-matching files in sidebar | Done |
+| [SM-4] | Dim non-matching hunks | Done |
+| [SM-5] | n/N jump between matches | Done |
+| [SM-6] | Escape exits search mode | Done |
 
 ### User Preferences (UP) — 4/4
 

@@ -52,6 +52,8 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
   const [sidebarWidth, setSidebarWidth] = useState(220);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [draggingSidebar, setDraggingSidebar] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(null);
+  const [fileContents, setFileContents] = useState({});
 
   const handleSidebarResizerMouseDown = useCallback((e) => {
     e.preventDefault();
@@ -73,6 +75,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     let cancelled = false;
     (async () => {
       const counts = {};
+      const contents = {};
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const [left, right] = await Promise.all([
@@ -81,8 +84,10 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
         ]);
         if (cancelled) return;
         counts[i] = countHunks(left, right);
+        contents[i] = { left, right };
       }
       setHunkCounts(counts);
+      setFileContents(contents);
     })();
     return () => { cancelled = true; };
   }, [api, files]);
@@ -157,6 +162,24 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     }));
   }, [currentIndex]);
 
+  const handleSearchChange = useCallback((query) => {
+    setSearchQuery(query);
+  }, []);
+
+  const searchHiddenFiles = useMemo(() => {
+    if (!searchQuery) return null;
+    const q = searchQuery.toLowerCase();
+    const hidden = new Set();
+    for (let i = 0; i < files.length; i++) {
+      const c = fileContents[i];
+      if (!c) continue;
+      const leftMatch = c.left && c.left.toLowerCase().includes(q);
+      const rightMatch = c.right && c.right.toLowerCase().includes(q);
+      if (!leftMatch && !rightMatch) hidden.add(i);
+    }
+    return hidden;
+  }, [searchQuery, files, fileContents]);
+
   const totalRejected = Object.values(perFileRejectedHunks).reduce((n, s) => n + s.size, 0);
 
   const totalChanges = Object.values(hunkCounts).reduce((a, b) => a + b, 0);
@@ -199,6 +222,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+      if (searchQuery != null) return;
 
       switch (e.key) {
         case 'q':
@@ -211,7 +235,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [confirmAndClose]);
+  }, [confirmAndClose, searchQuery]);
 
   useEffect(() => {
     if (shellRef.current) shellRef.current.focus();
@@ -291,6 +315,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
               onSelect={navigateTo}
               width={sidebarWidth}
               onCollapse={() => setSidebarCollapsed(true)}
+              hiddenFiles={searchHiddenFiles}
             />
             <div
               onMouseDown={handleSidebarResizerMouseDown}
@@ -333,6 +358,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
               onReviewedHunksChange={handleReviewedHunksChange}
               rejectedHunks={currentRejectedHunks}
               onRejectedHunksChange={handleRejectedHunksChange}
+              onSearchChange={handleSearchChange}
             />
           ) : (
             <div style={{

@@ -84,6 +84,15 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[DD-10]** While in directory diff mode, the viewer shall allow the user to resize the sidebar width by dragging its right edge
 - **[DD-11]** While in directory diff mode, the viewer shall provide a way to hide and show the sidebar
 
+### Search Mode (SM)
+
+- **[SM-1]** When the user presses `Cmd+F`, the viewer shall enter search mode with a text input field
+- **[SM-2]** While in search mode, the viewer shall match content across all lines, not just changed lines within hunks
+- **[SM-3]** While in search mode in directory diff, the viewer shall temporarily hide files that contain no matches
+- **[SM-4]** While in search mode, the viewer shall dim non-matching hunks
+- **[SM-5]** While in search mode, when the user presses `n` / `N`, the viewer shall jump to the next / previous match
+- **[SM-6]** While in search mode, when the user presses `Escape`, the viewer shall exit search mode and restore the normal view
+
 ### Binary Formats (BF)
 
 - **[BF-1]** When a recognized image file is opened, the diff viewer shall display the images side-by-side

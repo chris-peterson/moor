@@ -18,6 +18,9 @@
   --font-ui: 'Instrument Sans', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
   --bg-reviewed: #7b93db10;
+  --color-search: #f5e642;
+  --color-search-bg: #f5e64240;
+  --color-search-current: #f5a623;
   --font-size-code: 13px;
   --line-height-code: 1.6;
 }
