@@ -1,10 +1,10 @@
 # Implementation 1: React — Status
 
-**Spec:** v0.2 | **Coverage:** 36/36 (100%)
+**Spec:** v0.2 | **Coverage:** 55/55 (100%)
 
 ## Requirement Coverage
 
-### File Diff View (FD) — 8/8
+### File Diff View (FD) — 9/9
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -16,8 +16,9 @@
 | [FD-6] | Overview minimap | Done |
 | [FD-7] | Virtual scrolling | Done |
 | [FD-8] | Binary file detection | Done |
+| [FD-9] | Dim reviewed hunks | Done |
 
-### Navigation (NV) — 7/7
+### Navigation (NV) — 8/8
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -25,9 +26,53 @@
 | [NV-2] | q/Escape close | Done |
 | [NV-3] | Scroll wheel/trackpad | Done |
 | [NV-4] | Auto-scroll to first hunk | Done |
-| [NV-5] | Reviewed hunks persist across file navigation | Done |
-| [NV-6] | Reviewed hunks dimmed in code panels and minimap | Done |
-| [NV-7] | u undo (mark current hunk unreviewed) | Done |
+| [NV-5] | u mark current hunk unreviewed | Done |
+| [NV-6] | Click hunk marks reviewed | Done |
+| [NV-7] | r reject current hunk | Done |
+| [NV-8] | i open in editor | Done |
+
+### Directory Diff (DD) — 11/11
+
+| Req | Description | Status |
+|-----|-------------|--------|
+| [DD-1] | Sidebar with file tree | Done |
+| [DD-2] | File status indicators (M/L/R) | Done |
+| [DD-3] | Click file shows diff | Done |
+| [DD-4] | j/k at last/first hunk advances file | Done |
+| [DD-5] | Track visited files (checkmark) | Done |
+| [DD-6] | Progress tracks hunks, not files | Done |
+| [DD-7] | Quit prompts on unreviewed changes | Done |
+| [DD-8] | Ignore .git, node_modules, etc. | Done |
+| [DD-9] | Full file path in lower-left | Done |
+| [DD-10] | Resizable sidebar | Done |
+| [DD-11] | Hide/show sidebar | Done |
+
+### Context Menu (CM) — 5/5
+
+| Req | Description | Status |
+|-----|-------------|--------|
+| [CM-1] | Right-click hunk shows context menu | Done |
+| [CM-2] | Mark as reviewed | Done |
+| [CM-3] | Mark as unreviewed | Done |
+| [CM-4] | Reject | Done |
+| [CM-5] | Open in editor | Done |
+
+### Search Mode (SM) — 6/6
+
+| Req | Description | Status |
+|-----|-------------|--------|
+| [SM-1] | Cmd+F enters search mode | Done |
+| [SM-2] | Match all content, not just hunks | Done |
+| [SM-3] | Hide non-matching files in sidebar | Done |
+| [SM-4] | Dim non-matching hunks | Done |
+| [SM-5] | n/N jump between matches | Done |
+| [SM-6] | Escape exits search mode | Done |
+
+### Binary Formats (BF) — 1/1
+
+| Req | Description | Status |
+|-----|-------------|--------|
+| [BF-1] | Side-by-side image diff | Done |
 
 ### Diff Algorithm (DA) — 4/4
 
@@ -49,17 +94,6 @@
 | [AS-5] | Fast startup | Done |
 | [AS-6] | Exit code 0 | Done |
 | [AS-7] | git difftool integration | Done |
-
-### Search Mode (SM) — 6/6
-
-| Req | Description | Status |
-|-----|-------------|--------|
-| [SM-1] | Cmd+F enters search mode | Done |
-| [SM-2] | Match all content, not just hunks | Done |
-| [SM-3] | Hide non-matching files in sidebar | Done |
-| [SM-4] | Dim non-matching hunks | Done |
-| [SM-5] | n/N jump between matches | Done |
-| [SM-6] | Escape exits search mode | Done |
 
 ### User Preferences (UP) — 4/4
 

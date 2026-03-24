@@ -116,7 +116,7 @@ function CharDiffSpans({ oldStr, newStr, side, dimmed }) {
   );
 }
 
-function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick, searchQuery, searchDimmed }) {
+function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick, onContextMenu, searchQuery, searchDimmed }) {
   const fontSize = active ? '15px' : '13px';
   const dimmed = (reviewed && !active) || searchDimmed;
 
@@ -162,7 +162,7 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
   const rightType = isModify ? 'insert' : row.type;
 
   return (
-    <div onClick={row.type !== 'equal' ? onClick : undefined} style={{ display: 'flex', height: ROW_HEIGHT + 'px', cursor: row.type !== 'equal' ? 'pointer' : 'default' }}>
+    <div onClick={row.type !== 'equal' ? onClick : undefined} onContextMenu={row.type !== 'equal' ? onContextMenu : undefined} style={{ display: 'flex', height: ROW_HEIGHT + 'px', cursor: row.type !== 'equal' ? 'pointer' : 'default' }}>
       <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0, background: barColor }} />
       <div style={{ width: leftWidth + 'px', display: 'flex', overflow: 'hidden', background: cellBg(leftType, 'left') }}>
         <span style={lineNumStyle}>{row.leftNum ?? ''}</span>
@@ -227,7 +227,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const contentAreaRef = useRef(null);
   const headerRef = useRef(null);
   const hScrollRef = useRef(null);
-  const lastReviewedHunk = useRef(null);
+
 
   const [scrollTop, setScrollTop] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
@@ -247,6 +247,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const [searchQuery, setSearchQuery] = useState('');
   const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
   const searchInputRef = useRef(null);
+  const [contextMenu, setContextMenu] = useState(null);
   const totalHeight = rows.length * ROW_HEIGHT;
 
   const maxContentWidth = useMemo(() => {
@@ -403,7 +404,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
   const markCurrentReviewed = useCallback(() => {
     if (rejectedHunks.has(currentHunk)) return;
-    lastReviewedHunk.current = currentHunk;
     setReviewedHunks(prev => {
       const next = new Set(prev);
       next.add(currentHunk);
@@ -415,7 +415,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     const hIdx = rowToHunk.get(rowIdx);
     if (hIdx == null) return;
     if (!rejectedHunks.has(hIdx)) {
-      lastReviewedHunk.current = hIdx;
       setReviewedHunks(prev => {
         const next = new Set(prev);
         next.add(hIdx);
@@ -424,6 +423,63 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     }
     setCurrentHunk(hIdx);
   }, [rowToHunk, rejectedHunks, setReviewedHunks]);
+
+  const handleRowContextMenu = useCallback((e, rowIdx) => {
+    const hIdx = rowToHunk.get(rowIdx);
+    if (hIdx == null) return;
+    e.preventDefault();
+    setCurrentHunk(hIdx);
+    setContextMenu({ x: e.clientX, y: e.clientY, hunk: hIdx });
+  }, [rowToHunk]);
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  const contextMenuActions = useMemo(() => {
+    if (!contextMenu) return [];
+    const h = contextMenu.hunk;
+    const isReviewed = reviewedHunks.has(h);
+    const isRejected = rejectedHunks.has(h);
+    const actions = [];
+    if (!isReviewed && !isRejected) {
+      actions.push({ label: 'Mark as reviewed', action: () => {
+        setReviewedHunks(prev => { const next = new Set(prev); next.add(h); return next; });
+      }});
+    }
+    if (isReviewed) {
+      actions.push({ label: 'Mark as unreviewed', action: () => {
+        setReviewedHunks(prev => { const next = new Set(prev); next.delete(h); return next; });
+      }});
+    }
+    if (!isRejected) {
+      actions.push({ label: 'Reject', action: () => {
+        setRejectedHunks(prev => { const next = new Set(prev); next.add(h); return next; });
+        setReviewedHunks(prev => { const next = new Set(prev); next.delete(h); return next; });
+      }});
+    } else {
+      actions.push({ label: 'Unreject', action: () => {
+        setRejectedHunks(prev => { const next = new Set(prev); next.delete(h); return next; });
+      }});
+    }
+    if (window.kdiff4?.openInEditor && rightPath && hunkRanges[h]) {
+      const row = rows[hunkRanges[h].start];
+      const line = row?.rightNum || row?.leftNum || 1;
+      actions.push({ label: 'Open in editor', action: () => {
+        window.kdiff4.openInEditor(rightPath, line, 1);
+      }});
+    }
+    return actions;
+  }, [contextMenu, reviewedHunks, rejectedHunks, hunkRanges, rows, rightPath, setReviewedHunks, setRejectedHunks]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const dismiss = () => setContextMenu(null);
+    document.addEventListener('click', dismiss);
+    document.addEventListener('keydown', dismiss);
+    return () => {
+      document.removeEventListener('click', dismiss);
+      document.removeEventListener('keydown', dismiss);
+    };
+  }, [contextMenu]);
 
   useEffect(() => {
     setScrollTop(0);
@@ -520,16 +576,11 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
         }
         case 'u': {
           e.preventDefault();
-          if (lastReviewedHunk.current != null) {
-            const target = lastReviewedHunk.current;
-            setReviewedHunks(prev => {
-              const next = new Set(prev);
-              next.delete(target);
-              return next;
-            });
-            setCurrentHunk(target);
-            lastReviewedHunk.current = null;
-          }
+          setReviewedHunks(prev => {
+            const next = new Set(prev);
+            next.delete(currentHunk);
+            return next;
+          });
           break;
         }
         case 'r': {
@@ -817,6 +868,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                         rightWidth={rightWidth}
                         onResizerMouseDown={handleResizerMouseDown}
                         onClick={() => handleRowClick(idx)}
+                        onContextMenu={(e) => handleRowContextMenu(e, idx)}
                         searchQuery={searchActive ? searchQuery : null}
                         searchDimmed={isSearchDimmed}
                       />
@@ -851,6 +903,38 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           reviewedRows={reviewedRowSet}
           rejectedRows={rejectedRowSet}
         />
+      )}
+      {contextMenu && (
+        <div style={{
+          position: 'fixed',
+          left: contextMenu.x + 'px',
+          top: contextMenu.y + 'px',
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border)',
+          borderRadius: '4px',
+          padding: '4px 0',
+          zIndex: 100,
+          minWidth: '160px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+        }}>
+          {contextMenuActions.map((item, i) => (
+            <div
+              key={i}
+              onClick={(e) => { e.stopPropagation(); item.action(); closeContextMenu(); }}
+              style={{
+                padding: '6px 12px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontFamily: 'var(--font-ui)',
+                color: 'var(--text-primary)',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >
+              {item.label}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

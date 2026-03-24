@@ -67,6 +67,8 @@ Vim-style, keyboard-first:
 - **[NV-4]** When a file is opened, the viewer shall auto-scroll to the first diff hunk
 - **[NV-5]** When the user presses `u`, the viewer shall mark the current hunk as unreviewed
 - **[NV-6]** When the user clicks a hunk, the viewer shall mark it reviewed (equivalent to advancing past it with `j`)
+- **[NV-7]** When the user presses `r`, the viewer shall reject the current hunk (visually distinct from reviewed; excluded from "unreviewed" counts)
+- **[NV-8]** When the user presses `i`, the viewer shall open the current hunk's file in the configured editor at the hunk's line number
 
 ### Directory Diff (DD)
 
@@ -92,6 +94,14 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[SM-4]** While in search mode, the viewer shall dim non-matching hunks
 - **[SM-5]** While in search mode, when the user presses `n` / `N`, the viewer shall jump to the next / previous match
 - **[SM-6]** While in search mode, when the user presses `Escape`, the viewer shall exit search mode and restore the normal view
+
+### Context Menu (CM)
+
+- **[CM-1]** When the user right-clicks a hunk, the viewer shall display a context menu
+- **[CM-2]** The context menu shall include "Mark as reviewed" (see NV-6)
+- **[CM-3]** The context menu shall include "Mark as unreviewed" (see NV-5)
+- **[CM-4]** The context menu shall include "Reject" (see NV-7)
+- **[CM-5]** The context menu shall include "Open in editor" (see NV-8)
 
 ### Binary Formats (BF)
 
