@@ -1,6 +1,6 @@
 # Implementation 1: React — Status
 
-**Spec:** v0.2 | **Coverage:** 55/55 (100%)
+**Spec:** v0.2 | **Coverage:** 55/56 (98%)
 
 ## Requirement Coverage
 
@@ -68,11 +68,12 @@
 | [SM-5] | n/N jump between matches | Done |
 | [SM-6] | Escape exits search mode | Done |
 
-### Binary Formats (BF) — 1/1
+### Binary Formats (BF) — 1/2
 
 | Req | Description | Status |
 |-----|-------------|--------|
 | [BF-1] | Side-by-side image diff | Done |
+| [BF-2] | Preview/source toggle for visual text files | Unmet |
 
 ### Diff Algorithm (DA) — 4/4
 

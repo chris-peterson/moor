@@ -106,6 +106,7 @@ When launched with two directories (`git difftool --dir-diff`):
 ### Binary Formats (BF)
 
 - **[BF-1]** When a recognized image file is opened, the diff viewer shall display the images side-by-side
+- **[BF-2]** Where a file has both a text and a visual representation (e.g., SVG, Markdown), the diff viewer shall provide a toggle between source diff and rendered preview
 
 ### Diff Algorithm (DA)
 
