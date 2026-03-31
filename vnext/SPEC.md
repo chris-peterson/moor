@@ -122,8 +122,14 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[AS-3]** The application shall show file paths in the window title
 - **[AS-4]** When launched, the application shall open fullscreen (maximized)
 - **[AS-5]** The application shall achieve first paint in under 1 second
-- **[AS-6]** When closed, the application shall exit with code 0 (for `git difftool` integration)
+- **[AS-6]** When closed, the application shall exit with a code indicating review outcome (see EC)
 - **[AS-7]** The application shall support `git difftool` integration via `git config`
+
+### Exit Codes (EC)
+
+- **[EC-1]** When closed with all hunks reviewed and none rejected, the application shall exit with code 0
+- **[EC-2]** When closed with one or more rejected hunks, the application shall exit with code 1
+- **[EC-3]** When closed with one or more unreviewed hunks, the application shall exit with code 2
 
 ### User Preferences (UP)
 

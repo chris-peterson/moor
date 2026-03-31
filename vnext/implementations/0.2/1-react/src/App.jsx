@@ -17,6 +17,13 @@ function buildQuitMessage() {
   return `${parts.join(', ')} change${(state.rejected + state.unreviewed) === 1 ? '' : 's'}.\n\nQuit anyway?`;
 }
 
+function computeExitCode() {
+  const state = window.__kdiff4QuitState;
+  if (state?.rejected > 0) return 1;
+  if (state?.unreviewed > 0) return 2;
+  return 0;
+}
+
 export function App() {
   const [mode, setMode] = useState('loading');
   const [leftPath, setLeftPath] = useState('');
@@ -55,7 +62,7 @@ export function App() {
     api.onCloseRequested(() => {
       const message = buildQuitMessage();
       if (!message || window.confirm(message)) {
-        api.forceClose();
+        api.forceClose(computeExitCode());
       }
     });
   }, [api]);

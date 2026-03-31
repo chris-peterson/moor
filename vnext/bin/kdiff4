@@ -3,7 +3,6 @@
 # Usage:
 #   kdiff4 dir1 dir2                          # compare directories
 #   kdiff4 file1 file2                         # compare files
-#   kdiff4 -m base left right -o output        # 3-way merge
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 IMPL_DIR="$SCRIPT_DIR/../implementations/0.2/1-react"
@@ -13,5 +12,11 @@ if [ ! -d "$IMPL_DIR/dist" ]; then
     echo "Building kdiff4..." >&2
     (cd "$IMPL_DIR" && ./node_modules/.bin/vite build --quiet) || exit 1
 fi
+
+# Exit code file: Electron writes the review outcome here.
+# git difftool --dir-diff swallows the process exit code,
+# so callers should read this file after git difftool returns.
+export KDIFF4_EXIT_FILE="${TMPDIR:-/tmp}/kdiff4-exit-code"
+rm -f "$KDIFF4_EXIT_FILE"
 
 exec "$IMPL_DIR/node_modules/.bin/electron" "$IMPL_DIR" "$@"

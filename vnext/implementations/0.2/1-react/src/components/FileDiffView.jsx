@@ -285,6 +285,16 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     return map;
   }, [hunkRanges]);
 
+  useEffect(() => {
+    if (onNavigateNext) return;
+    const totalHunks = hunkRanges.length;
+    const reviewed = reviewedHunks.size;
+    const rejected = rejectedHunks.size;
+    const unreviewed = Math.max(0, totalHunks - reviewed - rejected);
+    window.__kdiff4QuitState = { rejected, unreviewed };
+    return () => { window.__kdiff4QuitState = null; };
+  }, [hunkRanges.length, reviewedHunks, rejectedHunks, onNavigateNext]);
+
   const activeRowSet = useMemo(() => {
     if (hunkRanges.length === 0) return new Set();
     const range = hunkRanges[currentHunk];

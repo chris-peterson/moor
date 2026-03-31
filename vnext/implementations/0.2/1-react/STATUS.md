@@ -1,6 +1,6 @@
 # Implementation 1: React — Status
 
-**Spec:** v0.2 | **Coverage:** 55/56 (98%)
+**Spec:** v0.2 | **Coverage:** 58/59 (98%)
 
 ## Requirement Coverage
 
@@ -84,6 +84,14 @@
 | [DA-3] | Ignore trailing whitespace | Done |
 | [DA-4] | Binary detection via null byte | Done |
 
+### Exit Codes (EC) — 3/3
+
+| Req | Description | Status |
+|-----|-------------|--------|
+| [EC-1] | Exit code 0 on clean approve | Done |
+| [EC-2] | Exit code 1 on rejection | Done |
+| [EC-3] | Exit code 2 on unreviewed | Done |
+
 ### Application Shell (AS) — 7/7
 
 | Req | Description | Status |
@@ -93,7 +101,7 @@
 | [AS-3] | Window title shows paths | Done |
 | [AS-4] | Launch maximized | Done |
 | [AS-5] | Fast startup | Done |
-| [AS-6] | Exit code 0 | Done |
+| [AS-6] | Exit code reflects review outcome (see EC) | Done |
 | [AS-7] | git difftool integration | Done |
 
 ### User Preferences (UP) — 4/4

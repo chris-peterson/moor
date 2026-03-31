@@ -211,8 +211,9 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     if (state?.rejected > 0) parts.push(`${state.rejected} rejected`);
     if (state?.unreviewed > 0) parts.push(`${state.unreviewed} unreviewed`);
     if (parts.length === 0 || window.confirm(`${parts.join(', ')} change${(state.rejected + state.unreviewed) === 1 ? '' : 's'}.\n\nQuit anyway?`)) {
+      const exitCode = state?.rejected > 0 ? 1 : state?.unreviewed > 0 ? 2 : 0;
       if (window.kdiff4?.forceClose) {
-        window.kdiff4.forceClose();
+        window.kdiff4.forceClose(exitCode);
       } else {
         onClose();
       }

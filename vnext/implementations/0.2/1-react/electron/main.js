@@ -2,12 +2,13 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import fs from 'fs/promises';
-import { existsSync, statSync } from 'fs';
+import { existsSync, statSync, writeFileSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow;
+let exitCode = 0;
 
 function parseLaunchArgs() {
   const args = process.argv.slice(2).filter(a => !a.startsWith('--'));
@@ -86,8 +87,9 @@ app.whenReady().then(async () => {
   }
 
   let forceClose = false;
-  ipcMain.on('force-close', () => {
+  ipcMain.on('force-close', (_event, code) => {
     forceClose = true;
+    exitCode = code ?? 0;
     mainWindow.close();
   });
 
@@ -105,5 +107,9 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  app.quit();
+  const exitFile = process.env.KDIFF4_EXIT_FILE;
+  if (exitFile) {
+    writeFileSync(exitFile, String(exitCode));
+  }
+  process.exit(exitCode);
 });
