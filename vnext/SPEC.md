@@ -69,6 +69,8 @@ Vim-style, keyboard-first:
 - **[NV-6]** When the user clicks a hunk, the viewer shall mark it reviewed (equivalent to advancing past it with `j`)
 - **[NV-7]** When the user presses `r`, the viewer shall reject the current hunk (visually distinct from reviewed; excluded from "unreviewed" counts)
 - **[NV-8]** When the user presses `i`, the viewer shall open the current hunk's file in the configured editor at the hunk's line number
+- **[NV-9]** When the user clicks the currently-selected hunk, the viewer shall mark it as reviewed
+- **[NV-10]** When the user presses `R` (shift+r), the viewer shall unreject the current hunk (restoring it to unreviewed)
 
 ### Directory Diff (DD)
 
@@ -102,11 +104,18 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[CM-3]** The context menu shall include "Mark as unreviewed" (see NV-5)
 - **[CM-4]** The context menu shall include "Reject" (see NV-7)
 - **[CM-5]** The context menu shall include "Open in editor" (see NV-8)
+- **[CM-6]** When the selected hunk is rejected, the context menu shall include "Unreject" (see NV-10)
+
+### Review Feedback (RV)
+
+- **[RV-1]** When all hunks have been reviewed, the viewer shall display a transient "Review Complete!" notification
+- **[RV-2]** While in directory diff mode, the bottom bar shall display a progress bar and "X of Y changes viewed" status
+- **[RV-3]** While rejected hunks exist, the bottom bar shall display one badge per rejected file with a rejection count, and when the user clicks a badge, the viewer shall navigate to that file's first rejected hunk
 
 ### Binary Formats (BF)
 
 - **[BF-1]** When a recognized image file is opened, the diff viewer shall display the images side-by-side
-- **[BF-2]** Where a file has both a text and a visual representation (e.g., SVG, Markdown), the diff viewer shall provide a toggle between source diff and rendered preview
+- ~~**[BF-2]**~~ Deferred — see FUT-1
 
 ### Diff Algorithm (DA)
 
@@ -172,5 +181,6 @@ git difftool branch       # compare against a branch
 
 ## Deferred (Future Versions)
 
+- **[FUT-1]** (→ BF) Where a file has both a text and a visual representation (e.g., SVG, Markdown), the diff viewer shall provide a toggle between source diff and rendered preview
 - **Syntax highlighting** — language-aware coloring in diff panels
 - **Configurable preferences** — font, colors, ignored patterns

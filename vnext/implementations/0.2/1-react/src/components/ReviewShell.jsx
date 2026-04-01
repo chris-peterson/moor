@@ -44,6 +44,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
   const [rightContent, setRightContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [navigatedBackward, setNavigatedBackward] = useState(false);
+  const [targetHunk, setTargetHunk] = useState(null);
   const [showToast, setShowToast] = useState(false);
   const [hunkCounts, setHunkCounts] = useState({});
   const [perFileReviewedHunks, setPerFileReviewedHunks] = useState({});
@@ -129,8 +130,17 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
 
   const navigateTo = useCallback((index) => {
     if (index < 0 || index >= files.length) return;
+    setTargetHunk(null);
     setCurrentIndex(index);
   }, [files.length]);
+
+  const navigateToRejection = useCallback((fileIndex) => {
+    if (fileIndex < 0 || fileIndex >= files.length) return;
+    const rejected = perFileRejectedHunks[fileIndex];
+    const firstRejected = rejected ? Math.min(...rejected) : null;
+    setTargetHunk(firstRejected);
+    setCurrentIndex(fileIndex);
+  }, [files.length, perFileRejectedHunks]);
 
   const navigateNext = useCallback(() => {
     setNavigatedBackward(false);
@@ -360,6 +370,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
               onNavigateNext={navigateNext}
               onNavigatePrev={navigatePrev}
               startAtEnd={navigatedBackward}
+              startAtHunk={targetHunk}
               onHunkChange={() => {}}
               reviewedHunks={currentReviewedHunks}
               onReviewedHunksChange={handleReviewedHunksChange}
@@ -388,7 +399,9 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
         hunkCounts={hunkCounts}
         viewed={viewed}
         perFileReviewedHunks={perFileReviewedHunks}
+        perFileRejectedHunks={perFileRejectedHunks}
         currentFilePath={currentFile ? relativePath(currentFile.rightPath || currentFile.leftPath, rightPath || leftPath) : ''}
+        onNavigateToFile={navigateToRejection}
       />
     </div>
   );

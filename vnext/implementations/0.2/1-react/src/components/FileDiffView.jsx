@@ -193,7 +193,7 @@ const BINARY_SENTINEL = '\x00BINARY';
 
 const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|bmp|webp|svg|ico)$/i;
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, startAtEnd, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange, onSearchChange }) {
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, startAtEnd, startAtHunk, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange, onSearchChange }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
@@ -495,7 +495,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     setScrollTop(0);
     setScrollLeft(0);
     if (!externalReviewedHunks) setInternalReviewedHunks(new Set());
-    setCurrentHunk(startAtEnd && hunkStarts.length > 0 ? hunkStarts.length - 1 : 0);
+    setCurrentHunk(startAtHunk != null ? startAtHunk : startAtEnd && hunkStarts.length > 0 ? hunkStarts.length - 1 : 0);
     setCurrentMatchIdx(0);
     if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
   }, [leftContent, rightContent]);

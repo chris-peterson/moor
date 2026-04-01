@@ -1,6 +1,6 @@
 # Implementation 1: React — Status
 
-**Spec:** v0.2 | **Coverage:** 58/59 (98%)
+**Spec:** v0.2 | **Coverage:** 65/65 (100%)
 
 ## Requirement Coverage
 
@@ -18,7 +18,7 @@
 | [FD-8] | Binary file detection | Done |
 | [FD-9] | Dim reviewed hunks | Done |
 
-### Navigation (NV) — 8/8
+### Navigation (NV) — 10/10
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -30,6 +30,8 @@
 | [NV-6] | Click hunk marks reviewed | Done |
 | [NV-7] | r reject current hunk | Done |
 | [NV-8] | i open in editor | Done |
+| [NV-9] | Click current hunk marks reviewed | Done |
+| [NV-10] | R (shift+r) unreject current hunk | Done |
 
 ### Directory Diff (DD) — 11/11
 
@@ -47,16 +49,6 @@
 | [DD-10] | Resizable sidebar | Done |
 | [DD-11] | Hide/show sidebar | Done |
 
-### Context Menu (CM) — 5/5
-
-| Req | Description | Status |
-|-----|-------------|--------|
-| [CM-1] | Right-click hunk shows context menu | Done |
-| [CM-2] | Mark as reviewed | Done |
-| [CM-3] | Mark as unreviewed | Done |
-| [CM-4] | Reject | Done |
-| [CM-5] | Open in editor | Done |
-
 ### Search Mode (SM) — 6/6
 
 | Req | Description | Status |
@@ -68,12 +60,30 @@
 | [SM-5] | n/N jump between matches | Done |
 | [SM-6] | Escape exits search mode | Done |
 
-### Binary Formats (BF) — 1/2
+### Context Menu (CM) — 6/6
+
+| Req | Description | Status |
+|-----|-------------|--------|
+| [CM-1] | Right-click hunk shows context menu | Done |
+| [CM-2] | Mark as reviewed | Done |
+| [CM-3] | Mark as unreviewed | Done |
+| [CM-4] | Reject | Done |
+| [CM-5] | Open in editor | Done |
+| [CM-6] | Unreject (when hunk is rejected) | Done |
+
+### Review Feedback (RV) — 3/3
+
+| Req | Description | Status |
+|-----|-------------|--------|
+| [RV-1] | "Review Complete!" toast notification | Done |
+| [RV-2] | Progress bar and "X of Y changes viewed" | Done |
+| [RV-3] | Rejection badges in bottom bar | Done |
+
+### Binary Formats (BF) — 1/1
 
 | Req | Description | Status |
 |-----|-------------|--------|
 | [BF-1] | Side-by-side image diff | Done |
-| [BF-2] | Preview/source toggle for visual text files | Unmet |
 
 ### Diff Algorithm (DA) — 4/4
 
@@ -84,13 +94,14 @@
 | [DA-3] | Ignore trailing whitespace | Done |
 | [DA-4] | Binary detection via null byte | Done |
 
-### Exit Codes (EC) — 3/3
+### Exit Codes (EC) — 4/4
 
 | Req | Description | Status |
 |-----|-------------|--------|
 | [EC-1] | Exit code 0 on clean approve | Done |
 | [EC-2] | Exit code 1 on rejection | Done |
 | [EC-3] | Exit code 2 on unreviewed | Done |
+| [EC-4] | Exit code 3 on early close | Done |
 
 ### Application Shell (AS) — 7/7
 
@@ -112,3 +123,9 @@
 | [UP-2] | Tab width 4 spaces | Done |
 | [UP-3] | Dark theme with distinct hues | Done |
 | [UP-4] | Word wrap off | Done |
+
+### Deferred
+
+| Req | Description |
+|-----|-------------|
+| [FUT-1] | Preview/source toggle for visual text files (ex-BF-2) |

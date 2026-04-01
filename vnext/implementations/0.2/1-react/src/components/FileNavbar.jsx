@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function FileNavbar({ files, currentIndex, allViewed, hunkCounts, viewed, perFileReviewedHunks, currentFilePath }) {
+export function FileNavbar({ files, currentIndex, allViewed, hunkCounts, viewed, perFileReviewedHunks, perFileRejectedHunks, currentFilePath, onNavigateToFile }) {
   let viewedChanges = 0;
   let totalChanges = 0;
   for (let i = 0; i < files.length; i++) {
@@ -14,6 +14,18 @@ export function FileNavbar({ files, currentIndex, allViewed, hunkCounts, viewed,
     }
   }
   const progress = totalChanges > 0 ? viewedChanges / totalChanges : 0;
+
+  const rejectionBadges = [];
+  if (perFileRejectedHunks) {
+    for (let i = 0; i < files.length; i++) {
+      const rejected = perFileRejectedHunks[i];
+      if (rejected && rejected.size > 0) {
+        const file = files[i];
+        const name = (file.rightPath || file.leftPath || '').split('/').pop();
+        rejectionBadges.push({ fileIndex: i, count: rejected.size, name });
+      }
+    }
+  }
 
   return (
     <div style={{
@@ -40,6 +52,33 @@ export function FileNavbar({ files, currentIndex, allViewed, hunkCounts, viewed,
           minWidth: 0,
         }}>
           {currentFilePath}
+        </div>
+      )}
+      {rejectionBadges.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+          {rejectionBadges.map(({ fileIndex, count, name }) => (
+            <button
+              key={fileIndex}
+              onClick={() => onNavigateToFile?.(fileIndex)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 8px',
+                background: 'var(--color-conflict)',
+                color: 'var(--bg-primary)',
+                border: 'none',
+                borderRadius: '10px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '10px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {count} rejected · {name}
+            </button>
+          ))}
         </div>
       )}
       <div style={{
