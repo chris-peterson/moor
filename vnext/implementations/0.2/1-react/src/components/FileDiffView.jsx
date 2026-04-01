@@ -474,7 +474,8 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       const row = rows[hunkRanges[h].start];
       const line = row?.rightNum || row?.leftNum || 1;
       actions.push({ label: 'Open in editor', action: () => {
-        window.kdiff4.openInEditor(rightPath, line, 1);
+        window.kdiff4.openInEditor(rightPath, line, 1)
+          .then(r => { if (r && !r.found) console.warn('open-in-editor:', r.error); });
       }});
     }
     return actions;
@@ -621,7 +622,8 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           if (window.kdiff4?.openInEditor && rightPath && hunkRanges[currentHunk]) {
             const row = rows[hunkRanges[currentHunk].start];
             const line = row?.rightNum || row?.leftNum || 1;
-            window.kdiff4.openInEditor(rightPath, line, 1);
+            window.kdiff4.openInEditor(rightPath, line, 1)
+              .then(r => { if (r && !r.found) console.warn('open-in-editor:', r.error); });
           }
           break;
         }

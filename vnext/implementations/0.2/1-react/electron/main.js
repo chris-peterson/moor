@@ -48,10 +48,18 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('open-in-editor', async (_event, { filePath, line, column }) => {
-    if (path.isAbsolute(filePath)) {
-      return navigator.openAbsolutePath(filePath, line, column);
+    try {
+      const result = path.isAbsolute(filePath)
+        ? await navigator.openAbsolutePath(filePath, line, column)
+        : await navigator.openAtLine(filePath, line, column);
+      if (!result.found) {
+        console.error('[open-in-editor]', result.error);
+      }
+      return result;
+    } catch (err) {
+      console.error('[open-in-editor]', err.message);
+      return { found: false, error: err.message };
     }
-    return navigator.openAtLine(filePath, line, column);
   });
 
   mainWindow = new BrowserWindow({

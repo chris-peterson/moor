@@ -5,6 +5,7 @@ import FileNavbar from './FileNavbar.jsx';
 import { computeLineChanges } from '../engine/diff.js';
 
 const BINARY_SENTINEL = '\x00BINARY';
+const emptySet = new Set();
 
 function countHunks(leftContent, rightContent) {
   if (!leftContent && !rightContent) return 0;
@@ -156,7 +157,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     }
   }, [currentIndex, navigateTo]);
 
-  const currentReviewedHunks = perFileReviewedHunks[currentIndex] || null;
+  const currentReviewedHunks = perFileReviewedHunks[currentIndex] || emptySet;
   const handleReviewedHunksChange = useCallback((updater) => {
     setPerFileReviewedHunks(prev => ({
       ...prev,
@@ -164,7 +165,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     }));
   }, [currentIndex]);
 
-  const currentRejectedHunks = perFileRejectedHunks[currentIndex] || null;
+  const currentRejectedHunks = perFileRejectedHunks[currentIndex] || emptySet;
   const handleRejectedHunksChange = useCallback((updater) => {
     setPerFileRejectedHunks(prev => ({
       ...prev,

@@ -250,15 +250,26 @@ class VSCodeNavigator {
     return null;
   }
 
+  _shellEnv() {
+    const PATH = [
+      '/opt/homebrew/bin',
+      '/usr/local/bin',
+      '/usr/bin',
+      '/bin',
+      process.env.PATH,
+    ].filter(Boolean).join(':');
+    return { ...process.env, PATH };
+  }
+
   _binExists(name) {
     return new Promise(resolve => {
-      execFile('which', [name], err => resolve(!err));
+      execFile('which', [name], { env: this._shellEnv() }, err => resolve(!err));
     });
   }
 
   _exec(bin, args) {
     return new Promise((resolve, reject) => {
-      execFile(bin, args, { timeout: 10000 }, (err, stdout, stderr) => {
+      execFile(bin, args, { timeout: 10000, env: this._shellEnv() }, (err, stdout, stderr) => {
         if (err) reject(err);
         else resolve(stdout);
       });
