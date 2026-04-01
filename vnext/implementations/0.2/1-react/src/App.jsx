@@ -19,8 +19,9 @@ function buildQuitMessage() {
 
 function computeExitCode() {
   const state = window.__kdiff4QuitState;
-  if (state?.rejected > 0) return 1;
-  if (state?.unreviewed > 0) return 2;
+  if (!state || state.noInteraction) return 3;
+  if (state.rejected > 0) return 1;
+  if (state.unreviewed > 0) return 2;
   return 0;
 }
 

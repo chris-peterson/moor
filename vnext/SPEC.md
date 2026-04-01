@@ -130,6 +130,7 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[EC-1]** When closed with all hunks reviewed and none rejected, the application shall exit with code 0
 - **[EC-2]** When closed with one or more rejected hunks, the application shall exit with code 1
 - **[EC-3]** When closed with one or more unreviewed hunks, the application shall exit with code 2
+- **[EC-4]** When closed before hunk counting completes or before any review interaction, the application shall exit with code 3
 
 ### User Preferences (UP)
 

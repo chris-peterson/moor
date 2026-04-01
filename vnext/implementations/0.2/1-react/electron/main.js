@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow;
-let exitCode = 0;
+let exitCode = 3;
 
 function parseLaunchArgs() {
   const args = process.argv.slice(2).filter(a => !a.startsWith('--'));

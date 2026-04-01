@@ -196,14 +196,20 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     prevAllReviewed.current = allReviewed;
   }, [allReviewed, totalChanges]);
 
+  const hunkCountingDone = Object.keys(hunkCounts).length >= files.length;
+
   useEffect(() => {
+    if (!hunkCountingDone && files.length > 0) {
+      window.__kdiff4QuitState = { noInteraction: true, rejected: 0, unreviewed: files.length };
+      return () => { window.__kdiff4QuitState = null; };
+    }
     const unreviewed = totalChanges - reviewedChanges - totalRejected;
     window.__kdiff4QuitState = {
       rejected: totalRejected,
       unreviewed: Math.max(0, unreviewed),
     };
     return () => { window.__kdiff4QuitState = null; };
-  }, [totalChanges, reviewedChanges, totalRejected]);
+  }, [hunkCountingDone, files.length, totalChanges, reviewedChanges, totalRejected]);
 
   const confirmAndClose = useCallback(() => {
     const state = window.__kdiff4QuitState;
