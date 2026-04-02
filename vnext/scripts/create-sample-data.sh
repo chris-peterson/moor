@@ -168,6 +168,29 @@ export function lcm(a, b) {
 }
 EOF
 
+mkdir -p "$SAMPLE_DIR/left" "$SAMPLE_DIR/right"
+cp "$SAMPLE_DIR/left.js" "$SAMPLE_DIR/left/math.js"
+cp "$SAMPLE_DIR/right.js" "$SAMPLE_DIR/right/math.js"
+
+cat > "$SAMPLE_DIR/left/config.js" << 'EOF'
+export const CONFIG = {
+  debug: false,
+  logLevel: 'warn',
+  maxRetries: 3,
+};
+EOF
+
+cat > "$SAMPLE_DIR/right/config.js" << 'EOF'
+export const CONFIG = {
+  debug: true,
+  logLevel: 'info',
+  maxRetries: 5,
+  timeout: 30000,
+};
+EOF
+
 echo "Sample data created at: $SAMPLE_DIR"
 echo "  left:  $SAMPLE_DIR/left.js"
 echo "  right: $SAMPLE_DIR/right.js"
+echo "  left/:  $SAMPLE_DIR/left/"
+echo "  right/: $SAMPLE_DIR/right/"

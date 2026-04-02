@@ -193,7 +193,7 @@ const BINARY_SENTINEL = '\x00BINARY';
 
 const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|bmp|webp|svg|ico)$/i;
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, startAtEnd, startAtHunk, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange, onSearchChange }) {
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, startAtEnd, startAtHunk, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange, rejectionReasons: externalRejectionReasons, onRejectionReasonsChange, onSearchChange }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
@@ -241,6 +241,12 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const [internalRejectedHunks, setInternalRejectedHunks] = useState(() => new Set());
   const rejectedHunks = externalRejectedHunks || internalRejectedHunks;
   const setRejectedHunks = onRejectedHunksChange || setInternalRejectedHunks;
+  const [internalRejectionReasons, setInternalRejectionReasons] = useState(() => new Map());
+  const rejectionReasons = externalRejectionReasons || internalRejectionReasons;
+  const setRejectionReasons = onRejectionReasonsChange || setInternalRejectionReasons;
+  const [rejectingHunk, setRejectingHunk] = useState(null);
+  const rejectInputRef = useRef(null);
+  const rejectCompletedRef = useRef(false);
   const [splitPercent, setSplitPercent] = useState(50);
   const [draggingResizer, setDraggingResizer] = useState(false);
   const [searchActive, setSearchActive] = useState(false);
@@ -291,9 +297,22 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     const reviewed = reviewedHunks.size;
     const rejected = rejectedHunks.size;
     const unreviewed = Math.max(0, totalHunks - reviewed - rejected);
-    window.__kdiff4QuitState = { rejected, unreviewed };
+    const rejections = [];
+    for (const [hunkIdx, reason] of rejectionReasons) {
+      const range = hunkRanges[hunkIdx];
+      if (!range) continue;
+      const row = rows[range.start];
+      rejections.push({ file: rightPath || leftPath, hunk: hunkIdx, line: row?.rightNum || row?.leftNum || 1, reason });
+    }
+    window.__kdiff4QuitState = { rejected, unreviewed, rejections };
     return () => { window.__kdiff4QuitState = null; };
-  }, [hunkRanges.length, reviewedHunks, rejectedHunks, onNavigateNext]);
+  }, [hunkRanges, rows, reviewedHunks, rejectedHunks, rejectionReasons, onNavigateNext, leftPath, rightPath]);
+
+  useEffect(() => {
+    if (rejectingHunk != null && rejectInputRef.current) {
+      rejectInputRef.current.focus();
+    }
+  }, [rejectingHunk]);
 
   const activeRowSet = useMemo(() => {
     if (hunkRanges.length === 0) return new Set();
@@ -421,6 +440,25 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     });
   }, [currentHunk, rejectedHunks]);
 
+  const [rejectInitialValue, setRejectInitialValue] = useState('');
+
+  const beginReject = useCallback((hunkIdx) => {
+    rejectCompletedRef.current = false;
+    setRejectInitialValue(rejectionReasons.get(hunkIdx) || '');
+    setRejectingHunk(hunkIdx);
+  }, [rejectionReasons]);
+
+  const completeRejection = useCallback((hunkIdx, reason) => {
+    if (rejectCompletedRef.current) return;
+    rejectCompletedRef.current = true;
+    setRejectedHunks(prev => { const next = new Set(prev); next.add(hunkIdx); return next; });
+    setReviewedHunks(prev => { const next = new Set(prev); next.delete(hunkIdx); return next; });
+    if (reason) {
+      setRejectionReasons(prev => { const next = new Map(prev); next.set(hunkIdx, reason); return next; });
+    }
+    setRejectingHunk(null);
+  }, [setRejectedHunks, setReviewedHunks, setRejectionReasons]);
+
   const handleRowClick = useCallback((rowIdx) => {
     const hIdx = rowToHunk.get(rowIdx);
     if (hIdx == null) return;
@@ -461,13 +499,12 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       }});
     }
     if (!isRejected) {
-      actions.push({ label: 'Reject', action: () => {
-        setRejectedHunks(prev => { const next = new Set(prev); next.add(h); return next; });
-        setReviewedHunks(prev => { const next = new Set(prev); next.delete(h); return next; });
-      }});
+      actions.push({ label: 'Reject', action: () => beginReject(h) });
     } else {
+      actions.push({ label: 'Edit rejection note', action: () => beginReject(h) });
       actions.push({ label: 'Unreject', action: () => {
         setRejectedHunks(prev => { const next = new Set(prev); next.delete(h); return next; });
+        setRejectionReasons(prev => { const next = new Map(prev); next.delete(h); return next; });
       }});
     }
     if (window.kdiff4?.openInEditor && rightPath && hunkRanges[h]) {
@@ -479,7 +516,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       }});
     }
     return actions;
-  }, [contextMenu, reviewedHunks, rejectedHunks, hunkRanges, rows, rightPath, setReviewedHunks, setRejectedHunks]);
+  }, [contextMenu, reviewedHunks, rejectedHunks, hunkRanges, rows, rightPath, setReviewedHunks, setRejectedHunks, setRejectionReasons, beginReject]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -520,6 +557,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       }
 
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+      if (rejectingHunk != null) return;
 
       if (searchActive) {
         switch (e.key) {
@@ -596,25 +634,13 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
         }
         case 'r': {
           e.preventDefault();
-          setRejectedHunks(prev => {
-            const next = new Set(prev);
-            next.add(currentHunk);
-            return next;
-          });
-          setReviewedHunks(prev => {
-            const next = new Set(prev);
-            next.delete(currentHunk);
-            return next;
-          });
+          beginReject(currentHunk);
           break;
         }
         case 'R': {
           e.preventDefault();
-          setRejectedHunks(prev => {
-            const next = new Set(prev);
-            next.delete(currentHunk);
-            return next;
-          });
+          setRejectedHunks(prev => { const next = new Set(prev); next.delete(currentHunk); return next; });
+          setRejectionReasons(prev => { const next = new Map(prev); next.delete(currentHunk); return next; });
           break;
         }
         case 'i': {
@@ -640,7 +666,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hunkStarts, hunkRanges, currentHunk, reviewedHunks, rejectedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, searchActive, navigateMatch, exitSearch]);
+  }, [hunkStarts, hunkRanges, currentHunk, reviewedHunks, rejectedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, searchActive, navigateMatch, exitSearch, beginReject, setRejectionReasons, rejectingHunk]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -724,7 +750,8 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   });
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       {/* Main column: scroll container (with sticky header) + hscrollbar */}
       <div ref={contentAreaRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
@@ -857,12 +884,90 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                     left: 0,
                     right: 0,
                     height: (hunkRanges[currentHunk].end - hunkRanges[currentHunk].start + 1) * ROW_HEIGHT + 'px',
-                    border: `1px solid var(${rejectedHunks.has(currentHunk) ? '--color-conflict' : '--color-accent'})`,
+                    border: `1px solid var(${rejectedHunks.has(currentHunk) || rejectingHunk === currentHunk ? '--color-conflict' : '--color-accent'})`,
                     borderRadius: '3px',
                     pointerEvents: 'none',
                     zIndex: 2,
                   }} />
                 )}
+                {hunkRanges.map((range, hIdx) => {
+                  const isEditing = rejectingHunk === hIdx;
+                  const reason = rejectionReasons.get(hIdx);
+                  const isRejected = rejectedHunks.has(hIdx);
+                  if (!isEditing && !(isRejected && reason)) return null;
+                  return (
+                    <div key={`note-${hIdx}`} style={{
+                      position: 'absolute',
+                      top: (range.end + 1) * ROW_HEIGHT + 'px',
+                      left: 0,
+                      right: 0,
+                      zIndex: 10,
+                      pointerEvents: 'auto',
+                    }}>
+                      {isEditing ? (
+                        <textarea
+                          ref={rejectInputRef}
+                          key={`edit-${hIdx}`}
+                          defaultValue={rejectInitialValue}
+                          rows={2}
+                          placeholder="Rejection reason (optional) — Enter to confirm, Shift+Enter for newline, Escape to skip"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              completeRejection(rejectingHunk, e.target.value.trim() || null);
+                            } else if (e.key === 'Escape') {
+                              e.preventDefault();
+                              completeRejection(rejectingHunk, null);
+                            }
+                            e.stopPropagation();
+                          }}
+                          onBlur={() => {
+                            completeRejection(rejectingHunk, rejectInputRef.current?.value.trim() || null);
+                          }}
+                          style={{
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            padding: '4px 8px',
+                            fontSize: '13px',
+                            fontFamily: 'var(--font-ui)',
+                            background: 'var(--bg-panel)',
+                            color: 'var(--text-primary)',
+                            border: '1px solid var(--color-conflict)',
+                            borderRadius: '3px',
+                            outline: 'none',
+                            resize: 'vertical',
+                          }}
+                        />
+                      ) : (
+                        <div
+                          onClick={() => beginReject(hIdx)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '3px 8px',
+                            fontSize: '12px',
+                            fontFamily: 'var(--font-ui)',
+                            background: 'var(--bg-panel)',
+                            color: 'var(--color-conflict)',
+                            borderLeft: '3px solid var(--color-conflict)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <span style={{ flex: 1, whiteSpace: 'pre-wrap' }}>{reason}</span>
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRejectionReasons(prev => { const next = new Map(prev); next.delete(hIdx); return next; });
+                            }}
+                            style={{ opacity: 0.5, cursor: 'pointer', fontSize: '11px' }}
+                            title="Remove note"
+                          >✕</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 <div style={{ position: 'absolute', top: startIdx * ROW_HEIGHT + 'px', left: 0, right: 0 }}>
                   {visibleRows.map((row, i) => {
                     const idx = startIdx + i;
@@ -948,6 +1053,62 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           ))}
         </div>
       )}
+    </div>
+    {!onNavigateNext && !isBinary && hunkRanges.length > 0 && (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        background: 'var(--bg-surface)',
+        borderTop: '1px solid var(--border)',
+        height: '36px',
+        flexShrink: 0,
+        padding: '0 12px',
+        fontFamily: 'var(--font-mono)',
+        fontSize: '11px',
+        color: 'var(--text-primary)',
+        gap: '12px',
+      }}>
+        {rejectedHunks.size > 0 && (
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '2px 8px',
+            background: 'var(--color-conflict)',
+            color: 'var(--bg-primary)',
+            borderRadius: '10px',
+            fontSize: '10px',
+            fontWeight: 600,
+          }}>
+            {rejectedHunks.size} rejected
+          </span>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{
+            width: '120px',
+            height: '4px',
+            background: 'var(--border)',
+            borderRadius: '2px',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              width: `${hunkRanges.length > 0 ? (reviewedHunks.size + rejectedHunks.size) / hunkRanges.length * 100 : 0}%`,
+              height: '100%',
+              background: reviewedHunks.size + rejectedHunks.size >= hunkRanges.length ? 'var(--color-equal)' : 'var(--color-accent)',
+              borderRadius: '2px',
+              transition: 'width 0.2s',
+            }} />
+          </div>
+          <span>
+            {reviewedHunks.size + rejectedHunks.size >= hunkRanges.length ? (
+              <span style={{ color: 'var(--color-equal)' }}>All changes viewed · q to close</span>
+            ) : (
+              <>{reviewedHunks.size + rejectedHunks.size} of {hunkRanges.length} changes viewed</>
+            )}
+          </span>
+        </div>
+      </div>
+    )}
     </div>
   );
 }

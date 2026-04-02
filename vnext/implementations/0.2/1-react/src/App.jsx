@@ -25,6 +25,15 @@ function computeExitCode() {
   return 0;
 }
 
+function buildClosePayload() {
+  const state = window.__kdiff4QuitState;
+  const exitCode = computeExitCode();
+  return {
+    exitCode,
+    rejections: state?.rejections || [],
+  };
+}
+
 export function App() {
   const [mode, setMode] = useState('loading');
   const [leftPath, setLeftPath] = useState('');
@@ -63,7 +72,7 @@ export function App() {
     api.onCloseRequested(() => {
       const message = buildQuitMessage();
       if (!message || window.confirm(message)) {
-        api.forceClose(computeExitCode());
+        api.forceClose(buildClosePayload());
       }
     });
   }, [api]);

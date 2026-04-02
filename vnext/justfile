@@ -26,6 +26,9 @@ _diff flags:
     fi
     wait
 
+dir-diff: sample-data build
+    ./bin/kdiff4 {{sample_dir}}/left {{sample_dir}}/right
+
 gitconfig_repo := home_directory() / "src/getty/cpeterson/gitconfig"
 
 git-install: build

@@ -3,12 +3,16 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import fs from 'fs/promises';
 import { existsSync, statSync, writeFileSync } from 'fs';
+import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow;
 let exitCode = 3;
+let closePayload = null;
+let reviewer = null;
+try { reviewer = execSync('git config user.name', { encoding: 'utf-8' }).trim(); } catch {};
 
 function parseLaunchArgs() {
   const args = process.argv.slice(2).filter(a => !a.startsWith('--'));
@@ -95,9 +99,15 @@ app.whenReady().then(async () => {
   }
 
   let forceClose = false;
-  ipcMain.on('force-close', (_event, code) => {
+  ipcMain.on('force-close', (_event, payload) => {
     forceClose = true;
-    exitCode = code ?? 0;
+    if (typeof payload === 'object' && payload !== null) {
+      exitCode = payload.exitCode ?? 0;
+      closePayload = payload;
+    } else {
+      exitCode = payload ?? 0;
+      closePayload = { exitCode, rejections: [] };
+    }
     mainWindow.close();
   });
 
@@ -117,7 +127,9 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   const exitFile = process.env.KDIFF4_EXIT_FILE;
   if (exitFile) {
-    writeFileSync(exitFile, String(exitCode));
+    const data = closePayload || { exitCode, rejections: [] };
+    if (reviewer) data.reviewer = reviewer;
+    writeFileSync(exitFile, JSON.stringify(data, null, 2));
   }
   process.exit(exitCode);
 });

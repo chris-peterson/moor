@@ -71,6 +71,8 @@ Vim-style, keyboard-first:
 - **[NV-8]** When the user presses `i`, the viewer shall open the current hunk's file in the configured editor at the hunk's line number
 - **[NV-9]** When the user clicks the currently-selected hunk, the viewer shall mark it as reviewed
 - **[NV-10]** When the user presses `R` (shift+r), the viewer shall unreject the current hunk (restoring it to unreviewed)
+- **[NV-11]** When the user presses `r`, the viewer shall display an inline text area for an optional rejection reason; Enter confirms, Shift+Enter inserts a newline, Escape confirms without a reason
+- **[NV-12]** While a rejected hunk has a rejection reason, the viewer shall display the reason as a persistent note below the hunk; clicking the note shall open it for editing, and clicking the ✕ shall remove the note (the hunk remains rejected)
 
 ### Directory Diff (DD)
 
@@ -111,6 +113,7 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[RV-1]** When all hunks have been reviewed, the viewer shall display a transient "Review Complete!" notification
 - **[RV-2]** While in directory diff mode, the bottom bar shall display a progress bar and "X of Y changes viewed" status
 - **[RV-3]** While rejected hunks exist, the bottom bar shall display one badge per rejected file with a rejection count, and when the user clicks a badge, the viewer shall navigate to that file's first rejected hunk
+- **[RV-4]** While in single-file mode, the bottom bar shall display the same progress bar, status messaging, and rejection badges as directory diff mode
 
 ### Binary Formats (BF)
 
@@ -140,6 +143,7 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[EC-2]** When closed with one or more rejected hunks, the application shall exit with code 1
 - **[EC-3]** When closed with one or more unreviewed hunks, the application shall exit with code 2
 - **[EC-4]** When closed before hunk counting completes or before any review interaction, the application shall exit with code 3
+- **[EC-5]** When `KDIFF4_EXIT_FILE` is set, the sidecar file shall contain a JSON object with `exitCode` (number), `reviewer` (string, from `git config user.name`), and `rejections` (array of objects with `file`, `hunk`, `line`, and `reason` fields)
 
 ### User Preferences (UP)
 

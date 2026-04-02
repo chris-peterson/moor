@@ -50,6 +50,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
   const [hunkCounts, setHunkCounts] = useState({});
   const [perFileReviewedHunks, setPerFileReviewedHunks] = useState({});
   const [perFileRejectedHunks, setPerFileRejectedHunks] = useState({});
+  const [perFileRejectionReasons, setPerFileRejectionReasons] = useState({});
   const shellRef = useRef(null);
   const [sidebarWidth, setSidebarWidth] = useState(220);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -173,6 +174,15 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     }));
   }, [currentIndex]);
 
+  const emptyMap = useMemo(() => new Map(), []);
+  const currentRejectionReasons = perFileRejectionReasons[currentIndex] || emptyMap;
+  const handleRejectionReasonsChange = useCallback((updater) => {
+    setPerFileRejectionReasons(prev => ({
+      ...prev,
+      [currentIndex]: typeof updater === 'function' ? updater(prev[currentIndex] || new Map()) : updater,
+    }));
+  }, [currentIndex]);
+
   const handleSearchChange = useCallback((query) => {
     setSearchQuery(query);
   }, []);
@@ -211,16 +221,26 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
 
   useEffect(() => {
     if (!hunkCountingDone && files.length > 0) {
-      window.__kdiff4QuitState = { noInteraction: true, rejected: 0, unreviewed: files.length };
+      window.__kdiff4QuitState = { noInteraction: true, rejected: 0, unreviewed: files.length, rejections: [] };
       return () => { window.__kdiff4QuitState = null; };
     }
     const unreviewed = totalChanges - reviewedChanges - totalRejected;
+    const rejections = [];
+    for (const [fileIdx, reasons] of Object.entries(perFileRejectionReasons)) {
+      const file = files[fileIdx];
+      if (!file || !reasons.size) continue;
+      const filePath = file.rightPath || file.leftPath;
+      for (const [hunkIdx, reason] of reasons) {
+        rejections.push({ file: filePath, hunk: hunkIdx, line: null, reason });
+      }
+    }
     window.__kdiff4QuitState = {
       rejected: totalRejected,
       unreviewed: Math.max(0, unreviewed),
+      rejections,
     };
     return () => { window.__kdiff4QuitState = null; };
-  }, [hunkCountingDone, files.length, totalChanges, reviewedChanges, totalRejected]);
+  }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalRejected, perFileRejectionReasons]);
 
   const confirmAndClose = useCallback(() => {
     const state = window.__kdiff4QuitState;
@@ -230,7 +250,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     if (parts.length === 0 || window.confirm(`${parts.join(', ')} change${(state.rejected + state.unreviewed) === 1 ? '' : 's'}.\n\nQuit anyway?`)) {
       const exitCode = state?.rejected > 0 ? 1 : state?.unreviewed > 0 ? 2 : 0;
       if (window.kdiff4?.forceClose) {
-        window.kdiff4.forceClose(exitCode);
+        window.kdiff4.forceClose({ exitCode, rejections: state?.rejections || [] });
       } else {
         onClose();
       }
@@ -377,6 +397,8 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
               onReviewedHunksChange={handleReviewedHunksChange}
               rejectedHunks={currentRejectedHunks}
               onRejectedHunksChange={handleRejectedHunksChange}
+              rejectionReasons={currentRejectionReasons}
+              onRejectionReasonsChange={handleRejectionReasonsChange}
               onSearchChange={handleSearchChange}
             />
           ) : (

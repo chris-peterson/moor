@@ -7,5 +7,5 @@ contextBridge.exposeInMainWorld('kdiff4', {
   onInitialPaths: (callback) => ipcRenderer.once('initial-paths', (_event, data) => callback(data)),
   openInEditor: (filePath, line, column) => ipcRenderer.invoke('open-in-editor', { filePath, line, column }),
   onCloseRequested: (callback) => ipcRenderer.on('close-requested', () => callback()),
-  forceClose: (exitCode) => ipcRenderer.send('force-close', exitCode),
+  forceClose: (payload) => ipcRenderer.send('force-close', payload),
 });
