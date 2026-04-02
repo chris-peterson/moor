@@ -16,7 +16,9 @@ fi
 # Exit code file: Electron writes the review outcome here.
 # git difftool --dir-diff swallows the process exit code,
 # so callers should read this file after git difftool returns.
-export KDIFF4_EXIT_FILE="${TMPDIR:-/tmp}/kdiff4-exit-code"
+KDIFF4_CACHE_DIR="$HOME/.cache/kdiff4"
+mkdir -p "$KDIFF4_CACHE_DIR"
+export KDIFF4_EXIT_FILE="$KDIFF4_CACHE_DIR/exit-code"
 rm -f "$KDIFF4_EXIT_FILE"
 
 exec "$IMPL_DIR/node_modules/.bin/electron" "$IMPL_DIR" "$@"
