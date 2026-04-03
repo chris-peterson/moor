@@ -1,6 +1,6 @@
 # Implementation 1: React — Status
 
-**Spec:** v0.2 | **Coverage:** 65/65 (100%)
+**Spec:** v0.2 | **Coverage:** 66/66 (100%)
 
 ## Requirement Coverage
 
@@ -18,7 +18,7 @@
 | [FD-8] | Binary file detection | Done |
 | [FD-9] | Dim reviewed hunks | Done |
 
-### Navigation (NV) — 10/10
+### Navigation (NV) — 11/11
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -32,6 +32,7 @@
 | [NV-8] | i open in editor | Done |
 | [NV-9] | Click current hunk marks reviewed | Done |
 | [NV-10] | R (shift+r) unreject current hunk | Done |
+| [NV-13] | Scroll to show entire hunk | Done |
 
 ### Directory Diff (DD) — 11/11
 
@@ -129,3 +130,4 @@
 | Req | Description |
 |-----|-------------|
 | [FUT-1] | Preview/source toggle for visual text files (ex-BF-2) |
+| [FUT-2] | Detect renamed/moved files instead of showing L + R (→ DD) |

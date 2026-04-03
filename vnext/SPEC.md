@@ -73,6 +73,7 @@ Vim-style, keyboard-first:
 - **[NV-10]** When the user presses `R` (shift+r), the viewer shall unreject the current hunk (restoring it to unreviewed)
 - **[NV-11]** When the user presses `r`, the viewer shall display an inline text area for an optional rejection reason; Enter confirms, Shift+Enter inserts a newline, Escape confirms without a reason
 - **[NV-12]** While a rejected hunk has a rejection reason, the viewer shall display the reason as a persistent note below the hunk; clicking the note shall open it for editing, and clicking the ✕ shall remove the note (the hunk remains rejected)
+- **[NV-13]** When navigating to a hunk, the viewer shall scroll until the last line of the hunk is visible, ensuring the entire hunk is in view
 
 ### Directory Diff (DD)
 
@@ -186,5 +187,6 @@ git difftool branch       # compare against a branch
 ## Deferred (Future Versions)
 
 - **[FUT-1]** (→ BF) Where a file has both a text and a visual representation (e.g., SVG, Markdown), the diff viewer shall provide a toggle between source diff and rendered preview
+- **[FUT-2]** (→ DD) While in directory diff mode, when a file is renamed or moved, the viewer shall detect it as a single rename rather than displaying separate left-only (L) and right-only (R) entries *(needs design: detection strategy, visual indicator, content diff behavior)*
 - **Syntax highlighting** — language-aware coloring in diff panels
 - **Configurable preferences** — font, colors, ignored patterns

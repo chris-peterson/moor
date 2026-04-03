@@ -417,10 +417,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   // Scroll to current hunk after render (useLayoutEffect = uses updated state, fires before paint)
   useLayoutEffect(() => {
     if (!scrollContainerRef.current || hunkStarts.length === 0) return;
-    const rowIdx = hunkStarts[currentHunk];
-    if (rowIdx == null) return;
-    const top = rowIdx * ROW_HEIGHT;
-    const bottom = top + ROW_HEIGHT;
+    const range = hunkRanges[currentHunk];
+    if (!range) return;
+    const top = range.start * ROW_HEIGHT;
+    const bottom = (range.end + 1) * ROW_HEIGHT;
     const ev = Math.max(0, viewportHeight - headerHeight);
     const visibleTop = Math.max(0, scrollContainerRef.current.scrollTop - headerHeight);
     const visibleBottom = visibleTop + ev;
@@ -429,7 +429,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     } else if (bottom > visibleBottom) {
       scrollContainerRef.current.scrollTop = bottom - ev + headerHeight;
     }
-  }, [currentHunk, hunkStarts, viewportHeight, headerHeight]);
+  }, [currentHunk, hunkRanges, viewportHeight, headerHeight]);
 
   const markCurrentReviewed = useCallback(() => {
     if (rejectedHunks.has(currentHunk)) return;
