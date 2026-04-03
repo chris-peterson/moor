@@ -143,7 +143,7 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[EC-2]** When closed with one or more rejected hunks, the application shall exit with code 1
 - **[EC-3]** When closed with one or more unreviewed hunks, the application shall exit with code 2
 - **[EC-4]** When closed before hunk counting completes or before any review interaction, the application shall exit with code 3
-- **[EC-5]** When `KDIFF4_EXIT_FILE` is set, the sidecar file shall contain a JSON object with `exitCode` (number), `reviewer` (string, from `git config user.name`), and `rejections` (array of objects with `file`, `hunk`, `line`, and `reason` fields)
+- **[EC-5]** The launcher shall write a JSON sidecar file to `~/.cache/kdiff4/review-result-<PID>` (unique per invocation). If `KDIFF4_REVIEW_RESULT` is already set by the caller, the launcher shall respect it. The sidecar shall contain `exitCode` (number), `reviewer` (string, from `git config user.name`), and `rejections` (array of objects with `file`, `hunk`, `line`, and `reason` fields)
 
 ### User Preferences (UP)
 

@@ -125,7 +125,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  const exitFile = process.env.KDIFF4_EXIT_FILE;
+  const exitFile = process.env.KDIFF4_REVIEW_RESULT;
   if (exitFile) {
     const data = closePayload || { exitCode, rejections: [] };
     if (reviewer) data.reviewer = reviewer;

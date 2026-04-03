@@ -18,7 +18,9 @@ fi
 # so callers should read this file after git difftool returns.
 KDIFF4_CACHE_DIR="$HOME/.cache/kdiff4"
 mkdir -p "$KDIFF4_CACHE_DIR"
-export KDIFF4_EXIT_FILE="$KDIFF4_CACHE_DIR/exit-code"
-rm -f "$KDIFF4_EXIT_FILE"
+if [ -z "$KDIFF4_REVIEW_RESULT" ]; then
+    export KDIFF4_REVIEW_RESULT="$KDIFF4_CACHE_DIR/review-result-$$"
+fi
+rm -f "$KDIFF4_REVIEW_RESULT"
 
 exec "$IMPL_DIR/node_modules/.bin/electron" "$IMPL_DIR" "$@"
