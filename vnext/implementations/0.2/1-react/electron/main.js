@@ -15,14 +15,59 @@ let reviewer = null;
 try { reviewer = execSync('git config user.name', { encoding: 'utf-8' }).trim(); } catch {};
 
 function parseLaunchArgs() {
-  const args = process.argv.slice(2).filter(a => !a.startsWith('--'));
-  if (args.length === 2) {
-    const leftStat = statSync(args[0], { throwIfNoEntry: false });
-    const rightStat = statSync(args[1], { throwIfNoEntry: false });
+  const argv = process.argv.slice(2);
+  const positional = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--title') { i++; continue; }
+    if (a.startsWith('--')) continue;
+    positional.push(a);
+  }
+  if (positional.length === 2) {
+    const leftStat = statSync(positional[0], { throwIfNoEntry: false });
+    const rightStat = statSync(positional[1], { throwIfNoEntry: false });
     const isDirectory = leftStat?.isDirectory() || rightStat?.isDirectory();
-    return { left: args[0], right: args[1], isDirectory };
+    return { left: positional[0], right: positional[1], isDirectory };
   }
   return null;
+}
+
+function parseTitleFlag() {
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--title' && i + 1 < argv.length) return argv[i + 1];
+    if (a.startsWith('--title=')) return a.slice('--title='.length);
+  }
+  return null;
+}
+
+function deriveProject() {
+  try {
+    const toplevel = execSync('git rev-parse --show-toplevel', {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (toplevel) return path.basename(toplevel);
+  } catch {}
+  return null;
+}
+
+function deriveContext(launchArgs) {
+  const cliTitle = parseTitleFlag();
+  if (cliTitle) return cliTitle;
+  if (process.env.KDIFF4_TITLE) return process.env.KDIFF4_TITLE;
+  if (launchArgs) return `${launchArgs.left} vs ${launchArgs.right}`;
+  return null;
+}
+
+function deriveWindowTitle(launchArgs) {
+  const project = deriveProject();
+  const context = deriveContext(launchArgs);
+  if (project && context) return `${project} - ${context}`;
+  if (project) return project;
+  if (context) return context;
+  return 'kdiff4';
 }
 
 app.whenReady().then(async () => {
@@ -80,9 +125,8 @@ app.whenReady().then(async () => {
 
   const launchArgs = parseLaunchArgs();
 
-  if (launchArgs) {
-    mainWindow.setTitle(`kdiff4 — ${launchArgs.left} vs ${launchArgs.right}`);
-  }
+  mainWindow.on('page-title-updated', (e) => e.preventDefault());
+  mainWindow.setTitle(deriveWindowTitle(launchArgs));
 
   mainWindow.webContents.on('did-finish-load', () => {
     if (launchArgs) {

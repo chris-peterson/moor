@@ -104,7 +104,7 @@
 | [EC-3] | Exit code 2 on unreviewed | Done |
 | [EC-4] | Exit code 3 on early close | Done |
 
-### Application Shell (AS) — 7/7
+### Application Shell (AS) — 8/8
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -115,6 +115,7 @@
 | [AS-5] | Fast startup | Done |
 | [AS-6] | Exit code reflects review outcome (see EC) | Done |
 | [AS-7] | git difftool integration | Done |
+| [AS-8] | Window title context (CLI / env / git repo / paths) | Done |
 
 ### User Preferences (UP) — 4/4
 

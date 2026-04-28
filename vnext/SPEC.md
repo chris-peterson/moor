@@ -137,6 +137,7 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[AS-5]** The application shall achieve first paint in under 1 second
 - **[AS-6]** When closed, the application shall exit with a code indicating review outcome (see EC)
 - **[AS-7]** The application shall support `git difftool` integration via `git config`
+- **[AS-8]** When launched, the application shall set the window title to `<project> - <context>`, where `<project>` is the basename of the git repository toplevel (`git rev-parse --show-toplevel` from the working directory) and `<context>` is the highest-priority available of: (1) the `--title` CLI flag, (2) the `KDIFF4_TITLE` environment variable, (3) the file paths being diffed (`<left> vs <right>`, AS-3 fallback). When only one component is available, the title shall be that component alone. The window title shall not be prefixed with `kdiff4 —`.
 
 ### Exit Codes (EC)
 
