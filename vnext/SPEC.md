@@ -73,7 +73,7 @@ Vim-style, keyboard-first:
 - **[NV-10]** When the user presses `R` (shift+r), the viewer shall unreject the current hunk (restoring it to unreviewed)
 - **[NV-11]** When the user presses `r`, the viewer shall display an inline text area for an optional rejection reason; Enter confirms, Shift+Enter inserts a newline, Escape confirms without a reason
 - **[NV-12]** While a rejected hunk has a rejection reason, the viewer shall display the reason as a persistent note below the hunk; clicking the note shall open it for editing, and clicking the ✕ shall remove the note (the hunk remains rejected)
-- **[NV-13]** When navigating to a hunk, the viewer shall scroll until the last line of the hunk is visible, ensuring the entire hunk is in view
+- **[NV-13]** When navigating to a hunk, the viewer shall position the hunk so the entire hunk is visible. If scrolling is required, the viewer shall align the top of the hunk to the top of the viewport. If the hunk is taller than the viewport, the viewer shall instead align the last line of the hunk to the bottom of the viewport.
 
 ### Directory Diff (DD)
 

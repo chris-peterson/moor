@@ -429,12 +429,12 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     const visibleTop = Math.max(0, scrollContainerRef.current.scrollTop - headerHeight);
     const visibleBottom = visibleTop + ev;
     if (hunkHeight > ev) {
-      // Hunk taller than viewport: NV-13 requires the last line be visible.
+      // Hunk taller than viewport: NV-13 falls back to keeping the last line visible.
       scrollContainerRef.current.scrollTop = bottom - ev + headerHeight;
-    } else if (top < visibleTop) {
+    } else if (top < visibleTop || bottom > visibleBottom) {
+      // NV-13: when scroll is required, align the hunk's top to the viewport top.
+      // Browser clamps scrollTop near the end of the document, which still keeps the hunk visible.
       scrollContainerRef.current.scrollTop = top + headerHeight;
-    } else if (bottom > visibleBottom) {
-      scrollContainerRef.current.scrollTop = bottom - ev + headerHeight;
     }
   }, [currentHunk, hunkRanges, viewportHeight, headerHeight]);
 

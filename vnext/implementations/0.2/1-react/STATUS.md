@@ -34,7 +34,7 @@
 | [NV-10] | R (shift+r) unreject current hunk | Done |
 | [NV-11] | Inline rejection reason input | Done |
 | [NV-12] | Persistent rejection reason note | Done |
-| [NV-13] | Scroll to show entire hunk (last line visible) | Done |
+| [NV-13] | Align hunk top to viewport top on scroll (fallback: last line visible for tall hunks) | Done |
 
 ### Directory Diff (DD) — 11/11
 
