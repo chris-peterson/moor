@@ -1,6 +1,6 @@
 # Implementation 1: React — Status
 
-**Spec:** v0.2 | **Coverage:** 66/66 (100%)
+**Spec:** v0.2 | **Coverage:** 68/68 (100%)
 
 ## Requirement Coverage
 
@@ -18,7 +18,7 @@
 | [FD-8] | Binary file detection | Done |
 | [FD-9] | Dim reviewed hunks | Done |
 
-### Navigation (NV) — 11/11
+### Navigation (NV) — 13/13
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -32,7 +32,9 @@
 | [NV-8] | i open in editor | Done |
 | [NV-9] | Click current hunk marks reviewed | Done |
 | [NV-10] | R (shift+r) unreject current hunk | Done |
-| [NV-13] | Scroll to show entire hunk | Done |
+| [NV-11] | Inline rejection reason input | Done |
+| [NV-12] | Persistent rejection reason note | Done |
+| [NV-13] | Scroll to show entire hunk (last line visible) | Done |
 
 ### Directory Diff (DD) — 11/11
 
@@ -124,7 +126,7 @@
 | [UP-1] | Monospace 13px | Done |
 | [UP-2] | Tab width 4 spaces | Done |
 | [UP-3] | Dark theme with distinct hues | Done |
-| [UP-4] | Word wrap off | Done |
+| [UP-4] | Never truncate; horizontal scroll preferred, word wrap fallback | Done |
 
 ### Deferred
 

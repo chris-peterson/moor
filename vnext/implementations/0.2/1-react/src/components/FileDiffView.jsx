@@ -345,12 +345,15 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     return set;
   }, [hunkRanges, rejectedHunks]);
 
-  const panelWidth = useMemo(() => {
+  const maxScroll = useMemo(() => {
     if (!viewportWidth) return 0;
-    return Math.round((viewportWidth - BAR_WIDTH - RESIZER_WIDTH) * splitPercent / 100);
-  }, [viewportWidth, splitPercent]);
-
-  const maxScroll = useMemo(() => Math.max(0, maxContentWidth - panelWidth), [maxContentWidth, panelWidth]);
+    const availableWidth = Math.max(0, viewportWidth - BAR_WIDTH - RESIZER_WIDTH);
+    const leftW = Math.round(availableWidth * splitPercent / 100);
+    const rightW = availableWidth - leftW;
+    // Line number column reserves 48 + 8 (padding-right); code area also has 8 padding-left.
+    const codeAreaWidth = Math.max(0, Math.min(leftW, rightW) - 64);
+    return Math.max(0, maxContentWidth - codeAreaWidth);
+  }, [maxContentWidth, viewportWidth, splitPercent]);
 
   const searchMatches = useMemo(() => {
     if (!searchActive || !searchQuery) return [];
@@ -421,10 +424,14 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     if (!range) return;
     const top = range.start * ROW_HEIGHT;
     const bottom = (range.end + 1) * ROW_HEIGHT;
+    const hunkHeight = bottom - top;
     const ev = Math.max(0, viewportHeight - headerHeight);
     const visibleTop = Math.max(0, scrollContainerRef.current.scrollTop - headerHeight);
     const visibleBottom = visibleTop + ev;
-    if (top < visibleTop) {
+    if (hunkHeight > ev) {
+      // Hunk taller than viewport: NV-13 requires the last line be visible.
+      scrollContainerRef.current.scrollTop = bottom - ev + headerHeight;
+    } else if (top < visibleTop) {
       scrollContainerRef.current.scrollTop = top + headerHeight;
     } else if (bottom > visibleBottom) {
       scrollContainerRef.current.scrollTop = bottom - ev + headerHeight;
