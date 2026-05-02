@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import os from 'os';
 import fs from 'fs/promises';
 import { existsSync, statSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
@@ -48,16 +49,35 @@ function deriveProject() {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
-    if (toplevel) return path.basename(toplevel);
+    if (!toplevel) return null;
+    const home = os.homedir();
+    const display = toplevel === home || toplevel.startsWith(home + path.sep)
+      ? '~' + toplevel.slice(home.length)
+      : toplevel;
+    return `${path.basename(toplevel)} (${display})`;
   } catch {}
   return null;
+}
+
+function isGitDifftoolTmpPath(p) {
+  if (!p) return false;
+  // git difftool --dir-diff drops the trees in $TMPDIR/git-difftool.<hash>/{left,right}.
+  // Surfacing those paths in the window title is useless — they're random,
+  // unrelated to the user's repo, and obscure the project name.
+  const tmpdir = os.tmpdir();
+  return p.startsWith(tmpdir) && /git-difftool\./.test(p);
 }
 
 function deriveContext(launchArgs) {
   const cliTitle = parseTitleFlag();
   if (cliTitle) return cliTitle;
   if (process.env.KDIFF4_TITLE) return process.env.KDIFF4_TITLE;
-  if (launchArgs) return `${launchArgs.left} vs ${launchArgs.right}`;
+  if (launchArgs) {
+    if (isGitDifftoolTmpPath(launchArgs.left) && isGitDifftoolTmpPath(launchArgs.right)) {
+      return 'git diff';
+    }
+    return `${launchArgs.left} vs ${launchArgs.right}`;
+  }
   return null;
 }
 

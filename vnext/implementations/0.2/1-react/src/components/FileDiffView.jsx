@@ -31,17 +31,15 @@ function SearchHighlight({ text, query, isCurrent }) {
 
 function areSimilarEnough(a, b) {
   if (!a || !b) return false;
-  const maxLen = Math.max(a.length, b.length);
-  if (maxLen === 0) return true;
+  // Compare distinct word tokens, not characters — English sentences always
+  // share most letters of the alphabet, so a char-set check returns true even
+  // for completely different lines and produces noisy per-word badges.
+  const tokensA = new Set(a.match(/[a-zA-Z0-9_]+/g) || []);
+  const tokensB = new Set(b.match(/[a-zA-Z0-9_]+/g) || []);
+  if (tokensA.size === 0 || tokensB.size === 0) return false;
   let common = 0;
-  const shorter = a.length <= b.length ? a : b;
-  const longer = a.length <= b.length ? b : a;
-  const longerSet = new Set();
-  for (let i = 0; i < longer.length; i++) longerSet.add(longer[i]);
-  for (let i = 0; i < shorter.length; i++) {
-    if (longerSet.has(shorter[i])) common++;
-  }
-  return common / maxLen > 0.4;
+  for (const t of tokensA) if (tokensB.has(t)) common++;
+  return common / Math.max(tokensA.size, tokensB.size) > 0.4;
 }
 
 const ROW_HEIGHT = Math.ceil(15 * 1.6); // 24px — fits active font (15px)
@@ -254,6 +252,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
   const searchInputRef = useRef(null);
   const [contextMenu, setContextMenu] = useState(null);
+  const contextMenuRef = useRef(null);
   const totalHeight = rows.length * ROW_HEIGHT;
 
   const maxContentWidth = useMemo(() => {
@@ -436,6 +435,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       // Browser clamps scrollTop near the end of the document, which still keeps the hunk visible.
       scrollContainerRef.current.scrollTop = top + headerHeight;
     }
+    setScrollLeft(0);
   }, [currentHunk, hunkRanges, viewportHeight, headerHeight]);
 
   const markCurrentReviewed = useCallback(() => {
@@ -527,12 +527,19 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
   useEffect(() => {
     if (!contextMenu) return;
-    const dismiss = () => setContextMenu(null);
-    document.addEventListener('click', dismiss);
-    document.addEventListener('keydown', dismiss);
+    // Dismiss only on outside interaction. Don't rely on stopPropagation from
+    // menu items — React synthetic events and native document listeners don't
+    // play well together and can drop the click before the action runs.
+    const onMouseDown = (e) => {
+      if (contextMenuRef.current && contextMenuRef.current.contains(e.target)) return;
+      setContextMenu(null);
+    };
+    const onKeyDown = () => setContextMenu(null);
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKeyDown);
     return () => {
-      document.removeEventListener('click', dismiss);
-      document.removeEventListener('keydown', dismiss);
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKeyDown);
     };
   }, [contextMenu]);
 
@@ -695,7 +702,9 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     const el = scrollContainerRef.current;
     if (!el) return;
     const onWheel = (e) => {
-      if (e.deltaX !== 0) {
+      // Trackpads emit small deltaX during predominantly-vertical scrolls and
+      // strand the user mid-line. Only honor horizontal intent.
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && e.deltaX !== 0) {
         e.preventDefault();
         setScrollLeft(prev => Math.max(0, Math.min(maxScroll, prev + e.deltaX)));
       }
@@ -1029,7 +1038,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
         />
       )}
       {contextMenu && (
-        <div style={{
+        <div ref={contextMenuRef} style={{
           position: 'fixed',
           left: contextMenu.x + 'px',
           top: contextMenu.y + 'px',
@@ -1044,7 +1053,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           {contextMenuActions.map((item, i) => (
             <div
               key={i}
-              onClick={(e) => { e.stopPropagation(); item.action(); closeContextMenu(); }}
+              onClick={() => { item.action(); closeContextMenu(); }}
               style={{
                 padding: '6px 12px',
                 cursor: 'pointer',
