@@ -70,6 +70,10 @@ export function App() {
   useEffect(() => {
     if (!api?.onCloseRequested) return;
     api.onCloseRequested(() => {
+      if (typeof window.__kdiff4ConfirmClose === 'function') {
+        window.__kdiff4ConfirmClose();
+        return;
+      }
       const message = buildQuitMessage();
       if (!message || window.confirm(message)) {
         api.forceClose(buildClosePayload());

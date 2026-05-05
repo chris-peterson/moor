@@ -26,6 +26,15 @@ function countHunks(leftContent, rightContent) {
   return count;
 }
 
+function relativePath(fullPath, base) {
+  if (!fullPath || !base) return fullPath || '';
+  if (fullPath.startsWith(base)) {
+    const rel = fullPath.slice(base.length);
+    return rel.startsWith('/') ? rel.slice(1) : rel;
+  }
+  return fullPath;
+}
+
 function flattenTree(node, list = []) {
   if (node.type === 'file' && node.status !== 'identical') {
     list.push(node);
@@ -57,6 +66,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
   const [draggingSidebar, setDraggingSidebar] = useState(false);
   const [searchQuery, setSearchQuery] = useState(null);
   const [fileContents, setFileContents] = useState({});
+  const [quitDialog, setQuitDialog] = useState(null);
 
   const handleSidebarResizerMouseDown = useCallback((e) => {
     e.preventDefault();
@@ -250,51 +260,91 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     return () => { window.__kdiff4QuitState = null; };
   }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalRejected, perFileRejectionReasons]);
 
-  const confirmAndClose = useCallback(() => {
-    const state = window.__kdiff4QuitState;
-    const parts = [];
-    if (state?.rejected > 0) parts.push(`${state.rejected} rejected`);
-    if (state?.unreviewed > 0) parts.push(`${state.unreviewed} unreviewed`);
-    if (parts.length === 0 || window.confirm(`${parts.join(', ')} change${(state.rejected + state.unreviewed) === 1 ? '' : 's'}.\n\nQuit anyway?`)) {
-      const exitCode = state?.rejected > 0 ? 1 : state?.unreviewed > 0 ? 2 : 0;
-      if (window.kdiff4?.forceClose) {
-        window.kdiff4.forceClose({ exitCode, rejections: state?.rejections || [] });
-      } else {
-        onClose();
+  const closeWithExitCode = useCallback((exitCode) => {
+    const rejections = [];
+    for (const [fileIdxStr, reasons] of Object.entries(perFileRejectionReasons)) {
+      const file = files[Number(fileIdxStr)];
+      if (!file || !reasons.size) continue;
+      const filePath = file.rightPath || file.leftPath;
+      for (const [hunkIdx, reason] of reasons) {
+        rejections.push({ file: filePath, hunk: hunkIdx, line: null, reason });
       }
     }
-  }, [onClose]);
+    if (window.kdiff4?.forceClose) {
+      window.kdiff4.forceClose({ exitCode, rejections });
+    } else {
+      onClose();
+    }
+  }, [files, perFileRejectionReasons, onClose]);
+
+  const unreviewedCount = Math.max(0, totalChanges - reviewedChanges - totalRejected);
+
+  const requestClose = useCallback(() => {
+    if (totalRejected > 0) {
+      setQuitDialog({ mode: 'rejected' });
+    } else if (unreviewedCount > 0) {
+      setQuitDialog({ mode: 'unreviewed' });
+    } else {
+      closeWithExitCode(0);
+    }
+  }, [totalRejected, unreviewedCount, closeWithExitCode]);
+
+  useEffect(() => {
+    window.__kdiff4ConfirmClose = requestClose;
+    return () => {
+      if (window.__kdiff4ConfirmClose === requestClose) {
+        window.__kdiff4ConfirmClose = null;
+      }
+    };
+  }, [requestClose]);
+
+  const rejectionSummary = useMemo(() => {
+    const summary = [];
+    for (const [fileIdxStr, hunks] of Object.entries(perFileRejectedHunks)) {
+      if (!hunks || hunks.size === 0) continue;
+      const fileIdx = Number(fileIdxStr);
+      const file = files[fileIdx];
+      if (!file) continue;
+      const reasons = perFileRejectionReasons[fileIdx];
+      const filePath = relativePath(file.rightPath || file.leftPath, rightPath || leftPath);
+      const items = [...hunks].sort((a, b) => a - b).map(hunkIdx => ({
+        hunk: hunkIdx,
+        reason: reasons?.get(hunkIdx) || null,
+      }));
+      summary.push({ fileIdx, filePath, count: hunks.size, items });
+    }
+    return summary;
+  }, [files, perFileRejectedHunks, perFileRejectionReasons, leftPath, rightPath]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
       if (searchQuery != null) return;
 
+      if (quitDialog) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setQuitDialog(null);
+        }
+        return;
+      }
+
       switch (e.key) {
         case 'q':
         case 'Escape':
           e.preventDefault();
-          confirmAndClose();
+          requestClose();
           break;
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [confirmAndClose, searchQuery]);
+  }, [requestClose, searchQuery, quitDialog]);
 
   useEffect(() => {
     if (shellRef.current) shellRef.current.focus();
   }, []);
-
-  const relativePath = (fullPath, base) => {
-    if (!fullPath || !base) return fullPath || '';
-    if (fullPath.startsWith(base)) {
-      const rel = fullPath.slice(base.length);
-      return rel.startsWith('/') ? rel.slice(1) : rel;
-    }
-    return fullPath;
-  };
 
   return (
     <div
@@ -435,6 +485,104 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
         currentFilePath={currentFile ? relativePath(currentFile.rightPath || currentFile.leftPath, rightPath || leftPath) : ''}
         onNavigateToFile={navigateToRejection}
       />
+      {quitDialog && (
+        <QuitDialog
+          mode={quitDialog.mode}
+          rejectedCount={totalRejected}
+          unreviewedCount={unreviewedCount}
+          rejectionSummary={rejectionSummary}
+          onCancel={() => setQuitDialog(null)}
+          onSendReviewFeedback={() => closeWithExitCode(1)}
+          onQuitAnyway={() => closeWithExitCode(2)}
+          onApproveAnyway={() => closeWithExitCode(0)}
+        />
+      )}
+    </div>
+  );
+}
+
+function QuitDialog({ mode, rejectedCount, unreviewedCount, rejectionSummary, onCancel, onSendReviewFeedback, onQuitAnyway, onApproveAnyway }) {
+  const overlay = {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0, 0, 0, 0.55)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2000,
+    fontFamily: 'var(--font-ui)',
+  };
+  const dialog = {
+    background: 'var(--bg-surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    padding: '20px 24px',
+    minWidth: '420px',
+    maxWidth: '640px',
+    color: 'var(--text-primary)',
+    boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)',
+  };
+  const heading = { margin: '0 0 12px 0', fontSize: '15px', fontWeight: 600 };
+  const body = { fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' };
+  const buttonRow = { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '20px' };
+  const baseBtn = {
+    fontFamily: 'inherit',
+    fontSize: '13px',
+    padding: '6px 14px',
+    borderRadius: '4px',
+    border: '1px solid var(--border)',
+    background: 'var(--bg-deep)',
+    color: 'var(--text-primary)',
+    cursor: 'pointer',
+  };
+  const primaryBtn = { ...baseBtn, background: 'var(--color-accent)', borderColor: 'var(--color-accent)', color: 'var(--bg-deep)', fontWeight: 600 };
+
+  if (mode === 'rejected') {
+    return (
+      <div style={overlay} onClick={onCancel}>
+        <div style={dialog} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+          <h2 style={heading}>Review feedback</h2>
+          <div style={body}>
+            {rejectedCount} rejected change{rejectedCount === 1 ? '' : 's'} across {rejectionSummary.length} file{rejectionSummary.length === 1 ? '' : 's'}.
+          </div>
+          <div style={{ maxHeight: '320px', overflow: 'auto', border: '1px solid var(--border)', borderRadius: '4px', padding: '10px 12px', background: 'var(--bg-deep)' }}>
+            {rejectionSummary.map(({ fileIdx, filePath, count, items }) => (
+              <div key={fileIdx} style={{ marginBottom: '10px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {filePath} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({count})</span>
+                </div>
+                <ul style={{ margin: '4px 0 0 0', paddingLeft: '18px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  {items.map(({ hunk, reason }) => (
+                    <li key={hunk}>
+                      hunk {hunk + 1}{reason ? `: ${reason}` : ' (no reason)'}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <div style={buttonRow}>
+            <button style={baseBtn} onClick={onCancel}>Cancel</button>
+            <button style={primaryBtn} onClick={onSendReviewFeedback} autoFocus>Send review feedback</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={overlay} onClick={onCancel}>
+      <div style={dialog} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+        <h2 style={heading}>Quit?</h2>
+        <div style={body}>
+          {unreviewedCount} unreviewed change{unreviewedCount === 1 ? '' : 's'} remaining.
+        </div>
+        <div style={buttonRow}>
+          <button style={baseBtn} onClick={onCancel}>Cancel</button>
+          <button style={baseBtn} onClick={onApproveAnyway}>Approve anyway</button>
+          <button style={primaryBtn} onClick={onQuitAnyway} autoFocus>Quit anyway</button>
+        </div>
+      </div>
     </div>
   );
 }

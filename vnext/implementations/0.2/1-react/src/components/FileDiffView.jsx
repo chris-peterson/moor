@@ -591,8 +591,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       }
 
       switch (e.key) {
-        case 'j':
-        case 'J': {
+        case 'j': {
           e.preventDefault();
           markCurrentReviewed();
           if (currentHunk < hunkStarts.length - 1) {
@@ -600,6 +599,18 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           } else if (onNavigateNext) {
             onNavigateNext();
           }
+          break;
+        }
+        case 'J': {
+          e.preventDefault();
+          setReviewedHunks(prev => {
+            const next = new Set(prev);
+            for (let i = 0; i < hunkRanges.length; i++) {
+              if (!rejectedHunks.has(i)) next.add(i);
+            }
+            return next;
+          });
+          if (onNavigateNext) onNavigateNext();
           break;
         }
         case 'k':

@@ -1,6 +1,6 @@
 # Implementation 1: React — Status
 
-**Spec:** v0.2 | **Coverage:** 71/71 (100%)
+**Spec:** v0.2 | **Coverage:** 74/74 (100%)
 
 ## Requirement Coverage
 
@@ -18,7 +18,7 @@
 | [FD-8] | Binary file detection | Done |
 | [FD-9] | Dim reviewed hunks | Done |
 
-### Navigation (NV) — 13/13
+### Navigation (NV) — 14/14
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -35,8 +35,9 @@
 | [NV-11] | Inline rejection reason input | Done |
 | [NV-12] | Persistent rejection reason note | Done |
 | [NV-13] | Align hunk top to viewport top on scroll (fallback: last line visible for tall hunks) | Done |
+| [NV-14] | Shift+J marks file reviewed and advances to next file | Done |
 
-### Directory Diff (DD) — 11/11
+### Directory Diff (DD) — 13/13
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -51,6 +52,8 @@
 | [DD-9] | Full file path in lower-left | Done |
 | [DD-10] | Resizable sidebar | Done |
 | [DD-11] | Hide/show sidebar | Done |
+| [DD-12] | Quit dialog summarizes rejections; primary CTA "Send review feedback" | Done |
+| [DD-13] | Quit dialog "Approve anyway" exits 0 with unreviewed hunks | Done |
 
 ### Search Mode (SM) — 6/6
 

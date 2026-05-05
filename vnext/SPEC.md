@@ -66,6 +66,7 @@ Vim-style, keyboard-first:
 - **[NV-11]** When the user presses `r`, the viewer shall display an inline text area for an optional rejection reason; Enter confirms, Shift+Enter inserts a newline, Escape confirms without a reason
 - **[NV-12]** While a rejected hunk has a rejection reason, the viewer shall display the reason as a persistent note below the hunk; clicking the note shall open it for editing, and clicking the ✕ shall remove the note (the hunk remains rejected)
 - **[NV-13]** When navigating to a hunk, the viewer shall position the hunk so the entire hunk is visible. If scrolling is required, the viewer shall align the top of the hunk to the top of the viewport. If the hunk is taller than the viewport, the viewer shall instead align the last line of the hunk to the bottom of the viewport.
+- **[NV-14]** When the user presses `Shift+J`, the viewer shall mark all unreviewed hunks in the current file as reviewed and navigate to the first hunk of the next file. Rejected hunks remain rejected.
 
 ### Directory Diff (DD)
 
@@ -82,6 +83,8 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[DD-9]** While in directory diff mode, the viewer shall display the full file path in the lower-left of the view
 - **[DD-10]** While in directory diff mode, the viewer shall allow the user to resize the sidebar width by dragging its right edge
 - **[DD-11]** While in directory diff mode, the viewer shall provide a way to hide and show the sidebar
+- **[DD-12]** When the user attempts to close with one or more rejected hunks, the viewer shall display a quit confirmation dialog summarizing the rejections (per-file count and reasons), with the primary CTA labeled "Send review feedback" that confirms the close. Exit code follows EC-2.
+- **[DD-13]** When the user attempts to close with one or more unreviewed hunks and no rejected hunks, the viewer shall display a quit confirmation dialog with the existing OK / Cancel actions plus an "Approve anyway" button. "Approve anyway" shall close the viewer with exit code 0 (clean approve) regardless of the unreviewed count.
 
 ### Search Mode (SM)
 
