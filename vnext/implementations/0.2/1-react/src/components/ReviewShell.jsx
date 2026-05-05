@@ -203,6 +203,14 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
 
   const totalRejected = Object.values(perFileRejectedHunks).reduce((n, s) => n + s.size, 0);
 
+  const rejectedFiles = useMemo(() => {
+    const set = new Set();
+    for (const [idx, hunks] of Object.entries(perFileRejectedHunks)) {
+      if (hunks && hunks.size > 0) set.add(Number(idx));
+    }
+    return set;
+  }, [perFileRejectedHunks]);
+
   const totalChanges = Object.values(hunkCounts).reduce((a, b) => a + b, 0);
   const reviewedChanges = Object.values(perFileReviewedHunks).reduce((n, s) => n + s.size, 0);
   const allReviewed = totalChanges > 0 && reviewedChanges >= totalChanges;
@@ -350,6 +358,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
               files={files}
               currentIndex={currentIndex}
               viewed={viewed}
+              rejectedFiles={rejectedFiles}
               onSelect={navigateTo}
               width={sidebarWidth}
               onCollapse={() => setSidebarCollapsed(true)}

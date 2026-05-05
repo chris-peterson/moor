@@ -18,7 +18,7 @@ const statusLabel = (status) => {
   }
 };
 
-function SidebarNode({ node, depth, files, currentIndex, viewed, onSelect, expanded, onToggle, hiddenFiles }) {
+function SidebarNode({ node, depth, files, currentIndex, viewed, rejectedFiles, onSelect, expanded, onToggle, hiddenFiles }) {
   const isDir = node.type === 'directory';
   const isIdentical = node.status === 'identical';
   const nodeKey = node.leftPath || node.rightPath || node.name;
@@ -27,6 +27,7 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, onSelect, expan
   const fileIndex = isDir ? -1 : files.indexOf(node);
   const isCurrent = fileIndex === currentIndex;
   const isViewed = viewed.has(fileIndex);
+  const isRejected = !isDir && rejectedFiles && rejectedFiles.has(fileIndex);
   const isClickable = !isDir && fileIndex >= 0;
   const isHidden = hiddenFiles && fileIndex >= 0 && hiddenFiles.has(fileIndex);
 
@@ -73,7 +74,7 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, onSelect, expan
           fontFamily: 'var(--font-mono)',
           fontSize: '11px',
           lineHeight: '1.8',
-          color: isViewed ? 'var(--text-muted)' : 'var(--text-primary)',
+          color: isRejected ? 'var(--color-conflict)' : isViewed ? 'var(--text-muted)' : 'var(--text-primary)',
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -109,6 +110,7 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, onSelect, expan
           files={files}
           currentIndex={currentIndex}
           viewed={viewed}
+          rejectedFiles={rejectedFiles}
           onSelect={onSelect}
           expanded={expanded}
           onToggle={onToggle}
@@ -119,7 +121,7 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, onSelect, expan
   );
 }
 
-export function Sidebar({ tree, files, currentIndex, viewed, onSelect, width, onCollapse, hiddenFiles }) {
+export function Sidebar({ tree, files, currentIndex, viewed, rejectedFiles, onSelect, width, onCollapse, hiddenFiles }) {
   const [expanded, setExpanded] = useState(() => {
     const set = new Set();
     const expandAll = (node) => {
@@ -220,6 +222,7 @@ export function Sidebar({ tree, files, currentIndex, viewed, onSelect, width, on
             files={files}
             currentIndex={currentIndex}
             viewed={viewed}
+            rejectedFiles={rejectedFiles}
             onSelect={onSelect}
             expanded={expanded}
             onToggle={onToggle}

@@ -1,6 +1,6 @@
 # Implementation 1: React — Status
 
-**Spec:** v0.2 | **Coverage:** 68/68 (100%)
+**Spec:** v0.2 | **Coverage:** 71/71 (100%)
 
 ## Requirement Coverage
 
@@ -74,13 +74,14 @@
 | [CM-5] | Open in editor | Done |
 | [CM-6] | Unreject (when hunk is rejected) | Done |
 
-### Review Feedback (RV) — 3/3
+### Review Feedback (RV) — 4/4
 
 | Req | Description | Status |
 |-----|-------------|--------|
 | [RV-1] | "Review Complete!" toast notification | Done |
 | [RV-2] | Progress bar and "X of Y changes viewed" | Done |
 | [RV-3] | Rejection badges in bottom bar | Done |
+| [RV-4] | Sidebar entry red when file has rejected hunks | Done |
 
 ### Binary Formats (BF) — 1/1
 
@@ -97,7 +98,7 @@
 | [DA-3] | Ignore trailing whitespace | Done |
 | [DA-4] | Binary detection via null byte | Done |
 
-### Exit Codes (EC) — 4/4
+### Exit Codes (EC) — 5/5
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -105,6 +106,7 @@
 | [EC-2] | Exit code 1 on rejection | Done |
 | [EC-3] | Exit code 2 on unreviewed | Done |
 | [EC-4] | Exit code 3 on early close | Done |
+| [EC-5] | JSON sidecar at ~/.cache/kdiff4/review-result-PID | Done |
 
 ### Application Shell (AS) — 8/8
 

@@ -9,21 +9,13 @@
 
 A fast, beautiful diff viewer optimized for `git difftool`. Opens instantly, shows the diff clearly, closes when done. Keyboard-driven, vim-style navigation.
 
-**Not a merge tool.** That's a solved problem (VS Code `--merge`, kdiff3). kdiff4 does one thing well: show diffs clearly — whether a single file pair or every changed file in a directory.
+**Not a merge tool.** That's a solved problem (VS Code `--merge`, kdiff3). kdiff4 does one thing well: show diffs clearly across changed files in a directory.
 
 ---
 
 ## Core Workflow
 
-**Single file:** Git launches kdiff4 for each changed file:
-
-```bash
-git difftool  # opens kdiff4 once per file, sequentially
-```
-
-kdiff4 opens, shows the diff, user reviews it, presses `q` to close. Git moves to the next file.
-
-**Directory diff:** Git launches kdiff4 once with all changed files:
+Git launches kdiff4 once with all changed files:
 
 ```bash
 git difftool --dir-diff  # opens kdiff4 once with all changes
@@ -114,7 +106,7 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[RV-1]** When all hunks have been reviewed, the viewer shall display a transient "Review Complete!" notification
 - **[RV-2]** While in directory diff mode, the bottom bar shall display a progress bar and "X of Y changes viewed" status
 - **[RV-3]** While rejected hunks exist, the bottom bar shall display one badge per rejected file with a rejection count, and when the user clicks a badge, the viewer shall navigate to that file's first rejected hunk
-- **[RV-4]** While in single-file mode, the bottom bar shall display the same progress bar, status messaging, and rejection badges as directory diff mode
+- **[RV-4]** While a file has one or more rejected hunks, the viewer shall display that file's sidebar entry in red
 
 ### Binary Formats (BF)
 
