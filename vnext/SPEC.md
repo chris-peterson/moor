@@ -85,6 +85,7 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[DD-11]** While in directory diff mode, the viewer shall provide a way to hide and show the sidebar
 - **[DD-12]** When the user attempts to close with one or more rejected hunks, the viewer shall display a quit confirmation dialog summarizing the rejections (per-file count and reasons), with the primary CTA labeled "Send review feedback" that confirms the close. Exit code follows EC-2.
 - **[DD-13]** When the user attempts to close with one or more unreviewed hunks and no rejected hunks, the viewer shall display a quit confirmation dialog with the existing OK / Cancel actions plus an "Approve anyway" button. "Approve anyway" shall close the viewer with exit code 0 (clean approve) regardless of the unreviewed count.
+- **[DD-14]** While a quit confirmation dialog (DD-12, DD-13) is open, the viewer shall support keyboard navigation between dialog buttons via Tab / Shift+Tab and Left / Right arrow keys; Enter shall activate the focused button and Escape shall cancel.
 
 ### Search Mode (SM)
 

@@ -1,6 +1,6 @@
 # Implementation 1: React — Status
 
-**Spec:** v0.2 | **Coverage:** 74/74 (100%)
+**Spec:** v0.2 | **Coverage:** 75/75 (100%)
 
 ## Requirement Coverage
 
@@ -37,7 +37,7 @@
 | [NV-13] | Align hunk top to viewport top on scroll (fallback: last line visible for tall hunks) | Done |
 | [NV-14] | Shift+J marks file reviewed and advances to next file | Done |
 
-### Directory Diff (DD) — 13/13
+### Directory Diff (DD) — 14/14
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -54,6 +54,7 @@
 | [DD-11] | Hide/show sidebar | Done |
 | [DD-12] | Quit dialog summarizes rejections; primary CTA "Send review feedback" | Done |
 | [DD-13] | Quit dialog "Approve anyway" exits 0 with unreviewed hunks | Done |
+| [DD-14] | Quit dialog keyboard nav (Tab, arrows, Enter, Escape) | Done |
 
 ### Search Mode (SM) — 6/6
 

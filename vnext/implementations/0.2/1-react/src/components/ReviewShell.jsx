@@ -502,6 +502,23 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
 }
 
 function QuitDialog({ mode, rejectedCount, unreviewedCount, rejectionSummary, onCancel, onSendReviewFeedback, onQuitAnyway, onApproveAnyway }) {
+  const dialogRef = useRef(null);
+
+  const handleDialogKeyDown = (e) => {
+    if (e.key !== 'Tab' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const root = dialogRef.current;
+    if (!root) return;
+    const buttons = Array.from(root.querySelectorAll('button'));
+    if (buttons.length === 0) return;
+    e.preventDefault();
+    const currentIdx = buttons.indexOf(document.activeElement);
+    const dir = (e.key === 'ArrowLeft' || (e.key === 'Tab' && e.shiftKey)) ? -1 : 1;
+    const nextIdx = currentIdx === -1
+      ? (dir === 1 ? 0 : buttons.length - 1)
+      : (currentIdx + dir + buttons.length) % buttons.length;
+    buttons[nextIdx].focus();
+  };
+
   const overlay = {
     position: 'fixed',
     inset: 0,
@@ -540,7 +557,7 @@ function QuitDialog({ mode, rejectedCount, unreviewedCount, rejectionSummary, on
   if (mode === 'rejected') {
     return (
       <div style={overlay} onClick={onCancel}>
-        <div style={dialog} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+        <div ref={dialogRef} style={dialog} onClick={(e) => e.stopPropagation()} onKeyDown={handleDialogKeyDown} role="dialog" aria-modal="true">
           <h2 style={heading}>Review feedback</h2>
           <div style={body}>
             {rejectedCount} rejected change{rejectedCount === 1 ? '' : 's'} across {rejectionSummary.length} file{rejectionSummary.length === 1 ? '' : 's'}.
@@ -572,7 +589,7 @@ function QuitDialog({ mode, rejectedCount, unreviewedCount, rejectionSummary, on
 
   return (
     <div style={overlay} onClick={onCancel}>
-      <div style={dialog} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div ref={dialogRef} style={dialog} onClick={(e) => e.stopPropagation()} onKeyDown={handleDialogKeyDown} role="dialog" aria-modal="true">
         <h2 style={heading}>Quit?</h2>
         <div style={body}>
           {unreviewedCount} unreviewed change{unreviewedCount === 1 ? '' : 's'} remaining.
