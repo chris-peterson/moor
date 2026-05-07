@@ -148,7 +148,6 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
     fontSize,
     lineHeight: ROW_HEIGHT + 'px',
     whiteSpace: 'pre',
-    overflow: 'hidden',
     flex: 1,
     paddingLeft: '8px',
     transform: scrollLeft ? `translateX(-${scrollLeft}px)` : undefined,
@@ -269,23 +268,27 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   }, [rows]);
 
   const [maxContentWidth, setMaxContentWidth] = useState(0);
+  const measureContainerRef = useRef(null);
 
-  useLayoutEffect(() => {
-    if (widestCandidates.length === 0) { setMaxContentWidth(0); return; }
-    // Measure at 15px (active-row size) so the budget covers both active and
-    // inactive rendering. A line activated by the user grows from 13px to 15px;
-    // budgeting at the smaller size would truncate the tail on activation.
-    const probe = document.createElement('span');
-    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font-family:var(--font-mono);font-size:15px;padding:0;margin:0';
-    document.body.appendChild(probe);
-    let max = 0;
-    for (const line of widestCandidates) {
-      probe.textContent = line;
-      const w = probe.getBoundingClientRect().width;
-      if (w > max) max = w;
-    }
-    document.body.removeChild(probe);
-    setMaxContentWidth(max + 8);
+  useEffect(() => {
+    const el = measureContainerRef.current;
+    if (!el) { setMaxContentWidth(0); return; }
+    const recompute = () => {
+      let max = 0;
+      for (const child of el.children) {
+        const w = child.getBoundingClientRect().width;
+        if (w > max) max = w;
+      }
+      setMaxContentWidth(max + 8);
+    };
+    recompute();
+    // ResizeObserver fires whenever a measured element's size changes —
+    // including the asynchronous font swap when JetBrains Mono finishes loading
+    // from Google Fonts. The initial measurement uses the fallback monospace
+    // (typically narrower); the observer triggers a recompute once JBM lands.
+    const observer = new ResizeObserver(recompute);
+    for (const child of el.children) observer.observe(child);
+    return () => observer.disconnect();
   }, [widestCandidates]);
 
   const hunkRanges = useMemo(() => {
@@ -803,6 +806,21 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       {/* Main column: scroll container (with sticky header) + hscrollbar */}
       <div ref={contentAreaRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+
+        {/* Hidden measurement container for the longest lines. Lives inside the
+            React tree so font CSS resolves identically to the rendered rows;
+            ResizeObserver on the spans catches the JBM font swap. */}
+        <div
+          ref={measureContainerRef}
+          aria-hidden
+          style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none', top: 0, left: 0, zIndex: -1 }}
+        >
+          {widestCandidates.map((line, i) => (
+            <div key={i} style={{ whiteSpace: 'pre', fontFamily: 'var(--font-mono)', fontSize: '15px' }}>
+              {line}
+            </div>
+          ))}
+        </div>
 
         {/* Full-screen overlay during resizer drag to capture mouse everywhere */}
         {draggingResizer && (
