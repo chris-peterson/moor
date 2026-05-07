@@ -150,7 +150,7 @@ Fixed for now, configurable later:
 - **[UP-1]** The application shall use system monospace font at 13px
 - **[UP-2]** The application shall render tabs as 4 spaces (display only)
 - **[UP-3]** The application shall use a dark color scheme with distinct hues per source
-- **[UP-4]** The application shall never truncate long lines. Horizontal scroll is the preferred presentation; word wrap is acceptable as a fallback when horizontal scroll is unavailable
+- **[UP-4]** The application shall never truncate or wrap long lines. The entire content of every line on both sides shall be reachable via horizontal scrolling.
 
 ---
 

@@ -255,16 +255,38 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const contextMenuRef = useRef(null);
   const totalHeight = rows.length * ROW_HEIGHT;
 
-  const maxContentWidth = useMemo(() => {
-    const charWidth = 7.8;
-    let maxLen = 0;
+  const widestCandidates = useMemo(() => {
+    // Top-K longest by char count, not just #1: wide glyphs (CJK, emoji, fallback
+    // fonts) can make a slightly shorter line render wider than the longest one.
+    const K = 10;
+    const all = [];
     for (const row of rows) {
-      const leftLen = row.leftLine ? expandTabs(row.leftLine).length : 0;
-      const rightLen = row.rightLine ? expandTabs(row.rightLine).length : 0;
-      maxLen = Math.max(maxLen, leftLen, rightLen);
+      if (row.leftLine) all.push(expandTabs(row.leftLine));
+      if (row.rightLine) all.push(expandTabs(row.rightLine));
     }
-    return maxLen * charWidth + 8;
+    all.sort((a, b) => b.length - a.length);
+    return all.slice(0, K);
   }, [rows]);
+
+  const [maxContentWidth, setMaxContentWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    if (widestCandidates.length === 0) { setMaxContentWidth(0); return; }
+    // Measure at 15px (active-row size) so the budget covers both active and
+    // inactive rendering. A line activated by the user grows from 13px to 15px;
+    // budgeting at the smaller size would truncate the tail on activation.
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font-family:var(--font-mono);font-size:15px;padding:0;margin:0';
+    document.body.appendChild(probe);
+    let max = 0;
+    for (const line of widestCandidates) {
+      probe.textContent = line;
+      const w = probe.getBoundingClientRect().width;
+      if (w > max) max = w;
+    }
+    document.body.removeChild(probe);
+    setMaxContentWidth(max + 8);
+  }, [widestCandidates]);
 
   const hunkRanges = useMemo(() => {
     const ranges = [];
