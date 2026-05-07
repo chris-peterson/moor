@@ -15,6 +15,8 @@
   --color-conflict-bg: #f14c4c30;
   --color-equal: #2d7d46;
   --color-accent: #7b93db;
+  --color-accent-bg: #7b93db26;
+  --color-accent-border: #7b93db4d;
   --font-ui: 'Instrument Sans', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
   --bg-reviewed: #7b93db10;

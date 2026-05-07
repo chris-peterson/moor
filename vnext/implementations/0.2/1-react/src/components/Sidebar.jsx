@@ -1,22 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-
-const statusColor = (status) => {
-  switch (status) {
-    case 'modified': return 'var(--color-left)';
-    case 'left-only': return 'var(--color-left)';
-    case 'right-only': return 'var(--color-right)';
-    default: return 'var(--text-muted)';
-  }
-};
-
-const statusLabel = (status) => {
-  switch (status) {
-    case 'modified': return 'M';
-    case 'left-only': return 'L';
-    case 'right-only': return 'R';
-    default: return '=';
-  }
-};
+import { statusColor, statusLabel } from '../engine/file-status.js';
 
 function SidebarNode({ node, depth, files, currentIndex, viewed, rejectedFiles, onSelect, expanded, onToggle, hiddenFiles }) {
   const isDir = node.type === 'directory';

@@ -1,3 +1,5 @@
+export const BINARY_SENTINEL = '\x00BINARY';
+
 function myersDiff(a, b, equals) {
   const N = a.length;
   const M = b.length;
@@ -142,6 +144,23 @@ export function computeLineChanges(oldLines, newLines) {
   return groupIntoHunks(edits, oldLines.length, newLines.length);
 }
 
+// Display hunks pair adjacent delete+insert blocks into a single review unit,
+// matching the row pairing in FileDiffView. ReviewShell uses this to size its
+// progress bar against what the reviewer will actually navigate through.
+export function countDisplayHunks(hunks) {
+  let count = 0;
+  for (let i = 0; i < hunks.length; i++) {
+    if (hunks[i].type === 'equal') continue;
+    if (hunks[i].type === 'delete' && hunks[i + 1]?.type === 'insert') {
+      count++;
+      i++;
+    } else {
+      count++;
+    }
+  }
+  return count;
+}
+
 export function diffLines(oldText, newText) {
   const oldLines = oldText.length === 0 ? [] : oldText.split('\n');
   const newLines = newText.length === 0 ? [] : newText.split('\n');
@@ -158,74 +177,36 @@ function tokenize(str) {
   return tokens;
 }
 
-function diffTokens(oldTokens, newTokens) {
-  const edits = myersDiff(oldTokens, newTokens, (a, b) => a === b);
-
+function groupEditsIntoSpans(edits, oldSeq, newSeq) {
   if (edits.length === 0) return [];
-
+  const valueAt = (edit) => edit.type === 'insert' ? newSeq[edit.newIdx] : oldSeq[edit.oldIdx];
   const result = [];
   let currentType = edits[0].type;
-  let currentValue = edits[0].type === 'delete'
-    ? oldTokens[edits[0].oldIdx]
-    : edits[0].type === 'insert'
-      ? newTokens[edits[0].newIdx]
-      : oldTokens[edits[0].oldIdx];
-
+  let currentValue = valueAt(edits[0]);
   for (let i = 1; i < edits.length; i++) {
     const edit = edits[i];
-    const token = edit.type === 'delete'
-      ? oldTokens[edit.oldIdx]
-      : edit.type === 'insert'
-        ? newTokens[edit.newIdx]
-        : oldTokens[edit.oldIdx];
-
     if (edit.type === currentType) {
-      currentValue += token;
+      currentValue += valueAt(edit);
     } else {
       result.push({ type: currentType, value: currentValue });
       currentType = edit.type;
-      currentValue = token;
+      currentValue = valueAt(edit);
     }
   }
   result.push({ type: currentType, value: currentValue });
-
   return result;
+}
+
+function diffTokens(oldTokens, newTokens) {
+  const edits = myersDiff(oldTokens, newTokens, (a, b) => a === b);
+  return groupEditsIntoSpans(edits, oldTokens, newTokens);
 }
 
 function diffCharLevel(oldStr, newStr) {
   const oldChars = Array.from(oldStr);
   const newChars = Array.from(newStr);
   const edits = myersDiff(oldChars, newChars);
-
-  if (edits.length === 0) return [];
-
-  const result = [];
-  let currentType = edits[0].type;
-  let currentValue = edits[0].type === 'delete'
-    ? oldChars[edits[0].oldIdx]
-    : edits[0].type === 'insert'
-      ? newChars[edits[0].newIdx]
-      : oldChars[edits[0].oldIdx];
-
-  for (let i = 1; i < edits.length; i++) {
-    const edit = edits[i];
-    const ch = edit.type === 'delete'
-      ? oldChars[edit.oldIdx]
-      : edit.type === 'insert'
-        ? newChars[edit.newIdx]
-        : oldChars[edit.oldIdx];
-
-    if (edit.type === currentType) {
-      currentValue += ch;
-    } else {
-      result.push({ type: currentType, value: currentValue });
-      currentType = edit.type;
-      currentValue = ch;
-    }
-  }
-  result.push({ type: currentType, value: currentValue });
-
-  return result;
+  return groupEditsIntoSpans(edits, oldChars, newChars);
 }
 
 // Heuristic: within each word boundary, if there's a single contiguous diff
@@ -233,15 +214,6 @@ function diffCharLevel(oldStr, newStr) {
 // in the same word, use word-level (cleaner).
 export function diffChars(oldStr, newStr) {
   const wordResult = diffTokens(tokenize(oldStr), tokenize(newStr));
-  const refined = [];
-
-  for (const part of wordResult) {
-    if (part.type !== 'equal') {
-      refined.push(part);
-      continue;
-    }
-    refined.push(part);
-  }
 
   // For each adjacent delete+insert pair, try char-level refinement
   const output = [];

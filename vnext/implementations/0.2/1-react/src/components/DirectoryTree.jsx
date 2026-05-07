@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Toolbar, ToolbarButton, ToolbarBadge, ToolbarSeparator } from './Toolbar.jsx';
+import { statusColor, statusLabel } from '../engine/file-status.js';
 
 const ArrowIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -39,26 +40,6 @@ const ChevronIcon = ({ expanded }) => (
     <path d="M4 2L8 6L4 10" stroke="var(--text-muted)" strokeWidth="1.2" />
   </svg>
 );
-
-const statusColor = (status) => {
-  switch (status) {
-    case 'modified': return 'var(--color-left)';
-    case 'left-only': return 'var(--color-left)';
-    case 'right-only': return 'var(--color-right)';
-    case 'identical': return 'var(--text-muted)';
-    default: return 'var(--text-secondary)';
-  }
-};
-
-const statusLabel = (status) => {
-  switch (status) {
-    case 'modified': return 'M';
-    case 'left-only': return 'L';
-    case 'right-only': return 'R';
-    case 'identical': return '=';
-    default: return '?';
-  }
-};
 
 function TreeNode({ node, depth, expanded, onToggle, onFileSelect }) {
   const isDir = node.type === 'directory';

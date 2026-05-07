@@ -2,28 +2,16 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Sidebar from './Sidebar.jsx';
 import FileDiffView from './FileDiffView.jsx';
 import FileNavbar from './FileNavbar.jsx';
-import { computeLineChanges } from '../engine/diff.js';
+import { computeLineChanges, countDisplayHunks, BINARY_SENTINEL } from '../engine/diff.js';
 
-const BINARY_SENTINEL = '\x00BINARY';
 const emptySet = new Set();
 
-function countHunks(leftContent, rightContent) {
+function hunkCountFor(leftContent, rightContent) {
   if (!leftContent && !rightContent) return 0;
   if (leftContent === BINARY_SENTINEL || rightContent === BINARY_SENTINEL) return 1;
   const leftLines = leftContent ? leftContent.split('\n') : [];
   const rightLines = rightContent ? rightContent.split('\n') : [];
-  const hunks = computeLineChanges(leftLines, rightLines);
-  let count = 0;
-  for (let i = 0; i < hunks.length; i++) {
-    if (hunks[i].type === 'equal') continue;
-    if (hunks[i].type === 'delete' && hunks[i + 1]?.type === 'insert') {
-      count++;
-      i++;
-    } else {
-      count++;
-    }
-  }
-  return count;
+  return countDisplayHunks(computeLineChanges(leftLines, rightLines));
 }
 
 function relativePath(fullPath, base) {
@@ -87,17 +75,19 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     if (!api || files.length === 0) return;
     let cancelled = false;
     (async () => {
-      const counts = {};
-      const contents = {};
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      const entries = await Promise.all(files.map(async (file) => {
         const [left, right] = await Promise.all([
           file.leftPath ? api.readFile(file.leftPath) : Promise.resolve(''),
           file.rightPath ? api.readFile(file.rightPath) : Promise.resolve(''),
         ]);
-        if (cancelled) return;
-        counts[i] = countHunks(left, right);
-        contents[i] = { left, right };
+        return { left, right };
+      }));
+      if (cancelled) return;
+      const counts = {};
+      const contents = {};
+      for (let i = 0; i < entries.length; i++) {
+        contents[i] = entries[i];
+        counts[i] = hunkCountFor(entries[i].left, entries[i].right);
       }
       setHunkCounts(counts);
       setFileContents(contents);
@@ -106,27 +96,33 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
   }, [api, files]);
 
   const currentFile = files[currentIndex] || null;
-  const loadIdRef = useRef(0);
 
-  const loadFile = useCallback(async (file) => {
-    if (!api || !file) return;
-    const id = ++loadIdRef.current;
-    setLoading(true);
-    const [left, right] = await Promise.all([
-      file.leftPath ? api.readFile(file.leftPath) : Promise.resolve(''),
-      file.rightPath ? api.readFile(file.rightPath) : Promise.resolve(''),
-    ]);
-    if (id !== loadIdRef.current) return;
-    setLeftContent(left);
-    setRightContent(right);
-    setLoading(false);
-  }, [api]);
-
+  // Prefer the prefetched content; fall back to a direct read if a file is
+  // selected before the startup prefetch has populated this index.
   useEffect(() => {
-    if (currentFile) {
-      loadFile(currentFile);
+    if (!currentFile) return;
+    const cached = fileContents[currentIndex];
+    if (cached) {
+      setLeftContent(cached.left);
+      setRightContent(cached.right);
+      setLoading(false);
+      return;
     }
-  }, [currentFile, loadFile]);
+    if (!api) return;
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      const [left, right] = await Promise.all([
+        currentFile.leftPath ? api.readFile(currentFile.leftPath) : Promise.resolve(''),
+        currentFile.rightPath ? api.readFile(currentFile.rightPath) : Promise.resolve(''),
+      ]);
+      if (cancelled) return;
+      setLeftContent(left);
+      setRightContent(right);
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [currentFile, currentIndex, fileContents, api]);
 
   const viewed = useMemo(() => {
     const set = new Set();
@@ -451,7 +447,6 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
               onNavigatePrev={navigatePrev}
               startAtEnd={navigatedBackward}
               startAtHunk={targetHunk}
-              onHunkChange={() => {}}
               reviewedHunks={currentReviewedHunks}
               onReviewedHunksChange={handleReviewedHunksChange}
               rejectedHunks={currentRejectedHunks}

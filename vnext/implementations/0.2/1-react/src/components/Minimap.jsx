@@ -47,13 +47,19 @@ export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, onScroll
     ctx.clearRect(0, 0, MINIMAP_WIDTH, containerHeight);
 
     const rowHeight = rows.length > 0 ? containerHeight / rows.length : 1;
+    const style = getComputedStyle(document.documentElement);
+    const resolvedColors = new Map();
+    const resolve = (cssValue) => {
+      if (resolvedColors.has(cssValue)) return resolvedColors.get(cssValue);
+      const varName = cssValue.match(/var\((.+)\)/)?.[1];
+      const color = varName ? style.getPropertyValue(varName).trim() : null;
+      resolvedColors.set(cssValue, color);
+      return color;
+    };
 
     for (let i = 0; i < colorMap.length; i++) {
       if (colorMap[i] === 'transparent') continue;
-      const style = getComputedStyle(document.documentElement);
-      const varName = colorMap[i].match(/var\((.+)\)/)?.[1];
-      if (!varName) continue;
-      const color = style.getPropertyValue(varName).trim();
+      const color = resolve(colorMap[i]);
       if (!color) continue;
 
       ctx.globalAlpha = reviewedRows && reviewedRows.has(i) ? 0.5 : 1;
@@ -126,8 +132,8 @@ export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, onScroll
           left: 0,
           width: '100%',
           height: viewportIndicatorHeight + 'px',
-          background: 'rgba(123, 147, 219, 0.15)',
-          border: '1px solid rgba(123, 147, 219, 0.3)',
+          background: 'var(--color-accent-bg)',
+          border: '1px solid var(--color-accent-border)',
           cursor: 'grab',
         }}
       />

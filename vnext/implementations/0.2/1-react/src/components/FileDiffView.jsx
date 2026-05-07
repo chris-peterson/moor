@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useCallback, useState, useEffect, useLayoutEffect } from 'react';
-import { computeLineChanges, diffChars } from '../engine/diff.js';
+import { computeLineChanges, diffChars, BINARY_SENTINEL } from '../engine/diff.js';
 import Minimap from './Minimap.jsx';
 
 const TAB_SPACES = '    ';
@@ -186,8 +186,6 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
   );
 }
 
-const BINARY_SENTINEL = '\x00BINARY';
-
 const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|bmp|webp|svg|ico)$/i;
 
 export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, startAtEnd, startAtHunk, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange, rejectionReasons: externalRejectionReasons, onRejectionReasonsChange, onSearchChange }) {
@@ -302,8 +300,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     }
     return ranges;
   }, [rows]);
-
-  const hunkStarts = useMemo(() => hunkRanges.map(r => r.start), [hunkRanges]);
 
   const rowToHunk = useMemo(() => {
     const map = new Map();
@@ -443,7 +439,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
   // Scroll to current hunk after render (useLayoutEffect = uses updated state, fires before paint)
   useLayoutEffect(() => {
-    if (!scrollContainerRef.current || hunkStarts.length === 0) return;
+    if (!scrollContainerRef.current || hunkRanges.length === 0) return;
     const range = hunkRanges[currentHunk];
     if (!range) return;
     const top = range.start * ROW_HEIGHT;
@@ -572,7 +568,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     setScrollTop(0);
     setScrollLeft(0);
     if (!externalReviewedHunks) setInternalReviewedHunks(new Set());
-    setCurrentHunk(startAtHunk != null ? startAtHunk : startAtEnd && hunkStarts.length > 0 ? hunkStarts.length - 1 : 0);
+    setCurrentHunk(startAtHunk != null ? startAtHunk : startAtEnd && hunkRanges.length > 0 ? hunkRanges.length - 1 : 0);
     setCurrentMatchIdx(0);
     if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
   }, [leftContent, rightContent]);
@@ -619,7 +615,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
         case 'j': {
           e.preventDefault();
           markCurrentReviewed();
-          if (currentHunk < hunkStarts.length - 1) {
+          if (currentHunk < hunkRanges.length - 1) {
             setCurrentHunk(currentHunk + 1);
           } else if (onNavigateNext) {
             onNavigateNext();
@@ -716,7 +712,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hunkStarts, hunkRanges, currentHunk, reviewedHunks, rejectedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, searchActive, navigateMatch, exitSearch, beginReject, setRejectionReasons, rejectingHunk]);
+  }, [hunkRanges, currentHunk, reviewedHunks, rejectedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, searchActive, navigateMatch, exitSearch, beginReject, setRejectionReasons, rejectingHunk]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
