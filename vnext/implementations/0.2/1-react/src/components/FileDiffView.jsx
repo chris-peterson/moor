@@ -411,10 +411,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     const top = rowIdx * ROW_HEIGHT;
     const bottom = top + ROW_HEIGHT;
     const ev = Math.max(0, viewportHeight - headerHeight);
-    const visibleTop = Math.max(0, scrollContainerRef.current.scrollTop - headerHeight);
+    const visibleTop = scrollContainerRef.current.scrollTop;
     const visibleBottom = visibleTop + ev;
     if (top < visibleTop || bottom > visibleBottom) {
-      scrollContainerRef.current.scrollTop = top - ev / 3 + headerHeight;
+      scrollContainerRef.current.scrollTop = Math.max(0, top - ev / 3);
     }
   }, [viewportHeight, headerHeight]);
 
@@ -446,15 +446,15 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     const bottom = (range.end + 1) * ROW_HEIGHT;
     const hunkHeight = bottom - top;
     const ev = Math.max(0, viewportHeight - headerHeight);
-    const visibleTop = Math.max(0, scrollContainerRef.current.scrollTop - headerHeight);
+    const visibleTop = scrollContainerRef.current.scrollTop;
     const visibleBottom = visibleTop + ev;
     if (hunkHeight > ev) {
       // Hunk taller than viewport: NV-13 falls back to keeping the last line visible.
-      scrollContainerRef.current.scrollTop = bottom - ev + headerHeight;
+      scrollContainerRef.current.scrollTop = bottom - ev;
     } else if (top < visibleTop || bottom > visibleBottom) {
       // NV-13: when scroll is required, align the hunk's top to the viewport top.
       // Browser clamps scrollTop near the end of the document, which still keeps the hunk visible.
-      scrollContainerRef.current.scrollTop = top + headerHeight;
+      scrollContainerRef.current.scrollTop = top;
     }
     setScrollLeft(0);
   }, [currentHunk, hunkRanges, viewportHeight, headerHeight]);

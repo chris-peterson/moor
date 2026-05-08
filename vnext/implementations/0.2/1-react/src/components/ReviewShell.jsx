@@ -500,6 +500,13 @@ function QuitDialog({ mode, rejectedCount, unreviewedCount, rejectionSummary, on
   const dialogRef = useRef(null);
 
   const handleDialogKeyDown = (e) => {
+    // Modal: swallow all keys so they don't reach the underlying diff view.
+    e.stopPropagation();
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onCancel();
+      return;
+    }
     if (e.key !== 'Tab' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     const root = dialogRef.current;
     if (!root) return;
