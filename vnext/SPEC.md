@@ -56,7 +56,7 @@ Vim-style, keyboard-first:
 - **[NV-1]** When the user presses `j` / `k`, the viewer shall navigate to the next / previous diff hunk
 - **[NV-2]** When the user presses `q` or `Escape`, the viewer shall close (exit with code 0)
 - **[NV-3]** The viewer shall support scroll wheel and trackpad navigation
-- **[NV-4]** When a file is opened, the viewer shall auto-scroll to the first diff hunk
+- **[NV-4]** When a file is opened, the viewer shall position to the first non-reviewed, non-rejected hunk; if every hunk has been reviewed or rejected, the viewer shall fall back to the first hunk
 - **[NV-5]** When the user presses `u`, the viewer shall mark the current hunk as unreviewed
 - **[NV-6]** When the user clicks a hunk, the viewer shall mark it reviewed (equivalent to advancing past it with `j`)
 - **[NV-7]** When the user presses `r`, the viewer shall reject the current hunk (visually distinct from reviewed; excluded from "unreviewed" counts)
@@ -65,7 +65,7 @@ Vim-style, keyboard-first:
 - **[NV-10]** When the user presses `R` (shift+r), the viewer shall unreject the current hunk (restoring it to unreviewed)
 - **[NV-11]** When the user presses `r`, the viewer shall display an inline text area for an optional rejection reason; Enter confirms, Shift+Enter inserts a newline, Escape confirms without a reason
 - **[NV-12]** While a rejected hunk has a rejection reason, the viewer shall display the reason as a persistent note below the hunk; clicking the note shall open it for editing, and clicking the ✕ shall remove the note (the hunk remains rejected)
-- **[NV-13]** When navigating to a hunk, the viewer shall position the hunk so the entire hunk is visible. If scrolling is required, the viewer shall align the top of the hunk to the top of the viewport. If the hunk is taller than the viewport, the viewer shall instead align the last line of the hunk to the bottom of the viewport.
+- **[NV-13]** When navigating to a hunk, the viewer shall position the hunk so its first line is visible. If scrolling is required, the viewer shall align the top of the hunk to the top of the viewport — including when the hunk is taller than the viewport, so the start of the change is always shown.
 - **[NV-14]** When the user presses `Shift+J`, the viewer shall mark all unreviewed hunks in the current file as reviewed and navigate to the first hunk of the next file. Rejected hunks remain rejected.
 
 ### Directory Diff (DD)

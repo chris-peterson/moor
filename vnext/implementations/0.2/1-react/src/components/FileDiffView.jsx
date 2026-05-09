@@ -444,16 +444,12 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     if (!range) return;
     const top = range.start * ROW_HEIGHT;
     const bottom = (range.end + 1) * ROW_HEIGHT;
-    const hunkHeight = bottom - top;
     const ev = Math.max(0, viewportHeight - headerHeight);
     const visibleTop = scrollContainerRef.current.scrollTop;
     const visibleBottom = visibleTop + ev;
-    if (hunkHeight > ev) {
-      // Hunk taller than viewport: NV-13 falls back to keeping the last line visible.
-      scrollContainerRef.current.scrollTop = bottom - ev;
-    } else if (top < visibleTop || bottom > visibleBottom) {
-      // NV-13: when scroll is required, align the hunk's top to the viewport top.
-      // Browser clamps scrollTop near the end of the document, which still keeps the hunk visible.
+    if (top < visibleTop || bottom > visibleBottom) {
+      // NV-13: align the hunk's top to the viewport top so the start of the
+      // change is always visible, even for hunks taller than the viewport.
       scrollContainerRef.current.scrollTop = top;
     }
     setScrollLeft(0);
@@ -568,7 +564,23 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     setScrollTop(0);
     setScrollLeft(0);
     if (!externalReviewedHunks) setInternalReviewedHunks(new Set());
-    setCurrentHunk(startAtHunk != null ? startAtHunk : startAtEnd && hunkRanges.length > 0 ? hunkRanges.length - 1 : 0);
+    let initial;
+    if (startAtHunk != null) {
+      initial = startAtHunk;
+    } else if (startAtEnd && hunkRanges.length > 0) {
+      initial = hunkRanges.length - 1;
+    } else {
+      // NV-4: land on the first non-reviewed, non-rejected hunk; fall back
+      // to the first hunk if every hunk has already been actioned.
+      initial = 0;
+      for (let i = 0; i < hunkRanges.length; i++) {
+        if (!reviewedHunks.has(i) && !rejectedHunks.has(i)) {
+          initial = i;
+          break;
+        }
+      }
+    }
+    setCurrentHunk(initial);
     setCurrentMatchIdx(0);
     if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
   }, [leftContent, rightContent]);

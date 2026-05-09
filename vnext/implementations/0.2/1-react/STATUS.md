@@ -25,7 +25,7 @@
 | [NV-1] | j/k next/prev hunk | Done |
 | [NV-2] | q/Escape close | Done |
 | [NV-3] | Scroll wheel/trackpad | Done |
-| [NV-4] | Auto-scroll to first hunk | Done |
+| [NV-4] | Land on first non-reviewed hunk (fallback: first hunk) | Done |
 | [NV-5] | u mark current hunk unreviewed | Done |
 | [NV-6] | Click hunk marks reviewed | Done |
 | [NV-7] | r reject current hunk | Done |
@@ -34,7 +34,7 @@
 | [NV-10] | R (shift+r) unreject current hunk | Done |
 | [NV-11] | Inline rejection reason input | Done |
 | [NV-12] | Persistent rejection reason note | Done |
-| [NV-13] | Align hunk top to viewport top on scroll (fallback: last line visible for tall hunks) | Done |
+| [NV-13] | Always align hunk top to viewport top on scroll (start of change visible, even for tall hunks) | Done |
 | [NV-14] | Shift+J marks file reviewed and advances to next file | Done |
 
 ### Directory Diff (DD) — 14/14
