@@ -23,4 +23,9 @@ if [ -z "$KDIFF4_REVIEW_RESULT" ]; then
 fi
 rm -f "$KDIFF4_REVIEW_RESULT"
 
+# Electron-based editors (VS Code, Cursor) set ELECTRON_RUN_AS_NODE=1
+# in their integrated terminal so child processes don't accidentally
+# spin up Electron windows. But we *want* Electron here — unset it.
+unset ELECTRON_RUN_AS_NODE
+
 exec "$IMPL_DIR/node_modules/.bin/electron" "$IMPL_DIR" "$@"
