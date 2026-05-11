@@ -442,14 +442,15 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     if (!scrollContainerRef.current || hunkRanges.length === 0) return;
     const range = hunkRanges[currentHunk];
     if (!range) return;
-    const top = range.start * ROW_HEIGHT;
+    // NV-13: show one line of context above the hunk (flush to top if the
+    // hunk starts at line 0). Never push the hunk's first line further down.
+    const contextStart = Math.max(0, range.start - 1);
+    const top = contextStart * ROW_HEIGHT;
     const bottom = (range.end + 1) * ROW_HEIGHT;
     const ev = Math.max(0, viewportHeight - headerHeight);
     const visibleTop = scrollContainerRef.current.scrollTop;
     const visibleBottom = visibleTop + ev;
     if (top < visibleTop || bottom > visibleBottom) {
-      // NV-13: align the hunk's top to the viewport top so the start of the
-      // change is always visible, even for hunks taller than the viewport.
       scrollContainerRef.current.scrollTop = top;
     }
     setScrollLeft(0);

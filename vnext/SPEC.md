@@ -65,7 +65,7 @@ Vim-style, keyboard-first:
 - **[NV-10]** When the user presses `R` (shift+r), the viewer shall unreject the current hunk (restoring it to unreviewed)
 - **[NV-11]** When the user presses `r`, the viewer shall display an inline text area for an optional rejection reason; Enter confirms, Shift+Enter inserts a newline, Escape confirms without a reason
 - **[NV-12]** While a rejected hunk has a rejection reason, the viewer shall display the reason as a persistent note below the hunk; clicking the note shall open it for editing, and clicking the ✕ shall remove the note (the hunk remains rejected)
-- **[NV-13]** When navigating to a hunk, the viewer shall position the hunk so its first line is visible. If scrolling is required, the viewer shall align the top of the hunk to the top of the viewport — including when the hunk is taller than the viewport, so the start of the change is always shown.
+- **[NV-13]** When navigating to a hunk, the viewer shall scroll so that one line of context above the hunk is visible at the top of the viewport, with the hunk's first line on the second visible row. If the hunk begins at the first line of the file, the viewer shall align the hunk's first line flush with the top of the viewport. The viewer shall not push the hunk's first line below the second visible row, even when the hunk is taller than the viewport.
 - **[NV-14]** When the user presses `Shift+J`, the viewer shall mark all unreviewed hunks in the current file as reviewed and navigate to the first hunk of the next file. Rejected hunks remain rejected.
 
 ### Directory Diff (DD)
