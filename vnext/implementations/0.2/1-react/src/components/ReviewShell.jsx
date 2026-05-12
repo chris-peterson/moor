@@ -164,6 +164,13 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     }
   }, [currentIndex, navigateTo]);
 
+  const navigatePrevFile = useCallback(() => {
+    setNavigatedBackward(false);
+    if (currentIndex > 0) {
+      navigateTo(currentIndex - 1);
+    }
+  }, [currentIndex, navigateTo]);
+
   const currentReviewedHunks = perFileReviewedHunks[currentIndex] || emptySet;
   const handleReviewedHunksChange = useCallback((updater) => {
     setPerFileReviewedHunks(prev => ({
@@ -445,6 +452,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
               rightContent={rightContent}
               onNavigateNext={navigateNext}
               onNavigatePrev={navigatePrev}
+              onNavigatePrevFile={navigatePrevFile}
               startAtEnd={navigatedBackward}
               startAtHunk={targetHunk}
               reviewedHunks={currentReviewedHunks}

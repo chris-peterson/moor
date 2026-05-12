@@ -87,14 +87,14 @@ function buildDisplayRows(leftLines, rightLines, hunks) {
   return rows;
 }
 
-function CharDiffSpans({ oldStr, newStr, side, dimmed }) {
+function CharDiffSpans({ oldStr, newStr, side }) {
   const parts = useMemo(() => diffChars(oldStr || '', newStr || ''), [oldStr, newStr]);
   return (
     <>
       {parts.map((part, i) => {
         if (side === 'left') {
           if (part.type === 'insert') return null;
-          const highlight = !dimmed && part.type === 'delete';
+          const highlight = part.type === 'delete';
           return (
             <span key={i} style={highlight ? { background: 'var(--color-left)', color: 'var(--bg-deep)', borderRadius: '2px' } : undefined}>
               {expandTabs(part.value)}
@@ -102,7 +102,7 @@ function CharDiffSpans({ oldStr, newStr, side, dimmed }) {
           );
         } else {
           if (part.type === 'delete') return null;
-          const highlight = !dimmed && part.type === 'insert';
+          const highlight = part.type === 'insert';
           return (
             <span key={i} style={highlight ? { background: 'var(--color-right)', color: 'var(--bg-deep)', borderRadius: '2px' } : undefined}>
               {expandTabs(part.value)}
@@ -167,7 +167,7 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
           {searchQuery && !dimmed
             ? <SearchHighlight text={row.leftLine} query={searchQuery} />
             : showCharDiff
-              ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="left" dimmed={dimmed} />
+              ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="left" />
               : expandTabs(row.leftLine)}
         </span>
       </div>
@@ -178,7 +178,7 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
           {searchQuery && !dimmed
             ? <SearchHighlight text={row.rightLine} query={searchQuery} />
             : showCharDiff
-              ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="right" dimmed={dimmed} />
+              ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="right" />
               : expandTabs(row.rightLine)}
         </span>
       </div>
@@ -188,7 +188,7 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
 
 const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|bmp|webp|svg|ico)$/i;
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, startAtEnd, startAtHunk, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange, rejectionReasons: externalRejectionReasons, onRejectionReasonsChange, onSearchChange }) {
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, onNavigatePrevFile, startAtEnd, startAtHunk, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange, rejectionReasons: externalRejectionReasons, onRejectionReasonsChange, onSearchChange }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
@@ -251,6 +251,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const [contextMenu, setContextMenu] = useState(null);
   const contextMenuRef = useRef(null);
   const totalHeight = rows.length * ROW_HEIGHT;
+  // NV-13 bottom pad: lets a hunk near end-of-file scroll into the
+  // "second visible row" position even when the file isn't tall enough
+  // to fill the viewport from that anchor.
+  const bottomPad = Math.max(0, viewportHeight - headerHeight - 2 * ROW_HEIGHT);
 
   const widestCandidates = useMemo(() => {
     // Top-K longest by char count, not just #1: wide glyphs (CJK, emoji, fallback
@@ -438,20 +442,70 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   }, [currentHunk, hunkRanges.length, onHunkChange]);
 
   // Scroll to current hunk after render (useLayoutEffect = uses updated state, fires before paint)
+  const scrolledForKey = useRef(null);
   useLayoutEffect(() => {
-    if (!scrollContainerRef.current || hunkRanges.length === 0) return;
-    const range = hunkRanges[currentHunk];
+    if (!scrollContainerRef.current) return;
+    const fileKey = `${leftPath ?? ''}|${rightPath ?? ''}`;
+    if (hunkRanges.length === 0) {
+      scrollContainerRef.current.scrollTop = 0;
+      scrolledForKey.current = fileKey;
+      return;
+    }
+    const isFirstScrollForFile = scrolledForKey.current !== fileKey;
+    // On file change, currentHunk is still the previous file's value. The
+    // file-change layoutEffect below will update it via setCurrentHunk, but
+    // that fires after this one — running NV-4 here instead lets us scroll
+    // to the correct hunk in a single pass and avoids a second smooth-scroll
+    // in the follow-up render.
+    let effectiveHunk = currentHunk;
+    if (isFirstScrollForFile) {
+      if (startAtHunk != null) {
+        effectiveHunk = startAtHunk;
+      } else if (startAtEnd) {
+        effectiveHunk = hunkRanges.length - 1;
+      } else {
+        effectiveHunk = 0;
+        for (let i = 0; i < hunkRanges.length; i++) {
+          if (!reviewedHunks.has(i) && !rejectedHunks.has(i)) {
+            effectiveHunk = i;
+            break;
+          }
+        }
+      }
+    }
+    const range = hunkRanges[effectiveHunk];
     if (!range) return;
-    // NV-13: show one line of context above the hunk (flush to top if the
-    // hunk starts at line 0). Never push the hunk's first line further down.
-    const contextStart = Math.max(0, range.start - 1);
-    const top = contextStart * ROW_HEIGHT;
-    const bottom = (range.end + 1) * ROW_HEIGHT;
-    const ev = Math.max(0, viewportHeight - headerHeight);
-    const visibleTop = scrollContainerRef.current.scrollTop;
-    const visibleBottom = visibleTop + ev;
-    if (top < visibleTop || bottom > visibleBottom) {
-      scrollContainerRef.current.scrollTop = top;
+    scrolledForKey.current = fileKey;
+    // NV-13: compute the ideal target — one line of context above the hunk
+    // by default; slide flush to keep the bottom in view when needed; top
+    // on row 2 for hunks taller than the viewport.
+    const topAtRow2 = Math.max(0, (range.start - 1) * ROW_HEIGHT);
+    const scrollForBottom = (range.end + 1) * ROW_HEIGHT + headerHeight - viewportHeight;
+    const topFlush = range.start * ROW_HEIGHT;
+    let target;
+    if (scrollForBottom <= topAtRow2) {
+      target = topAtRow2;
+    } else if (scrollForBottom <= topFlush) {
+      target = scrollForBottom;
+    } else {
+      target = topAtRow2;
+    }
+    target = Math.max(0, target);
+    if (isFirstScrollForFile) {
+      // Cross-file navigation: jump instantly so the user lands oriented.
+      scrollContainerRef.current.scrollTop = target;
+    } else {
+      // In-file navigation: skip if the hunk is already fully visible,
+      // otherwise smooth-scroll to draw the eye.
+      const ev = Math.max(0, viewportHeight - headerHeight);
+      const visibleTop = scrollContainerRef.current.scrollTop;
+      const hunkTopY = range.start * ROW_HEIGHT;
+      const hunkBottomY = (range.end + 1) * ROW_HEIGHT;
+      if (hunkTopY >= visibleTop && hunkBottomY <= visibleTop + ev) {
+        setScrollLeft(0);
+        return;
+      }
+      scrollContainerRef.current.scrollTo({ top: target, behavior: 'smooth' });
     }
     setScrollLeft(0);
   }, [currentHunk, hunkRanges, viewportHeight, headerHeight]);
@@ -561,7 +615,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     };
   }, [contextMenu]);
 
-  useEffect(() => {
+  // useLayoutEffect (not useEffect): the scroll layoutEffect above needs the
+  // updated currentHunk before paint, otherwise the user sees a flash of the
+  // stale scroll position from the previous file.
+  useLayoutEffect(() => {
     setScrollTop(0);
     setScrollLeft(0);
     if (!externalReviewedHunks) setInternalReviewedHunks(new Set());
@@ -583,7 +640,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     }
     setCurrentHunk(initial);
     setCurrentMatchIdx(0);
-    if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
   }, [leftContent, rightContent]);
 
   useEffect(() => {
@@ -647,8 +703,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           if (onNavigateNext) onNavigateNext();
           break;
         }
-        case 'k':
-        case 'K': {
+        case 'k': {
           e.preventDefault();
           markCurrentReviewed();
           if (currentHunk > 0) {
@@ -656,6 +711,12 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           } else if (onNavigatePrev) {
             onNavigatePrev();
           }
+          break;
+        }
+        case 'K': {
+          // NV-15: jump back a file without touching review state.
+          e.preventDefault();
+          if (onNavigatePrevFile) onNavigatePrevFile();
           break;
         }
         case 'ArrowDown': {
@@ -725,7 +786,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hunkRanges, currentHunk, reviewedHunks, rejectedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, searchActive, navigateMatch, exitSearch, beginReject, setRejectionReasons, rejectingHunk]);
+  }, [hunkRanges, currentHunk, reviewedHunks, rejectedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, searchActive, navigateMatch, exitSearch, beginReject, setRejectionReasons, rejectingHunk]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -952,7 +1013,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
               </div>
 
               {/* Virtual scroll content */}
-              <div style={{ height: totalHeight + 'px', position: 'relative' }}>
+              <div style={{ height: (totalHeight + bottomPad) + 'px', position: 'relative' }}>
                 {hunkRanges[currentHunk] && (
                   <div style={{
                     position: 'absolute',
