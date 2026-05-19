@@ -43,7 +43,7 @@ const ChevronIcon = ({ expanded }) => (
 
 function TreeNode({ node, depth, expanded, onToggle, onFileSelect }) {
   const isDir = node.type === 'directory';
-  const isClickable = node.type === 'file' && node.status === 'modified';
+  const isClickable = node.type === 'file' && (node.status === 'modified' || node.status === 'renamed');
   const isIdentical = node.status === 'identical';
   const isExpanded = expanded.has(node.leftPath || node.rightPath || node.name);
   const nodeKey = node.leftPath || node.rightPath || node.name;
@@ -96,6 +96,9 @@ function TreeNode({ node, depth, expanded, onToggle, onFileSelect }) {
         {isDir ? <FolderIcon open={isExpanded} /> : <FileIcon />}
         <span style={{ color: isIdentical ? 'var(--text-muted)' : 'var(--text-primary)' }}>
           {node.name}
+          {node.status === 'renamed' && node.fromName && node.fromName !== node.name && (
+            <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>← {node.fromName}</span>
+          )}
         </span>
         <span style={badgeStyle}>{statusLabel(node.status)}</span>
       </div>
@@ -163,6 +166,7 @@ export function DirectoryTree({ tree, onFileSelect, onBack }) {
         {summary.modified > 0 && <ToolbarBadge accent="amber">{summary.modified}</ToolbarBadge>}
         {summary.leftOnly > 0 && <ToolbarBadge accent="amber">{summary.leftOnly} L</ToolbarBadge>}
         {summary.rightOnly > 0 && <ToolbarBadge accent="teal">{summary.rightOnly} R</ToolbarBadge>}
+        {summary.renamed > 0 && <ToolbarBadge accent="teal">{summary.renamed} →</ToolbarBadge>}
         {summary.identical > 0 && <ToolbarBadge accent="green">{summary.identical} =</ToolbarBadge>}
       </Toolbar>
       <div style={treeContainerStyle}>

@@ -37,7 +37,7 @@
 | [NV-13] | Always align hunk top to viewport top on scroll (start of change visible, even for tall hunks) | Done |
 | [NV-14] | Shift+J marks file reviewed and advances to next file | Done |
 
-### Directory Diff (DD) — 14/14
+### Directory Diff (DD) — 15/15
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -55,6 +55,7 @@
 | [DD-12] | Quit dialog summarizes rejections; primary CTA "Send review feedback" | Done |
 | [DD-13] | Quit dialog "Approve anyway" exits 0 with unreviewed hunks | Done |
 | [DD-14] | Quit dialog keyboard nav (Tab, arrows, Enter, Escape) | Done |
+| [DD-15] | Rename/move detection (`git mv`) — single entry instead of L+R | Done |
 
 ### Search Mode (SM) — 6/6
 
@@ -139,4 +140,3 @@
 | Req | Description |
 |-----|-------------|
 | [FUT-1] | Preview/source toggle for visual text files (ex-BF-2) |
-| [FUT-2] | Detect renamed/moved files instead of showing L + R (→ DD) |

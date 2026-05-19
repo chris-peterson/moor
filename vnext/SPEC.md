@@ -87,6 +87,7 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[DD-12]** When the user attempts to close with one or more rejected hunks, the viewer shall display a quit confirmation dialog summarizing the rejections (per-file count and reasons), with the primary CTA labeled "Send review feedback" that confirms the close. Exit code follows EC-2.
 - **[DD-13]** When the user attempts to close with one or more unreviewed hunks and no rejected hunks, the viewer shall display a quit confirmation dialog with the existing OK / Cancel actions plus an "Approve anyway" button. "Approve anyway" shall close the viewer with exit code 0 (clean approve) regardless of the unreviewed count.
 - **[DD-14]** While a quit confirmation dialog (DD-12, DD-13) is open, the viewer shall support keyboard navigation between dialog buttons via Tab / Shift+Tab and Left / Right arrow keys; Enter shall activate the focused button and Escape shall cancel.
+- **[DD-15]** While in directory diff mode, when a left-only file and a right-only file are determined to be a rename or move of the same content (e.g., via `git mv`), the viewer shall display the pair as a single entry showing the old → new path, instead of as separate L and R entries. The entry shall contribute one item to the sidebar and hunk counts (DD-6), and its diff view shall show content changes between the two versions (zero-hunk when the rename is content-identical).
 
 ### Search Mode (SM)
 
@@ -185,6 +186,5 @@ git difftool branch       # compare against a branch
 ## Deferred (Future Versions)
 
 - **[FUT-1]** (→ BF) Where a file has both a text and a visual representation (e.g., SVG, Markdown), the diff viewer shall provide a toggle between source diff and rendered preview
-- **[FUT-2]** (→ DD) While in directory diff mode, when a file is renamed or moved, the viewer shall detect it as a single rename rather than displaying separate left-only (L) and right-only (R) entries *(needs design: detection strategy, visual indicator, content diff behavior)*
 - **Syntax highlighting** — language-aware coloring in diff panels
 - **Configurable preferences** — font, colors, ignored patterns

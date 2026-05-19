@@ -38,7 +38,7 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, rejectedFiles, 
   const hasNonIdenticalChildren = isDir && (hiddenFiles
     ? hasVisibleChildren(node)
     : node.children?.some(c =>
-        c.status !== 'identical' || (c.type === 'directory' && c.summary && (c.summary.modified > 0 || c.summary.leftOnly > 0 || c.summary.rightOnly > 0))
+        c.status !== 'identical' || (c.type === 'directory' && c.summary && (c.summary.modified > 0 || c.summary.leftOnly > 0 || c.summary.rightOnly > 0 || c.summary.renamed > 0))
       ));
   if (isDir && !hasNonIdenticalChildren) return null;
 
@@ -73,7 +73,12 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, rejectedFiles, 
           </svg>
         )}
         {!isDir && <span style={{ width: 10, flexShrink: 0 }} />}
-        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</span>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {node.name}
+          {node.status === 'renamed' && node.fromName && node.fromName !== node.name && (
+            <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>← {node.fromName}</span>
+          )}
+        </span>
         {!isDir && (
           <span style={{ color: statusColor(node.status), flexShrink: 0, fontSize: '10px' }}>
             {statusLabel(node.status)}
