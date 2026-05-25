@@ -18,7 +18,7 @@
 | [FD-8] | Binary file detection | Done |
 | [FD-9] | Dim reviewed hunks | Done |
 
-### Navigation (NV) — 14/14
+### Navigation (NV) — 16/16
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -36,6 +36,8 @@
 | [NV-12] | Persistent rejection reason note | Done |
 | [NV-13] | Always align hunk top to viewport top on scroll (start of change visible, even for tall hunks) | Done |
 | [NV-14] | Shift+J marks file reviewed and advances to next file | Done |
+| [NV-15] | Shift+K navigates to previous file | Done |
+| [NV-16] | Transient error toast when open-in-editor fails | Done |
 
 ### Directory Diff (DD) — 15/15
 

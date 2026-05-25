@@ -211,6 +211,21 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
   const searchInputRef = useRef(null);
   const [contextMenu, setContextMenu] = useState(null);
+  const [errorToast, setErrorToast] = useState(null);
+  const errorToastTimerRef = useRef(null);
+
+  const showErrorToast = useCallback((message) => {
+    setErrorToast(message);
+    if (errorToastTimerRef.current) clearTimeout(errorToastTimerRef.current);
+    errorToastTimerRef.current = setTimeout(() => setErrorToast(null), 3000);
+  }, []);
+
+  const handleOpenInEditor = useCallback((line) => {
+    if (!window.moor?.openInEditor || !rightPath) return;
+    window.moor.openInEditor(rightPath, line, 1).then(r => {
+      if (r && !r.found) showErrorToast(r.error || 'Could not open in editor');
+    });
+  }, [rightPath, showErrorToast]);
   const contextMenuRef = useRef(null);
   const totalHeight = rows.length * ROW_HEIGHT;
   // NV-13 bottom pad: lets a hunk near end-of-file scroll into the
@@ -284,10 +299,11 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     const rejected = rejectedHunks.size;
     const unreviewed = Math.max(0, totalHunks - reviewed - rejected);
     const rejections = [];
-    for (const [hunkIdx, reason] of rejectionReasons) {
+    for (const hunkIdx of rejectedHunks) {
       const range = hunkRanges[hunkIdx];
       if (!range) continue;
       const row = rows[range.start];
+      const reason = rejectionReasons.get(hunkIdx) ?? null;
       rejections.push({ file: rightPath || leftPath, hunk: hunkIdx, line: row?.rightNum || row?.leftNum || 1, reason });
     }
     window.__moorQuitState = { rejected, unreviewed, rejections };
@@ -554,13 +570,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     if (window.moor?.openInEditor && rightPath && hunkRanges[h]) {
       const row = rows[hunkRanges[h].start];
       const line = row?.rightNum || row?.leftNum || 1;
-      actions.push({ label: 'Open in editor', action: () => {
-        window.moor.openInEditor(rightPath, line, 1)
-          .then(r => { if (r && !r.found) console.warn('open-in-editor:', r.error); });
-      }});
+      actions.push({ label: 'Open in editor', action: () => handleOpenInEditor(line) });
     }
     return actions;
-  }, [contextMenu, reviewedHunks, rejectedHunks, hunkRanges, rows, rightPath, setReviewedHunks, setRejectedHunks, setRejectionReasons, beginReject]);
+  }, [contextMenu, reviewedHunks, rejectedHunks, hunkRanges, rows, rightPath, setReviewedHunks, setRejectedHunks, setRejectionReasons, beginReject, handleOpenInEditor]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -733,8 +746,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           if (window.moor?.openInEditor && rightPath && hunkRanges[currentHunk]) {
             const row = rows[hunkRanges[currentHunk].start];
             const line = row?.rightNum || row?.leftNum || 1;
-            window.moor.openInEditor(rightPath, line, 1)
-              .then(r => { if (r && !r.found) console.warn('open-in-editor:', r.error); });
+            handleOpenInEditor(line);
           }
           break;
         }
@@ -838,6 +850,25 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    {errorToast && (
+      <div style={{
+        position: 'fixed',
+        top: '24px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        background: 'var(--color-conflict)',
+        color: 'var(--bg-deep)',
+        fontFamily: 'var(--font-ui)',
+        fontSize: '13px',
+        fontWeight: 600,
+        padding: '8px 20px',
+        borderRadius: '6px',
+        zIndex: 1000,
+        animation: 'toast-fade 3s ease-in-out',
+      }}>
+        {errorToast}
+      </div>
+    )}
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       {/* Main column: scroll container (with sticky header) + hscrollbar */}
       <div ref={contentAreaRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>

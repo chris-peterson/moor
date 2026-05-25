@@ -68,6 +68,7 @@ Vim-style, keyboard-first:
 - **[NV-13]** When navigating to a hunk that is already fully visible in the viewport, the viewer shall not scroll. Otherwise the viewer shall scroll so that one line of context above the hunk is visible at the top of the viewport, with the hunk's first line on the second visible row. If the hunk begins at the first line of the file, the viewer shall align the hunk's first line flush with the top of the viewport. If the hunk would fit in the viewport flush to the top but not with the context-above row, the viewer shall align the hunk flush so the bottom is in view. The viewer shall not push the hunk's first line below the second visible row, even when the hunk is taller than the viewport. In-file hunk navigation shall animate the scroll; navigation to a new file shall scroll instantly.
 - **[NV-14]** When the user presses `Shift+J`, the viewer shall mark all unreviewed hunks in the current file as reviewed and navigate to the first hunk of the next file. Rejected hunks remain rejected.
 - **[NV-15]** When the user presses `Shift+K`, the viewer shall navigate to the first hunk of the previous file. Review and rejection state of hunks in the current file shall remain unchanged.
+- **[NV-16]** When the user invokes "open in editor" (NV-8 or CM-5) and the editor lookup returns no result (file not in any open or recent workspace, or editor CLI not found), the viewer shall display a transient error toast with the failure reason for 3 seconds.
 
 ### Directory Diff (DD)
 

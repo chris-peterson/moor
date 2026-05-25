@@ -247,15 +247,17 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     }
     const unreviewed = totalChanges - reviewedChanges - totalRejected;
     const rejections = [];
-    for (const [fileIdxStr, reasons] of Object.entries(perFileRejectionReasons)) {
+    for (const [fileIdxStr, rejected] of Object.entries(perFileRejectedHunks)) {
       const fileIdx = Number(fileIdxStr);
       const file = files[fileIdx];
-      if (!file || !reasons.size) continue;
+      if (!file || !rejected || rejected.size === 0) continue;
       const filePath = file.rightPath || file.leftPath;
       const content = fileContents[fileIdx];
       const starts = content ? computeHunkStartLines(content.left, content.right) : [];
-      for (const [hunkIdx, reason] of reasons) {
+      const reasons = perFileRejectionReasons[fileIdx];
+      for (const hunkIdx of rejected) {
         const line = starts[hunkIdx]?.line ?? 1;
+        const reason = reasons?.get(hunkIdx) ?? null;
         rejections.push({ file: filePath, hunk: hunkIdx, line, reason });
       }
     }
@@ -265,19 +267,21 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
       rejections,
     };
     return () => { window.__moorQuitState = null; };
-  }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalRejected, perFileRejectionReasons, fileContents]);
+  }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalRejected, perFileRejectedHunks, perFileRejectionReasons, fileContents]);
 
   const closeWithExitCode = useCallback((exitCode) => {
     const rejections = [];
-    for (const [fileIdxStr, reasons] of Object.entries(perFileRejectionReasons)) {
+    for (const [fileIdxStr, rejected] of Object.entries(perFileRejectedHunks)) {
       const fileIdx = Number(fileIdxStr);
       const file = files[fileIdx];
-      if (!file || !reasons.size) continue;
+      if (!file || !rejected || rejected.size === 0) continue;
       const filePath = file.rightPath || file.leftPath;
       const content = fileContents[fileIdx];
       const starts = content ? computeHunkStartLines(content.left, content.right) : [];
-      for (const [hunkIdx, reason] of reasons) {
+      const reasons = perFileRejectionReasons[fileIdx];
+      for (const hunkIdx of rejected) {
         const line = starts[hunkIdx]?.line ?? 1;
+        const reason = reasons?.get(hunkIdx) ?? null;
         rejections.push({ file: filePath, hunk: hunkIdx, line, reason });
       }
     }
@@ -286,7 +290,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     } else {
       onClose();
     }
-  }, [files, perFileRejectionReasons, fileContents, onClose]);
+  }, [files, perFileRejectedHunks, perFileRejectionReasons, fileContents, onClose]);
 
   const unreviewedCount = Math.max(0, totalChanges - reviewedChanges - totalRejected);
 
