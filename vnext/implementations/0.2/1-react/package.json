@@ -7,13 +7,16 @@
   "scripts": {
     "start": "electron .",
     "build": "vite build",
-    "test": "node --test src/engine/*.test.js"
+    "test": "node --test src/engine/*.test.js",
+    "postinstall": "electron-rebuild"
   },
   "dependencies": {
+    "better-sqlite3": "^12.10.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.3.1",
     "vite": "^6.0.7"
