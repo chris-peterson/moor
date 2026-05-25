@@ -111,7 +111,7 @@
 | [EC-2] | Exit code 1 on rejection | Done |
 | [EC-3] | Exit code 2 on unreviewed | Done |
 | [EC-4] | Exit code 3 on early close | Done |
-| [EC-5] | JSON sidecar at ~/.cache/kdiff4/review-result-PID | Done |
+| [EC-5] | JSON sidecar at ~/.cache/moor/review-result-PID | Done |
 
 ### Application Shell (AS) — 8/8
 

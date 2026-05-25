@@ -71,7 +71,7 @@ function isGitDifftoolTmpPath(p) {
 function deriveContext(launchArgs) {
   const cliTitle = parseTitleFlag();
   if (cliTitle) return cliTitle;
-  if (process.env.KDIFF4_TITLE) return process.env.KDIFF4_TITLE;
+  if (process.env.MOOR_TITLE) return process.env.MOOR_TITLE;
   if (launchArgs) {
     if (isGitDifftoolTmpPath(launchArgs.left) && isGitDifftoolTmpPath(launchArgs.right)) {
       return 'git diff';
@@ -87,7 +87,7 @@ function deriveWindowTitle(launchArgs) {
   if (project && context) return `${project} - ${context}`;
   if (project) return project;
   if (context) return context;
-  return 'kdiff4';
+  return 'moor';
 }
 
 app.whenReady().then(async () => {
@@ -189,7 +189,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  const exitFile = process.env.KDIFF4_REVIEW_RESULT;
+  const exitFile = process.env.MOOR_REVIEW_RESULT;
   if (exitFile) {
     const data = closePayload || { exitCode, rejections: [] };
     if (reviewer) data.reviewer = reviewer;

@@ -161,7 +161,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
   useEffect(() => {
     if (!isImage) { setLeftDataUrl(null); setRightDataUrl(null); return; }
-    const api = window.kdiff4;
+    const api = window.moor;
     if (!api?.readFileAsDataUrl) return;
     let cancelled = false;
     (async () => {
@@ -290,8 +290,8 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       const row = rows[range.start];
       rejections.push({ file: rightPath || leftPath, hunk: hunkIdx, line: row?.rightNum || row?.leftNum || 1, reason });
     }
-    window.__kdiff4QuitState = { rejected, unreviewed, rejections };
-    return () => { window.__kdiff4QuitState = null; };
+    window.__moorQuitState = { rejected, unreviewed, rejections };
+    return () => { window.__moorQuitState = null; };
   }, [hunkRanges, rows, reviewedHunks, rejectedHunks, rejectionReasons, onNavigateNext, leftPath, rightPath]);
 
   useEffect(() => {
@@ -551,11 +551,11 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
         setRejectionReasons(prev => { const next = new Map(prev); next.delete(h); return next; });
       }});
     }
-    if (window.kdiff4?.openInEditor && rightPath && hunkRanges[h]) {
+    if (window.moor?.openInEditor && rightPath && hunkRanges[h]) {
       const row = rows[hunkRanges[h].start];
       const line = row?.rightNum || row?.leftNum || 1;
       actions.push({ label: 'Open in editor', action: () => {
-        window.kdiff4.openInEditor(rightPath, line, 1)
+        window.moor.openInEditor(rightPath, line, 1)
           .then(r => { if (r && !r.found) console.warn('open-in-editor:', r.error); });
       }});
     }
@@ -730,10 +730,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
         }
         case 'i': {
           e.preventDefault();
-          if (window.kdiff4?.openInEditor && rightPath && hunkRanges[currentHunk]) {
+          if (window.moor?.openInEditor && rightPath && hunkRanges[currentHunk]) {
             const row = rows[hunkRanges[currentHunk].start];
             const line = row?.rightNum || row?.leftNum || 1;
-            window.kdiff4.openInEditor(rightPath, line, 1)
+            window.moor.openInEditor(rightPath, line, 1)
               .then(r => { if (r && !r.found) console.warn('open-in-editor:', r.error); });
           }
           break;

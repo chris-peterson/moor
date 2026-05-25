@@ -3,7 +3,7 @@ import FileDiffView from './components/FileDiffView.jsx';
 import ReviewShell from './components/ReviewShell.jsx';
 
 function buildQuitMessage() {
-  const state = window.__kdiff4QuitState;
+  const state = window.__moorQuitState;
   if (!state) return null;
 
   const parts = [];
@@ -18,7 +18,7 @@ function buildQuitMessage() {
 }
 
 function computeExitCode() {
-  const state = window.__kdiff4QuitState;
+  const state = window.__moorQuitState;
   if (!state || state.noInteraction) return 3;
   if (state.rejected > 0) return 1;
   if (state.unreviewed > 0) return 2;
@@ -26,7 +26,7 @@ function computeExitCode() {
 }
 
 function buildClosePayload() {
-  const state = window.__kdiff4QuitState;
+  const state = window.__moorQuitState;
   const exitCode = computeExitCode();
   return {
     exitCode,
@@ -42,7 +42,7 @@ export function App() {
   const [rightContent, setRightContent] = useState('');
   const [directoryTree, setDirectoryTree] = useState(null);
 
-  const api = window.kdiff4;
+  const api = window.moor;
 
   useEffect(() => {
     if (!api) return;
@@ -70,8 +70,8 @@ export function App() {
   useEffect(() => {
     if (!api?.onCloseRequested) return;
     api.onCloseRequested(() => {
-      if (typeof window.__kdiff4ConfirmClose === 'function') {
-        window.__kdiff4ConfirmClose();
+      if (typeof window.__moorConfirmClose === 'function') {
+        window.__moorConfirmClose();
         return;
       }
       const message = buildQuitMessage();
@@ -93,7 +93,7 @@ export function App() {
     return (
       <div style={{ ...containerStyle, alignItems: 'center', justifyContent: 'center' }}>
         <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-ui)' }}>
-          {api ? 'Loading...' : 'Usage: kdiff4 file1 file2'}
+          {api ? 'Loading...' : 'Usage: moor file1 file2'}
         </span>
       </div>
     );

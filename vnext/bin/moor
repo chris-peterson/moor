@@ -1,27 +1,27 @@
 #!/bin/bash
-# kdiff4 — production launcher
+# moor — production launcher
 # Usage:
-#   kdiff4 dir1 dir2                          # compare directories
-#   kdiff4 file1 file2                         # compare files
+#   moor dir1 dir2                          # compare directories
+#   moor file1 file2                         # compare files
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 IMPL_DIR="$SCRIPT_DIR/../implementations/0.2/1-react"
 
 # Build if dist doesn't exist
 if [ ! -d "$IMPL_DIR/dist" ]; then
-    echo "Building kdiff4..." >&2
+    echo "Building moor..." >&2
     (cd "$IMPL_DIR" && ./node_modules/.bin/vite build --quiet) || exit 1
 fi
 
 # Exit code file: Electron writes the review outcome here.
 # git difftool --dir-diff swallows the process exit code,
 # so callers should read this file after git difftool returns.
-KDIFF4_CACHE_DIR="$HOME/.cache/kdiff4"
-mkdir -p "$KDIFF4_CACHE_DIR"
-if [ -z "$KDIFF4_REVIEW_RESULT" ]; then
-    export KDIFF4_REVIEW_RESULT="$KDIFF4_CACHE_DIR/review-result-$$"
+MOOR_CACHE_DIR="$HOME/.cache/moor"
+mkdir -p "$MOOR_CACHE_DIR"
+if [ -z "$MOOR_REVIEW_RESULT" ]; then
+    export MOOR_REVIEW_RESULT="$MOOR_CACHE_DIR/review-result-$$"
 fi
-rm -f "$KDIFF4_REVIEW_RESULT"
+rm -f "$MOOR_REVIEW_RESULT"
 
 # Electron-based editors (VS Code, Cursor) set ELECTRON_RUN_AS_NODE=1
 # in their integrated terminal so child processes don't accidentally

@@ -16,25 +16,18 @@ test:
 sample-data:
     bash scripts/create-sample-data.sh
 
-diff *flags: sample-data build (_diff flags)
-
-_diff flags:
-    #!/usr/bin/env bash
-    ./bin/kdiff4 {{sample_dir}}/left.js {{sample_dir}}/right.js &
-    if echo "{{flags}}" | grep -q -- "--legacy"; then
-        kdiff3 {{sample_dir}}/left.js {{sample_dir}}/right.js &
-    fi
-    wait
+diff: sample-data build
+    ./bin/moor {{sample_dir}}/left.js {{sample_dir}}/right.js
 
 dir-diff: sample-data build
-    ./bin/kdiff4 {{sample_dir}}/left {{sample_dir}}/right
+    ./bin/moor {{sample_dir}}/left {{sample_dir}}/right
 
 gitconfig_repo := home_directory() / "src/getty/cpeterson/gitconfig"
 
 git-install: build
-    git config --global diff.tool kdiff4
-    git config --global difftool.kdiff4.cmd '{{justfile_directory()}}/bin/kdiff4 "$LOCAL" "$REMOTE"'
+    git config --global diff.tool moor
+    git config --global difftool.moor.cmd '{{justfile_directory()}}/bin/moor "$LOCAL" "$REMOTE"'
 
 git-uninstall:
-    git config --global --remove-section difftool.kdiff4 2>/dev/null || true
+    git config --global --remove-section difftool.moor 2>/dev/null || true
     cd {{gitconfig_repo}} && bash update.sh

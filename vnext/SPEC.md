@@ -1,4 +1,4 @@
-# kdiff4 — Modern Diff Viewer
+# moor — Modern Diff Viewer
 
 **Version:** 0.2
 **Status:** Draft — narrowed scope after implementation 0.1 learnings
@@ -9,19 +9,19 @@
 
 A fast, beautiful diff viewer optimized for `git difftool`. Opens instantly, shows the diff clearly, closes when done. Keyboard-driven, vim-style navigation.
 
-**Not a merge tool.** That's a solved problem (VS Code `--merge`, kdiff3). kdiff4 does one thing well: show diffs clearly across changed files in a directory.
+**Not a merge tool.** That's a solved problem (VS Code `--merge`). moor does one thing well: show diffs clearly across changed files in a directory.
 
 ---
 
 ## Core Workflow
 
-Git launches kdiff4 once with all changed files:
+Git launches moor once with all changed files:
 
 ```bash
-git difftool --dir-diff  # opens kdiff4 once with all changes
+git difftool --dir-diff  # opens moor once with all changes
 ```
 
-kdiff4 opens a sidebar listing changed files. User navigates between files, reviews each diff, and closes when done.
+moor opens a sidebar listing changed files. User navigates between files, reviews each diff, and closes when done.
 
 ---
 
@@ -129,13 +129,13 @@ When launched with two directories (`git difftool --dir-diff`):
 ### Application Shell (AS)
 
 - **[AS-1]** The application shall be an Electron app with a production build (no dev server needed)
-- **[AS-2]** The application shall launch from CLI: `kdiff4 file1 file2`
+- **[AS-2]** The application shall launch from CLI: `moor file1 file2`
 - **[AS-3]** The application shall show file paths in the window title
 - **[AS-4]** When launched, the application shall open fullscreen (maximized)
 - **[AS-5]** The application shall achieve first paint in under 1 second
 - **[AS-6]** When closed, the application shall exit with a code indicating review outcome (see EC)
 - **[AS-7]** The application shall support `git difftool` integration via `git config`
-- **[AS-8]** When launched, the application shall set the window title to `<project> - <context>`, where `<project>` is `<basename> (<path>)` from the git repository toplevel (`git rev-parse --show-toplevel` from the working directory), with `<path>` home-substituted to `~/...` when applicable, and `<context>` is the highest-priority available of: (1) the `--title` CLI flag, (2) the `KDIFF4_TITLE` environment variable, (3) the file paths being diffed (`<left> vs <right>`, AS-3 fallback), or `git diff` when both paths are git-difftool temp directories. When only one component is available, the title shall be that component alone. The window title shall not be prefixed with `kdiff4 —`.
+- **[AS-8]** When launched, the application shall set the window title to `<project> - <context>`, where `<project>` is `<basename> (<path>)` from the git repository toplevel (`git rev-parse --show-toplevel` from the working directory), with `<path>` home-substituted to `~/...` when applicable, and `<context>` is the highest-priority available of: (1) the `--title` CLI flag, (2) the `MOOR_TITLE` environment variable, (3) the file paths being diffed (`<left> vs <right>`, AS-3 fallback), or `git diff` when both paths are git-difftool temp directories. When only one component is available, the title shall be that component alone. The window title shall not be prefixed with `moor —`.
 
 ### Exit Codes (EC)
 
@@ -143,7 +143,7 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[EC-2]** When closed with one or more rejected hunks, the application shall exit with code 1
 - **[EC-3]** When closed with one or more unreviewed hunks, the application shall exit with code 2
 - **[EC-4]** When closed before hunk counting completes or before any review interaction, the application shall exit with code 3
-- **[EC-5]** The launcher shall write a JSON sidecar file to `~/.cache/kdiff4/review-result-<PID>` (unique per invocation). If `KDIFF4_REVIEW_RESULT` is already set by the caller, the launcher shall respect it. The sidecar shall contain `exitCode` (number), `reviewer` (string, from `git config user.name`), and `rejections` (array of objects with `file`, `hunk`, `line`, and `reason` fields)
+- **[EC-5]** The launcher shall write a JSON sidecar file to `~/.cache/moor/review-result-<PID>` (unique per invocation). If `MOOR_REVIEW_RESULT` is already set by the caller, the launcher shall respect it. The sidecar shall contain `exitCode` (number), `reviewer` (string, from `git config user.name`), and `rejections` (array of objects with `file`, `hunk`, `line`, and `reason` fields)
 
 ### User Preferences (UP)
 
@@ -158,7 +158,7 @@ Fixed for now, configurable later:
 
 ## Out of Scope
 
-- 3-way merge (use `code --merge` or kdiff3)
+- 3-way merge (use `code --merge`)
 - Configuration UI / settings dialog
 - Remote file access
 - Printing
@@ -171,8 +171,8 @@ Fixed for now, configurable later:
 
 ```bash
 # Install
-git config --global diff.tool kdiff4
-git config --global difftool.kdiff4.cmd '/path/to/kdiff4 "$LOCAL" "$REMOTE"'
+git config --global diff.tool moor
+git config --global difftool.moor.cmd '/path/to/moor "$LOCAL" "$REMOTE"'
 
 # Usage
 git difftool              # review changes file-by-file

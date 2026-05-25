@@ -19,7 +19,7 @@ describe('compareDirectories — rename detection', () => {
   let root;
 
   before(async () => {
-    root = await mkdtemp(join(tmpdir(), 'kdiff4-dir-test-'));
+    root = await mkdtemp(join(tmpdir(), 'moor-dir-test-'));
     await mkdir(join(root, 'left/src'), { recursive: true });
     await mkdir(join(root, 'right/src'), { recursive: true });
     await mkdir(join(root, 'left/old'), { recursive: true });
@@ -95,7 +95,7 @@ describe('compareDirectories — rename detection', () => {
   });
 
   test('does not match files with differing content', async () => {
-    const local = await mkdtemp(join(tmpdir(), 'kdiff4-dir-nomatch-'));
+    const local = await mkdtemp(join(tmpdir(), 'moor-dir-nomatch-'));
     await writeFile(join(local, 'a.txt'), 'alpha\n');
     await mkdir(join(local, 'right'));
     await writeFile(join(local, 'right/b.txt'), 'beta\n');

@@ -242,8 +242,8 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
 
   useEffect(() => {
     if (!hunkCountingDone && files.length > 0) {
-      window.__kdiff4QuitState = { noInteraction: true, rejected: 0, unreviewed: files.length, rejections: [] };
-      return () => { window.__kdiff4QuitState = null; };
+      window.__moorQuitState = { noInteraction: true, rejected: 0, unreviewed: files.length, rejections: [] };
+      return () => { window.__moorQuitState = null; };
     }
     const unreviewed = totalChanges - reviewedChanges - totalRejected;
     const rejections = [];
@@ -259,12 +259,12 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
         rejections.push({ file: filePath, hunk: hunkIdx, line, reason });
       }
     }
-    window.__kdiff4QuitState = {
+    window.__moorQuitState = {
       rejected: totalRejected,
       unreviewed: Math.max(0, unreviewed),
       rejections,
     };
-    return () => { window.__kdiff4QuitState = null; };
+    return () => { window.__moorQuitState = null; };
   }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalRejected, perFileRejectionReasons, fileContents]);
 
   const closeWithExitCode = useCallback((exitCode) => {
@@ -281,8 +281,8 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
         rejections.push({ file: filePath, hunk: hunkIdx, line, reason });
       }
     }
-    if (window.kdiff4?.forceClose) {
-      window.kdiff4.forceClose({ exitCode, rejections });
+    if (window.moor?.forceClose) {
+      window.moor.forceClose({ exitCode, rejections });
     } else {
       onClose();
     }
@@ -301,10 +301,10 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
   }, [totalRejected, unreviewedCount, closeWithExitCode]);
 
   useEffect(() => {
-    window.__kdiff4ConfirmClose = requestClose;
+    window.__moorConfirmClose = requestClose;
     return () => {
-      if (window.__kdiff4ConfirmClose === requestClose) {
-        window.__kdiff4ConfirmClose = null;
+      if (window.__moorConfirmClose === requestClose) {
+        window.__moorConfirmClose = null;
       }
     };
   }, [requestClose]);

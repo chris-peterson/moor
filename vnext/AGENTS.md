@@ -1,8 +1,8 @@
-# kdiff4 — Build Philosophy
+# moor — Build Philosophy
 
 ## What This Is
 
-A fast, keyboard-driven diff viewer optimized for `git difftool`. Not a merge tool, not a directory browser — those are solved by VS Code and kdiff3. kdiff4 does one thing well: show a two-file diff.
+A fast, keyboard-driven diff viewer optimized for `git difftool`. Not a merge tool, not a directory browser — those are solved elsewhere. moor does one thing well: show a two-file diff.
 
 ## Key Constraints
 
