@@ -1,7 +1,0 @@
-unmatchedSuppression:*
-assertWithSideEffect
-useInitializationList
-cstyleCast
-uninitMemberVar:src/OptionItems.h:*
-variableScope
-unsafeClassCanLeak

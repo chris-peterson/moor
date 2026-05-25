@@ -1,37 +1,11 @@
-# general
-apidocs
-.directory
-.kdev4
-build
+sample_data/
+implementations/**/node_modules/
+implementations/**/dist/
+implementations/**/.vite/
+
 *~
-*.patch
-*.diff
 *.bak
 *.orig
-*.pyc
 *.rej
 *.swp
-doxygen.log
-Doxyfile
-*.kdevelop
-*.kdevelop.filelist
-*.kdevelop.pcs
-*.kdevses
-.*kate-swp
-build/
-mem.log.*
-massif.*
-callgrind.*
-perf.data*
-
-# vnext
-vnext/sample_data/
-vnext/implementations/**/node_modules/
-vnext/implementations/**/dist/
-vnext/implementations/**/.vite/
-
-# from kdiff3
-*.BACKUP.*
-*.BASE.*
-*.LOCAL.*
-*.REMOTE.*
+.DS_Store
