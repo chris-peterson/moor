@@ -133,7 +133,7 @@
 | [UP-1] | Monospace 13px | Done |
 | [UP-2] | Tab width 4 spaces | Done |
 | [UP-3] | Dark theme with distinct hues | Done |
-| [UP-4] | Never truncate; horizontal scroll preferred, word wrap fallback | Done |
+| [UP-4] | Never truncate or wrap; horizontal scroll reveals full lines | Done |
 
 ### Deferred
 

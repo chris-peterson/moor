@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Sidebar from './Sidebar.jsx';
 import FileDiffView from './FileDiffView.jsx';
 import FileNavbar from './FileNavbar.jsx';
-import { computeLineChanges, countDisplayHunks, BINARY_SENTINEL } from '../engine/diff.js';
+import { computeLineChanges, countDisplayHunks, computeHunkStartLines, BINARY_SENTINEL } from '../engine/diff.js';
 
 const emptySet = new Set();
 
@@ -247,12 +247,16 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     }
     const unreviewed = totalChanges - reviewedChanges - totalRejected;
     const rejections = [];
-    for (const [fileIdx, reasons] of Object.entries(perFileRejectionReasons)) {
+    for (const [fileIdxStr, reasons] of Object.entries(perFileRejectionReasons)) {
+      const fileIdx = Number(fileIdxStr);
       const file = files[fileIdx];
       if (!file || !reasons.size) continue;
       const filePath = file.rightPath || file.leftPath;
+      const content = fileContents[fileIdx];
+      const starts = content ? computeHunkStartLines(content.left, content.right) : [];
       for (const [hunkIdx, reason] of reasons) {
-        rejections.push({ file: filePath, hunk: hunkIdx, line: null, reason });
+        const line = starts[hunkIdx]?.line ?? 1;
+        rejections.push({ file: filePath, hunk: hunkIdx, line, reason });
       }
     }
     window.__kdiff4QuitState = {
@@ -261,16 +265,20 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
       rejections,
     };
     return () => { window.__kdiff4QuitState = null; };
-  }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalRejected, perFileRejectionReasons]);
+  }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalRejected, perFileRejectionReasons, fileContents]);
 
   const closeWithExitCode = useCallback((exitCode) => {
     const rejections = [];
     for (const [fileIdxStr, reasons] of Object.entries(perFileRejectionReasons)) {
-      const file = files[Number(fileIdxStr)];
+      const fileIdx = Number(fileIdxStr);
+      const file = files[fileIdx];
       if (!file || !reasons.size) continue;
       const filePath = file.rightPath || file.leftPath;
+      const content = fileContents[fileIdx];
+      const starts = content ? computeHunkStartLines(content.left, content.right) : [];
       for (const [hunkIdx, reason] of reasons) {
-        rejections.push({ file: filePath, hunk: hunkIdx, line: null, reason });
+        const line = starts[hunkIdx]?.line ?? 1;
+        rejections.push({ file: filePath, hunk: hunkIdx, line, reason });
       }
     }
     if (window.kdiff4?.forceClose) {
@@ -278,7 +286,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
     } else {
       onClose();
     }
-  }, [files, perFileRejectionReasons, onClose]);
+  }, [files, perFileRejectionReasons, fileContents, onClose]);
 
   const unreviewedCount = Math.max(0, totalChanges - reviewedChanges - totalRejected);
 

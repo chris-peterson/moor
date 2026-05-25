@@ -161,6 +161,74 @@ export function countDisplayHunks(hunks) {
   return count;
 }
 
+// Expand line-level hunks into per-row display records, pairing adjacent
+// delete+insert blocks as `modify` rows. This is the same expansion the diff
+// view renders, exposed here so ReviewShell can derive per-hunk line numbers
+// for the EC-5 sidecar without recomputing it differently.
+export function buildDisplayRows(leftLines, rightLines, hunks) {
+  const rows = [];
+  for (let h = 0; h < hunks.length; h++) {
+    const hunk = hunks[h];
+    if (hunk.type === 'equal') {
+      for (let o = hunk.oldStart, n = hunk.newStart; o <= hunk.oldEnd; o++, n++) {
+        rows.push({ type: 'equal', leftLine: leftLines[o], rightLine: rightLines[n], leftNum: o + 1, rightNum: n + 1 });
+      }
+    } else if (hunk.type === 'delete') {
+      const next = hunks[h + 1];
+      if (next && next.type === 'insert') {
+        const delCount = hunk.oldEnd - hunk.oldStart + 1;
+        const insCount = next.newEnd - next.newStart + 1;
+        const paired = Math.min(delCount, insCount);
+        for (let i = 0; i < paired; i++) {
+          rows.push({ type: 'modify', leftLine: leftLines[hunk.oldStart + i], rightLine: rightLines[next.newStart + i], leftNum: hunk.oldStart + i + 1, rightNum: next.newStart + i + 1 });
+        }
+        for (let i = paired; i < delCount; i++) {
+          rows.push({ type: 'delete', leftLine: leftLines[hunk.oldStart + i], rightLine: null, leftNum: hunk.oldStart + i + 1, rightNum: null });
+        }
+        for (let i = paired; i < insCount; i++) {
+          rows.push({ type: 'insert', leftLine: null, rightLine: rightLines[next.newStart + i], leftNum: null, rightNum: next.newStart + i + 1 });
+        }
+        h++;
+      } else {
+        for (let o = hunk.oldStart; o <= hunk.oldEnd; o++) {
+          rows.push({ type: 'delete', leftLine: leftLines[o], rightLine: null, leftNum: o + 1, rightNum: null });
+        }
+      }
+    } else if (hunk.type === 'insert') {
+      for (let n = hunk.newStart; n <= hunk.newEnd; n++) {
+        rows.push({ type: 'insert', leftLine: null, rightLine: rightLines[n], leftNum: null, rightNum: n + 1 });
+      }
+    }
+  }
+  return rows;
+}
+
+// Return [{ line }, ...] indexed by display hunk index, where `line` is the
+// 1-based line number of the hunk's first row (rightNum preferred, leftNum
+// for pure-deletions). Used by the EC-5 sidecar to populate `line` for every
+// rejected hunk without having to plumb FileDiffView state up to ReviewShell.
+export function computeHunkStartLines(leftContent, rightContent) {
+  if (leftContent === BINARY_SENTINEL || rightContent === BINARY_SENTINEL) {
+    return [{ line: 1 }];
+  }
+  const leftLines = leftContent ? leftContent.split('\n') : [];
+  const rightLines = rightContent ? rightContent.split('\n') : [];
+  const hunks = computeLineChanges(leftLines, rightLines);
+  const rows = buildDisplayRows(leftLines, rightLines, hunks);
+
+  const starts = [];
+  let inHunk = false;
+  for (const row of rows) {
+    if (row.type === 'equal') {
+      inHunk = false;
+    } else if (!inHunk) {
+      inHunk = true;
+      starts.push({ line: row.rightNum || row.leftNum || 1 });
+    }
+  }
+  return starts;
+}
+
 export function diffLines(oldText, newText) {
   const oldLines = oldText.length === 0 ? [] : oldText.split('\n');
   const newLines = newText.length === 0 ? [] : newText.split('\n');

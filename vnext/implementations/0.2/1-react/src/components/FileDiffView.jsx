@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useCallback, useState, useEffect, useLayoutEffect } from 'react';
-import { computeLineChanges, diffChars, BINARY_SENTINEL } from '../engine/diff.js';
+import { computeLineChanges, diffChars, buildDisplayRows, BINARY_SENTINEL } from '../engine/diff.js';
 import Minimap from './Minimap.jsx';
 
 const TAB_SPACES = '    ';
@@ -48,44 +48,6 @@ const H_SCROLL_STEP = 40;
 const V_SCROLL_STEP = ROW_HEIGHT * 3;
 const RESIZER_WIDTH = 5;
 const BAR_WIDTH = 3;
-
-function buildDisplayRows(leftLines, rightLines, hunks) {
-  const rows = [];
-  for (let h = 0; h < hunks.length; h++) {
-    const hunk = hunks[h];
-    if (hunk.type === 'equal') {
-      for (let o = hunk.oldStart, n = hunk.newStart; o <= hunk.oldEnd; o++, n++) {
-        rows.push({ type: 'equal', leftLine: leftLines[o], rightLine: rightLines[n], leftNum: o + 1, rightNum: n + 1 });
-      }
-    } else if (hunk.type === 'delete') {
-      const next = hunks[h + 1];
-      if (next && next.type === 'insert') {
-        const delCount = hunk.oldEnd - hunk.oldStart + 1;
-        const insCount = next.newEnd - next.newStart + 1;
-        const paired = Math.min(delCount, insCount);
-        for (let i = 0; i < paired; i++) {
-          rows.push({ type: 'modify', leftLine: leftLines[hunk.oldStart + i], rightLine: rightLines[next.newStart + i], leftNum: hunk.oldStart + i + 1, rightNum: next.newStart + i + 1 });
-        }
-        for (let i = paired; i < delCount; i++) {
-          rows.push({ type: 'delete', leftLine: leftLines[hunk.oldStart + i], rightLine: null, leftNum: hunk.oldStart + i + 1, rightNum: null });
-        }
-        for (let i = paired; i < insCount; i++) {
-          rows.push({ type: 'insert', leftLine: null, rightLine: rightLines[next.newStart + i], leftNum: null, rightNum: next.newStart + i + 1 });
-        }
-        h++;
-      } else {
-        for (let o = hunk.oldStart; o <= hunk.oldEnd; o++) {
-          rows.push({ type: 'delete', leftLine: leftLines[o], rightLine: null, leftNum: o + 1, rightNum: null });
-        }
-      }
-    } else if (hunk.type === 'insert') {
-      for (let n = hunk.newStart; n <= hunk.newEnd; n++) {
-        rows.push({ type: 'insert', leftLine: null, rightLine: rightLines[n], leftNum: null, rightNum: n + 1 });
-      }
-    }
-  }
-  return rows;
-}
 
 function CharDiffSpans({ oldStr, newStr, side }) {
   const parts = useMemo(() => diffChars(oldStr || '', newStr || ''), [oldStr, newStr]);
@@ -496,13 +458,13 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       scrollContainerRef.current.scrollTop = target;
     } else {
       // In-file navigation: skip if the hunk is already fully visible,
-      // otherwise smooth-scroll to draw the eye.
+      // otherwise smooth-scroll to draw the eye. NV-13 says don't scroll —
+      // that includes preserving horizontal scroll.
       const ev = Math.max(0, viewportHeight - headerHeight);
       const visibleTop = scrollContainerRef.current.scrollTop;
       const hunkTopY = range.start * ROW_HEIGHT;
       const hunkBottomY = (range.end + 1) * ROW_HEIGHT;
       if (hunkTopY >= visibleTop && hunkBottomY <= visibleTop + ev) {
-        setScrollLeft(0);
         return;
       }
       scrollContainerRef.current.scrollTo({ top: target, behavior: 'smooth' });
@@ -532,9 +494,12 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     rejectCompletedRef.current = true;
     setRejectedHunks(prev => { const next = new Set(prev); next.add(hunkIdx); return next; });
     setReviewedHunks(prev => { const next = new Set(prev); next.delete(hunkIdx); return next; });
-    if (reason) {
-      setRejectionReasons(prev => { const next = new Map(prev); next.set(hunkIdx, reason); return next; });
-    }
+    setRejectionReasons(prev => {
+      const next = new Map(prev);
+      if (reason) next.set(hunkIdx, reason);
+      else next.delete(hunkIdx);
+      return next;
+    });
     setRejectingHunk(null);
   }, [setRejectedHunks, setReviewedHunks, setRejectionReasons]);
 
