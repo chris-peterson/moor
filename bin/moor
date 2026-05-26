@@ -5,7 +5,7 @@
 #   moor file1 file2                         # compare files
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-IMPL_DIR="$SCRIPT_DIR/../implementations/0.2/1-react"
+IMPL_DIR="$SCRIPT_DIR/.."
 
 # Build if dist doesn't exist
 if [ ! -d "$IMPL_DIR/dist" ]; then

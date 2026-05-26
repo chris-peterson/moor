@@ -1,7 +1,7 @@
 sample_data/
-implementations/**/node_modules/
-implementations/**/dist/
-implementations/**/.vite/
+node_modules/
+dist/
+.vite/
 
 *~
 *.bak

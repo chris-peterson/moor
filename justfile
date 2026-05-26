@@ -1,17 +1,13 @@
-spec := "0.2"
-impl := "1-react"
-
-impl_dir := "implementations" / spec / impl
 sample_dir := justfile_directory() / "sample_data"
 
 install:
-    cd {{impl_dir}} && npm install
+    npm install
 
 build:
-    cd {{impl_dir}} && ./node_modules/.bin/vite build
+    ./node_modules/.bin/vite build
 
 test:
-    cd {{impl_dir}} && npm test
+    npm test
 
 sample-data:
     bash scripts/create-sample-data.sh
