@@ -41,8 +41,14 @@ export function App() {
   const [leftContent, setLeftContent] = useState('');
   const [rightContent, setRightContent] = useState('');
   const [directoryTree, setDirectoryTree] = useState(null);
+  const [contextChannel, setContextChannel] = useState({ channelConfigured: false, input: null });
 
   const api = window.moor;
+
+  useEffect(() => {
+    if (!api?.getInitialContext) return;
+    api.getInitialContext().then(setContextChannel);
+  }, [api]);
 
   useEffect(() => {
     if (!api) return;
@@ -107,6 +113,8 @@ export function App() {
           leftPath={leftPath}
           rightPath={rightPath}
           api={api}
+          channelConfigured={contextChannel.channelConfigured}
+          inputContext={contextChannel.input}
           onClose={() => window.close()}
         />
       </div>

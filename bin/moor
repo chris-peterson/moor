@@ -3,6 +3,7 @@
 # Usage:
 #   moor dir1 dir2                          # compare directories
 #   moor file1 file2                         # compare files
+#   moor --context <path> dir1 dir2          # capture review output via MOOR_CONTEXT contract
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 IMPL_DIR="$SCRIPT_DIR/.."
@@ -12,16 +13,6 @@ if [ ! -d "$IMPL_DIR/dist" ]; then
     echo "Building moor..." >&2
     (cd "$IMPL_DIR" && ./node_modules/.bin/vite build --quiet) || exit 1
 fi
-
-# Exit code file: Electron writes the review outcome here.
-# git difftool --dir-diff swallows the process exit code,
-# so callers should read this file after git difftool returns.
-MOOR_CACHE_DIR="$HOME/.cache/moor"
-mkdir -p "$MOOR_CACHE_DIR"
-if [ -z "$MOOR_REVIEW_RESULT" ]; then
-    export MOOR_REVIEW_RESULT="$MOOR_CACHE_DIR/review-result-$$"
-fi
-rm -f "$MOOR_REVIEW_RESULT"
 
 # Electron-based editors (VS Code, Cursor) set ELECTRON_RUN_AS_NODE=1
 # in their integrated terminal so child processes don't accidentally

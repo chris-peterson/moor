@@ -2,9 +2,20 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Sidebar from './Sidebar.jsx';
 import FileDiffView from './FileDiffView.jsx';
 import FileNavbar from './FileNavbar.jsx';
+import ContextHeader from './ContextHeader.jsx';
 import { computeLineChanges, countDisplayHunks, computeHunkStartLines, BINARY_SENTINEL } from '../engine/diff.js';
 
 const emptySet = new Set();
+const emptyMap = new Map();
+
+function useIndexedSetter(setState, currentIndex, empty) {
+  return useCallback((updater) => {
+    setState(prev => ({
+      ...prev,
+      [currentIndex]: typeof updater === 'function' ? updater(prev[currentIndex] || empty) : updater,
+    }));
+  }, [setState, currentIndex, empty]);
+}
 
 function hunkCountFor(leftContent, rightContent) {
   if (!leftContent && !rightContent) return 0;
@@ -35,7 +46,7 @@ function flattenTree(node, list = []) {
   return list;
 }
 
-export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
+export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured, inputContext, onClose }) {
   const files = useMemo(() => flattenTree(tree), [tree]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [leftContent, setLeftContent] = useState('');
@@ -172,29 +183,13 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
   }, [currentIndex, navigateTo]);
 
   const currentReviewedHunks = perFileReviewedHunks[currentIndex] || emptySet;
-  const handleReviewedHunksChange = useCallback((updater) => {
-    setPerFileReviewedHunks(prev => ({
-      ...prev,
-      [currentIndex]: typeof updater === 'function' ? updater(prev[currentIndex] || new Set()) : updater,
-    }));
-  }, [currentIndex]);
+  const handleReviewedHunksChange = useIndexedSetter(setPerFileReviewedHunks, currentIndex, emptySet);
 
   const currentRejectedHunks = perFileRejectedHunks[currentIndex] || emptySet;
-  const handleRejectedHunksChange = useCallback((updater) => {
-    setPerFileRejectedHunks(prev => ({
-      ...prev,
-      [currentIndex]: typeof updater === 'function' ? updater(prev[currentIndex] || new Set()) : updater,
-    }));
-  }, [currentIndex]);
+  const handleRejectedHunksChange = useIndexedSetter(setPerFileRejectedHunks, currentIndex, emptySet);
 
-  const emptyMap = useMemo(() => new Map(), []);
   const currentRejectionReasons = perFileRejectionReasons[currentIndex] || emptyMap;
-  const handleRejectionReasonsChange = useCallback((updater) => {
-    setPerFileRejectionReasons(prev => ({
-      ...prev,
-      [currentIndex]: typeof updater === 'function' ? updater(prev[currentIndex] || new Map()) : updater,
-    }));
-  }, [currentIndex]);
+  const handleRejectionReasonsChange = useIndexedSetter(setPerFileRejectionReasons, currentIndex, emptyMap);
 
   const handleSearchChange = useCallback((query) => {
     setSearchQuery(query);
@@ -240,57 +235,70 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
 
   const hunkCountingDone = Object.keys(hunkCounts).length >= files.length;
 
+  const liveRejections = useMemo(() => {
+    if (!hunkCountingDone) return [];
+    const rejections = [];
+    for (const [fileIdxStr, rejected] of Object.entries(perFileRejectedHunks)) {
+      const fileIdx = Number(fileIdxStr);
+      const file = files[fileIdx];
+      if (!file || !rejected || rejected.size === 0) continue;
+      const filePath = file.rightPath || file.leftPath;
+      const content = fileContents[fileIdx];
+      const starts = content ? computeHunkStartLines(content.left, content.right) : [];
+      const reasons = perFileRejectionReasons[fileIdx];
+      for (const hunkIdx of rejected) {
+        const line = starts[hunkIdx]?.line ?? 1;
+        const reason = reasons?.get(hunkIdx) ?? null;
+        rejections.push({ file: filePath, hunk: hunkIdx, line, reason });
+      }
+    }
+    return rejections;
+  }, [hunkCountingDone, files, perFileRejectedHunks, perFileRejectionReasons, fileContents]);
+
+  const rejectionBadges = useMemo(() => {
+    const badges = [];
+    for (let i = 0; i < files.length; i++) {
+      const rejected = perFileRejectedHunks[i];
+      if (rejected && rejected.size > 0) {
+        const file = files[i];
+        const name = (file.rightPath || file.leftPath || '').split('/').pop();
+        badges.push({ fileIndex: i, count: rejected.size, name });
+      }
+    }
+    return badges;
+  }, [files, perFileRejectedHunks]);
+
   useEffect(() => {
     if (!hunkCountingDone && files.length > 0) {
       window.__moorQuitState = { noInteraction: true, rejected: 0, unreviewed: files.length, rejections: [] };
       return () => { window.__moorQuitState = null; };
     }
     const unreviewed = totalChanges - reviewedChanges - totalRejected;
-    const rejections = [];
-    for (const [fileIdxStr, rejected] of Object.entries(perFileRejectedHunks)) {
-      const fileIdx = Number(fileIdxStr);
-      const file = files[fileIdx];
-      if (!file || !rejected || rejected.size === 0) continue;
-      const filePath = file.rightPath || file.leftPath;
-      const content = fileContents[fileIdx];
-      const starts = content ? computeHunkStartLines(content.left, content.right) : [];
-      const reasons = perFileRejectionReasons[fileIdx];
-      for (const hunkIdx of rejected) {
-        const line = starts[hunkIdx]?.line ?? 1;
-        const reason = reasons?.get(hunkIdx) ?? null;
-        rejections.push({ file: filePath, hunk: hunkIdx, line, reason });
-      }
-    }
     window.__moorQuitState = {
       rejected: totalRejected,
       unreviewed: Math.max(0, unreviewed),
-      rejections,
+      rejections: liveRejections,
     };
     return () => { window.__moorQuitState = null; };
-  }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalRejected, perFileRejectedHunks, perFileRejectionReasons, fileContents]);
+  }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalRejected, liveRejections]);
+
+  useEffect(() => {
+    if (!api?.writeOutput) return;
+    // Coalesce rapid state changes (typing a rejection reason fires per-keystroke
+    // effects) into one IPC write per frame.
+    const handle = requestAnimationFrame(() => {
+      api.writeOutput({ rejections: liveRejections });
+    });
+    return () => cancelAnimationFrame(handle);
+  }, [api, liveRejections]);
 
   const closeWithExitCode = useCallback((exitCode) => {
-    const rejections = [];
-    for (const [fileIdxStr, rejected] of Object.entries(perFileRejectedHunks)) {
-      const fileIdx = Number(fileIdxStr);
-      const file = files[fileIdx];
-      if (!file || !rejected || rejected.size === 0) continue;
-      const filePath = file.rightPath || file.leftPath;
-      const content = fileContents[fileIdx];
-      const starts = content ? computeHunkStartLines(content.left, content.right) : [];
-      const reasons = perFileRejectionReasons[fileIdx];
-      for (const hunkIdx of rejected) {
-        const line = starts[hunkIdx]?.line ?? 1;
-        const reason = reasons?.get(hunkIdx) ?? null;
-        rejections.push({ file: filePath, hunk: hunkIdx, line, reason });
-      }
-    }
     if (window.moor?.forceClose) {
-      window.moor.forceClose({ exitCode, rejections });
+      window.moor.forceClose({ exitCode, rejections: liveRejections });
     } else {
       onClose();
     }
-  }, [files, perFileRejectedHunks, perFileRejectionReasons, fileContents, onClose]);
+  }, [liveRejections, onClose]);
 
   const unreviewedCount = Math.max(0, totalChanges - reviewedChanges - totalRejected);
 
@@ -391,6 +399,15 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
           Review Complete!
         </div>
       )}
+      <ContextHeader
+        context={inputContext}
+        channelConfigured={channelConfigured}
+        rejectionBadges={rejectionBadges}
+        viewedChanges={reviewedChanges}
+        totalChanges={totalChanges}
+        allViewed={allReviewed}
+        onNavigateToRejection={navigateToRejection}
+      />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {draggingSidebar && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize' }} />
@@ -490,15 +507,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, onClose }) {
         </div>
       </div>
       <FileNavbar
-        files={files}
-        currentIndex={currentIndex}
-        allViewed={allReviewed}
-        hunkCounts={hunkCounts}
-        viewed={viewed}
-        perFileReviewedHunks={perFileReviewedHunks}
-        perFileRejectedHunks={perFileRejectedHunks}
         currentFilePath={currentFile ? relativePath(currentFile.rightPath || currentFile.leftPath, rightPath || leftPath) : ''}
-        onNavigateToFile={navigateToRejection}
       />
       {quitDialog && (
         <QuitDialog

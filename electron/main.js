@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import os from 'os';
 import fs from 'fs/promises';
-import { existsSync, statSync, writeFileSync } from 'fs';
+import { existsSync, statSync, writeFileSync, readFileSync, renameSync } from 'fs';
 import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -13,14 +13,18 @@ let mainWindow;
 let exitCode = 3;
 let closePayload = null;
 let reviewer = null;
+let contextPath = null;
+let contextInput = null;
 try { reviewer = execSync('git config user.name', { encoding: 'utf-8' }).trim(); } catch {};
+
+const VALUE_FLAGS = new Set(['--title', '--context']);
 
 function parseLaunchArgs() {
   const argv = process.argv.slice(2);
   const positional = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--title') { i++; continue; }
+    if (VALUE_FLAGS.has(a)) { i++; continue; }
     if (a.startsWith('--')) continue;
     positional.push(a);
   }
@@ -33,14 +37,53 @@ function parseLaunchArgs() {
   return null;
 }
 
-function parseTitleFlag() {
+function parseFlag(name) {
   const argv = process.argv.slice(2);
+  const long = `--${name}`;
+  const inline = `--${name}=`;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--title' && i + 1 < argv.length) return argv[i + 1];
-    if (a.startsWith('--title=')) return a.slice('--title='.length);
+    if (a === long && i + 1 < argv.length) return argv[i + 1];
+    if (a.startsWith(inline)) return a.slice(inline.length);
   }
   return null;
+}
+
+function resolveContextPath() {
+  return parseFlag('context') ?? process.env.MOOR_CONTEXT ?? null;
+}
+
+function readContextInput(filePath) {
+  if (!existsSync(filePath)) return null;
+  try {
+    const raw = readFileSync(filePath, 'utf-8');
+    if (!raw.trim()) return null;
+    const parsed = JSON.parse(raw);
+    return parsed.input ?? null;
+  } catch (err) {
+    console.error(`[moor] failed to read context input from ${filePath}: ${err.message}`);
+    return null;
+  }
+}
+
+function writeContextOutput(output) {
+  if (!contextPath) return;
+  const payload = {
+    input: contextInput,
+    output: {
+      ...output,
+      reviewer: reviewer ?? null,
+    },
+  };
+  // Write to a temp path and rename so a watching reader never observes a
+  // truncated JSON file mid-write — rename is atomic on POSIX filesystems.
+  const tmp = `${contextPath}.tmp-${process.pid}`;
+  try {
+    writeFileSync(tmp, JSON.stringify(payload, null, 2));
+    renameSync(tmp, contextPath);
+  } catch (err) {
+    console.error(`[moor] failed to write context output to ${contextPath}: ${err.message}`);
+  }
 }
 
 function deriveProject() {
@@ -69,7 +112,7 @@ function isGitDifftoolTmpPath(p) {
 }
 
 function deriveContext(launchArgs) {
-  const cliTitle = parseTitleFlag();
+  const cliTitle = parseFlag('title');
   if (cliTitle) return cliTitle;
   if (process.env.MOOR_TITLE) return process.env.MOOR_TITLE;
   if (launchArgs) {
@@ -91,6 +134,11 @@ function deriveWindowTitle(launchArgs) {
 }
 
 app.whenReady().then(async () => {
+  contextPath = resolveContextPath();
+  if (contextPath) {
+    contextInput = readContextInput(contextPath);
+  }
+
   const { VSCodeNavigator } = await import('./vscode-navigator.js');
   const navigator = new VSCodeNavigator();
 
@@ -129,6 +177,15 @@ app.whenReady().then(async () => {
       console.error('[open-in-editor]', err.message);
       return { found: false, error: err.message };
     }
+  });
+
+  ipcMain.handle('get-initial-context', () => ({
+    channelConfigured: contextPath !== null,
+    input: contextInput,
+  }));
+
+  ipcMain.on('write-output', (_event, output) => {
+    writeContextOutput(output);
   });
 
   mainWindow = new BrowserWindow({
@@ -189,11 +246,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  const exitFile = process.env.MOOR_REVIEW_RESULT;
-  if (exitFile) {
-    const data = closePayload || { exitCode, rejections: [] };
-    if (reviewer) data.reviewer = reviewer;
-    writeFileSync(exitFile, JSON.stringify(data, null, 2));
-  }
+  const data = closePayload || { exitCode, rejections: [] };
+  writeContextOutput(data);
   process.exit(exitCode);
 });

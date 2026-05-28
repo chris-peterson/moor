@@ -8,4 +8,6 @@ contextBridge.exposeInMainWorld('moor', {
   openInEditor: (filePath, line, column) => ipcRenderer.invoke('open-in-editor', { filePath, line, column }),
   onCloseRequested: (callback) => ipcRenderer.on('close-requested', () => callback()),
   forceClose: (payload) => ipcRenderer.send('force-close', payload),
+  getInitialContext: () => ipcRenderer.invoke('get-initial-context'),
+  writeOutput: (payload) => ipcRenderer.send('write-output', payload),
 });
