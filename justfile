@@ -3,6 +3,9 @@ sample_dir := justfile_directory() / "sample_data"
 install:
     npm install
 
+install-cli:
+    ./bin/moor install-cli
+
 docs:
     cp SPEC.md docs/SPEC.md
     docsify serve docs --open

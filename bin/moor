@@ -1,17 +1,143 @@
 #!/bin/bash
-# moor — production launcher
+# moor — production launcher + CLI
+#
 # Usage:
 #   moor dir1 dir2                          # compare directories
-#   moor file1 file2                         # compare files
-#   moor --context <path> dir1 dir2          # capture review output via MOOR_CONTEXT contract
+#   moor file1 file2                        # compare files
+#   moor --context <path> dir1 dir2         # capture review output via MOOR_CONTEXT contract
+#   moor --version                          # print version (from plugin.json)
+#   moor install-cli [--dir <path>]         # install/refresh the ~/.local/bin/moor wrapper + completions
+#   moor completions zsh [--print]          # install or print zsh tab completion
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-IMPL_DIR="$SCRIPT_DIR/.."
+# Resolve plugin root from the hook-provided env var, else from this script's
+# location. All three invocation contexts (slash command, SessionStart hook,
+# on-PATH wrapper) must converge on the same root — see recipe Rule 4.
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+COMPLETIONS_DIR="$HOME/.zsh/completions"
+ZSHRC="$HOME/.zshrc"
+
+plugin_version() {
+    # plugin.json is the single source of truth for the version (recipe Rule 9).
+    local v
+    v=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+        "$PLUGIN_ROOT/.claude-plugin/plugin.json")
+    printf '%s\n' "${v%%$'\n'*}"
+}
+
+print_completion() {
+cat <<'EOF'
+#compdef moor
+
+_moor() {
+  if (( CURRENT == 2 )); then
+    _alternative \
+      'commands:command:((install-cli\:"install or refresh the PATH wrapper" completions\:"install or print tab completion"))' \
+      'options:option:((--context\:"review feedback channel (path)" --version\:"print version"))' \
+      'files:file or directory:_files'
+    return
+  fi
+  case "${words[2]}" in
+    completions)
+      (( CURRENT == 3 )) && compadd zsh
+      (( CURRENT == 4 )) && compadd -- --print
+      ;;
+    install-cli)
+      (( CURRENT == 3 )) && compadd -- --dir
+      (( CURRENT == 4 )) && [[ "${words[3]}" == "--dir" ]] && _files -/
+      ;;
+    *)
+      _files
+      ;;
+  esac
+}
+
+_moor "$@"
+EOF
+}
+
+install_completions() {
+    mkdir -p "$COMPLETIONS_DIR"
+    print_completion > "$COMPLETIONS_DIR/_moor"
+    echo "  ✓ wrote $COMPLETIONS_DIR/_moor"
+
+    local fpath_line="fpath=(~/.zsh/completions \$fpath)"
+    if [ ! -f "$ZSHRC" ]; then
+        echo "  ! $ZSHRC doesn't exist; create it and add:"
+        echo "      $fpath_line"
+        echo "      autoload -Uz compinit && compinit"
+        return
+    fi
+    # Only an uncommented occurrence counts — a stale `# fpath=…` shouldn't pass.
+    if grep -qE '^[[:space:]]*[^#[:space:]].*\.zsh/completions' "$ZSHRC"; then
+        echo "  ✓ $ZSHRC already configures fpath"
+        return
+    fi
+    # Append a fresh fpath + compinit block. Placed after any existing compinit
+    # so this later compinit sees ~/.zsh/completions on fpath.
+    printf '\n%s\nautoload -Uz compinit && compinit\n' "$fpath_line" >> "$ZSHRC"
+    echo "  ✓ appended fpath + compinit to $ZSHRC"
+}
+
+install_cli_wrapper() {
+    local target_dir="${1:-$HOME/.local/bin}"
+    # The wrapper hardcodes this script's path at install time; plugin upgrades
+    # don't refresh it. The SessionStart hook (hooks/cli-freshness.sh) detects
+    # the resulting version drift and nudges the user to re-run install-cli.
+    local source="$SCRIPT_DIR/moor"
+    mkdir -p "$target_dir"
+    local target="$target_dir/moor"
+    local wrapper="#!/usr/bin/env bash
+exec \"$source\" \"\$@\"
+"
+    # Compare both sides through command substitution so the wrapper's trailing
+    # newline (stripped by $(...)) doesn't make every run miss the no-op path.
+    if [ -f "$target" ] && [ "$(cat "$target")" = "$(printf '%s' "$wrapper")" ]; then
+        echo "  ✓ already installed: $target -> $source"
+    else
+        printf '%s' "$wrapper" > "$target"
+        chmod 0755 "$target"
+        echo "  ✓ wrote $target -> $source"
+    fi
+
+    case ":$PATH:" in
+        *":$target_dir:"*) ;;
+        *) echo "  ! $target_dir is not on \$PATH — add it to your shell rc" ;;
+    esac
+}
+
+case "${1:-}" in
+    --version|-v)
+        echo "moor $(plugin_version)"
+        exit 0
+        ;;
+    completions)
+        shift
+        [ "${1:-}" = "zsh" ] || { echo "only zsh is supported (got: ${1:-})" >&2; exit 1; }
+        shift
+        if [ "${1:-}" = "--print" ]; then
+            print_completion
+        else
+            install_completions
+            echo "restart your shell (or run 'exec zsh') to activate completions"
+        fi
+        exit 0
+        ;;
+    install-cli)
+        shift
+        target_dir=""
+        [ "${1:-}" = "--dir" ] && target_dir="${2:-}"
+        install_cli_wrapper "$target_dir"
+        install_completions
+        exit 0
+        ;;
+esac
 
 # Build if dist doesn't exist
-if [ ! -d "$IMPL_DIR/dist" ]; then
+if [ ! -d "$PLUGIN_ROOT/dist" ]; then
     echo "Building moor..." >&2
-    (cd "$IMPL_DIR" && ./node_modules/.bin/vite build --quiet) || exit 1
+    (cd "$PLUGIN_ROOT" && ./node_modules/.bin/vite build --quiet) || exit 1
 fi
 
 # Electron-based editors (VS Code, Cursor) set ELECTRON_RUN_AS_NODE=1
@@ -19,4 +145,4 @@ fi
 # spin up Electron windows. But we *want* Electron here — unset it.
 unset ELECTRON_RUN_AS_NODE
 
-exec "$IMPL_DIR/node_modules/.bin/electron" "$IMPL_DIR" "$@"
+exec "$PLUGIN_ROOT/node_modules/.bin/electron" "$PLUGIN_ROOT" "$@"

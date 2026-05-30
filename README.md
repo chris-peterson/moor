@@ -18,7 +18,9 @@ keybindings, and the review-feedback contract, see the docs site above.
 |------|---------|
 | `src/` | React UI and the diff engine (`src/engine/`) |
 | `electron/` | Electron main process and launch wiring |
-| `bin/moor` | Production launcher — builds `dist/` on first run, then launches Electron |
+| `bin/moor` | Launcher + CLI — builds `dist/` on first run and launches Electron; also handles `--version`, `install-cli`, and `completions` |
+| `commands/moor.md` | Slash-command shim forwarding `$ARGUMENTS` to `bin/moor` |
+| `hooks/` | `SessionStart` hook that warns when the on-PATH `moor` wrapper drifts from the plugin version |
 | `scripts/` | Sample-data generation |
 | `docs/` | Docsify documentation site (deployed to GitHub Pages) |
 | `SPEC.md` | Numbered requirements (EARS) — the behavioral contract |
@@ -39,6 +41,7 @@ just dir-diff       # build sample data and open a directory diff
 ```bash
 just git-install    # builds dist/ and sets diff.tool = moor
 just git-uninstall  # removes the difftool config
+just install-cli    # copies a moor wrapper to ~/.local/bin + zsh completion
 ```
 
 ## Docs

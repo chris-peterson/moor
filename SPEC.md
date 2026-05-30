@@ -173,6 +173,17 @@ Fixed for now, configurable later:
 - **[UP-03]** The application shall use a dark color scheme with distinct hues per source
 - **[UP-04]** The application shall never truncate or wrap long lines. The entire content of every line on both sides shall be reachable via horizontal scrolling.
 
+### Plugin Distribution (PD)
+
+moor ships as a Claude Code plugin. These requirements cover the surfaces that make it installable and discoverable alongside its peers.
+
+- **[PD-01]** The launcher shall accept `--version` (`-v`) and print `moor <version>`, reading the version from `.claude-plugin/plugin.json` (the single source of truth).
+- **[PD-02]** The launcher shall provide an `install-cli` subcommand that writes a wrapper to `~/.local/bin/moor` (overridable with `--dir <path>`) which execs the plugin's launcher, and shall warn when the target directory is not on `$PATH`.
+- **[PD-03]** `install-cli` shall also install zsh tab completion.
+- **[PD-04]** The launcher shall provide a `completions zsh` subcommand that installs the zsh completion to `~/.zsh/completions/_moor` (configuring `fpath` and `compinit` in `~/.zshrc` when absent), or prints it to stdout when given `--print`.
+- **[PD-05]** On each Claude Code session start, the plugin shall compare the on-PATH `moor` wrapper's reported version against `.claude-plugin/plugin.json`; when they differ, it shall instruct the user to re-run `install-cli`. When `moor` is not on `$PATH`, the check shall be silent.
+- **[PD-06]** The plugin shall expose a `/moor:moor` slash command that forwards its arguments to the launcher.
+
 ---
 
 ## Out of Scope

@@ -1,6 +1,6 @@
 # Status
 
-**Spec:** v0.2 | **Coverage:** 82/82 (100%)
+**Spec:** v0.2 | **Coverage:** 88/88 (100%)
 
 ## Requirement Coverage
 
@@ -145,6 +145,17 @@
 | [UP-02] | Tab width 4 spaces | Done |
 | [UP-03] | Dark theme with distinct hues | Done |
 | [UP-04] | Never truncate or wrap; horizontal scroll reveals full lines | Done |
+
+### Plugin Distribution (PD) — 6/6
+
+| Req | Description | Status |
+|-----|-------------|--------|
+| [PD-01] | `--version` prints version from plugin.json | Done |
+| [PD-02] | `install-cli` writes ~/.local/bin/moor wrapper (`--dir` override) | Done |
+| [PD-03] | `install-cli` also installs zsh completion | Done |
+| [PD-04] | `completions zsh [--print]` installs or prints completion | Done |
+| [PD-05] | SessionStart hook warns on wrapper/plugin version drift | Done |
+| [PD-06] | `/moor:moor` slash command forwards args to launcher | Done |
 
 ### Deferred
 

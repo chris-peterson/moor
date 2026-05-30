@@ -26,6 +26,17 @@ register it as your git difftool:
 just git-install   # builds dist/ and sets diff.tool = moor
 ```
 
+Put `moor` on your `PATH` with zsh tab completion, so you can launch it from
+any directory:
+
+```bash
+just install-cli   # copies a wrapper to ~/.local/bin/moor + installs completion
+```
+
+This is the same operation as the `/moor:moor install-cli` slash command. The
+plugin checks on each session start whether the on-PATH wrapper has drifted
+from the installed plugin version and reminds you to re-run it after an update.
+
 ## Quickstart
 
 Compare two files or two directories directly:
