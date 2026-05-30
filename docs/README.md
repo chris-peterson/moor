@@ -37,6 +37,15 @@ This is the same operation as the `/moor:moor install-cli` slash command. The
 plugin checks on each session start whether the on-PATH wrapper has drifted
 from the installed plugin version and reminds you to re-run it after an update.
 
+## Updating
+
+Third-party Claude Code marketplaces have auto-update **off by default**. Either:
+
+- **Enable auto-update once** via `/plugin` → Marketplaces → `chris-peterson` → Enable auto-update. Future releases install on the next session start.
+- **Or update manually** with `claude plugin update moor@chris-peterson`.
+
+Confirm what's installed with `moor --version`. See the [changelog](https://github.com/chris-peterson/moor/blob/main/CHANGELOG.md) for release notes.
+
 ## Quickstart
 
 Compare two files or two directories directly:
