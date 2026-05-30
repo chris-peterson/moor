@@ -3,6 +3,10 @@ sample_dir := justfile_directory() / "sample_data"
 install:
     npm install
 
+docs:
+    cp SPEC.md docs/SPEC.md
+    docsify serve docs --open
+
 build:
     ./node_modules/.bin/vite build
 

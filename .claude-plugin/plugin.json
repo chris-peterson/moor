@@ -1,0 +1,7 @@
+{
+  "name": "moor",
+  "version": "0.3.0",
+  "description": "A fast, keyboard-driven diff viewer for reviewing AI-generated code.",
+  "keywords": ["diff", "difftool", "git", "code-review", "electron"],
+  "license": "MIT"
+}

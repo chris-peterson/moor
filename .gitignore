@@ -2,6 +2,7 @@ sample_data/
 node_modules/
 dist/
 .vite/
+docs/SPEC.md
 
 *~
 *.bak
