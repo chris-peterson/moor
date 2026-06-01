@@ -15,8 +15,8 @@ marketplace](https://chris-peterson.github.io/claude-marketplace/#/). Add the
 marketplace, then install the plugin:
 
 ```bash
-/plugin marketplace add chris-peterson/claude-marketplace
-/plugin install moor@chris-peterson
+claude plugin marketplace add chris-peterson/claude-marketplace
+claude plugin install moor@chris-peterson
 ```
 
 The plugin ships the Electron app and a `bin/moor` launcher. Build it once and
