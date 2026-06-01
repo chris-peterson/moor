@@ -65,7 +65,11 @@ Vim-style, keyboard-first:
 - **[NV-10]** When the user presses `R` (shift+r), the viewer shall unreject the current hunk (restoring it to unreviewed)
 - **[NV-11]** When the user presses `r`, the viewer shall display an inline text area for an optional rejection reason; Enter confirms, Shift+Enter inserts a newline, Escape confirms without a reason
 - **[NV-12]** While a rejected hunk has a rejection reason, the viewer shall display the reason as a persistent note below the hunk; clicking the note shall open it for editing, and clicking the ✕ shall remove the note (the hunk remains rejected)
-- **[NV-13]** When navigating to a hunk that is already fully visible in the viewport, the viewer shall not scroll. Otherwise the viewer shall scroll so that one line of context above the hunk is visible at the top of the viewport, with the hunk's first line on the second visible row. If the hunk begins at the first line of the file, the viewer shall align the hunk's first line flush with the top of the viewport. If the hunk would fit in the viewport flush to the top but not with the context-above row, the viewer shall align the hunk flush so the bottom is in view. The viewer shall not push the hunk's first line below the second visible row, even when the hunk is taller than the viewport. In-file hunk navigation shall animate the scroll; navigation to a new file shall scroll instantly.
+- **[NV-13]** The viewer shall position the viewport when navigating between hunks, per the lettered sub-requirements below. NV-13 governs hunk navigation only; search-match scroll positioning (the `scrollToRow` helper) is intentionally a separate behavior, so the two are not expected to share positioning math.
+  - **[NV-13a]** When navigating to a hunk that is already fully visible in the viewport, the viewer shall not scroll.
+  - **[NV-13b]** Otherwise the viewer shall scroll so that one line of context above the hunk is visible at the top of the viewport, with the hunk's first line on the second visible row.
+  - **[NV-13c]** If the hunk begins at the first line of the file, the viewer shall align the hunk's first line flush with the top of the viewport. If the hunk would fit in the viewport flush to the top but not with the context-above row, the viewer shall align the hunk flush so the bottom is in view. The viewer shall not push the hunk's first line below the second visible row, even when the hunk is taller than the viewport.
+  - **[NV-13d]** In-file hunk navigation shall animate the scroll; navigation to a new file shall scroll instantly.
 - **[NV-14]** When the user presses `Shift+J`, the viewer shall mark all unreviewed hunks in the current file as reviewed and navigate to the first hunk of the next file. Rejected hunks remain rejected.
 - **[NV-15]** When the user presses `Shift+K`, the viewer shall navigate to the first hunk of the previous file. Review and rejection state of hunks in the current file shall remain unchanged.
 - **[NV-16]** When the user invokes "open in editor" (NV-08 or CM-05) and the editor lookup returns no result (file not in any open or recent workspace, or editor CLI not found), the viewer shall display a transient error toast with the failure reason for 3 seconds.
@@ -136,7 +140,13 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[AS-05]** The application shall achieve first paint in under 1 second
 - **[AS-06]** When closed, the application shall exit with a code indicating review outcome (see EC)
 - **[AS-07]** The application shall support `git difftool` integration via `git config`
-- **[AS-08]** When launched, the application shall set the window title to `<project> - <context>`, where `<project>` is `<basename> (<path>)` from the git repository toplevel (`git rev-parse --show-toplevel` from the working directory), with `<path>` home-substituted to `~/...` when applicable, and `<context>` is the highest-priority available of: (1) the `--title` CLI flag, (2) the `MOOR_TITLE` environment variable, (3) the file paths being diffed (`<left> vs <right>`, AS-03 fallback), or `git diff` when both paths are git-difftool temp directories. When only one component is available, the title shall be that component alone. The window title shall not be prefixed with `moor —`.
+- **[AS-08]** When launched, the application shall set the window title to `<project> - <context>`, composed per the sub-requirements below.
+  - **[AS-08a]** `<project>` shall be `<basename> (<path>)` derived from the git repository toplevel (`git rev-parse --show-toplevel` from the working directory).
+  - **[AS-08b]** In `<project>`, `<path>` shall be home-substituted to `~/...` when the path is under the user's home directory.
+  - **[AS-08c]** `<context>` shall be the highest-priority available of: (1) the `--title` CLI flag, (2) the `MOOR_TITLE` environment variable, (3) the file paths being diffed (`<left> vs <right>`, AS-03 fallback).
+  - **[AS-08d]** When both diffed paths are git-difftool temp directories, `<context>` shall be `git diff` instead of the file-paths form (AS-08c option 3).
+  - **[AS-08e]** When only one of `<project>` / `<context>` is available, the title shall be that component alone (no ` - ` separator).
+  - **[AS-08f]** The window title shall not be prefixed with `moor —`.
 
 ### Exit Codes (EC)
 
@@ -160,18 +170,21 @@ moor exposes a bidirectional contract with its caller via a JSON file. The calle
 #### Outputs (viewer → caller)
 
 - **[IM.OUT-01]** The viewer shall write review state to the context file's `output` section continuously, flushing after every hunk state change (review, unreview, reject, unreject, rejection-reason edit). On exit, the file shall reflect the final state.
-- **[IM.OUT-02]** The output section shall always include `reviewer` (string, from `git config user.name`) and `rejections` (array of `{file, hunk, line, reason}`). The output section shall include `exitCode` (number) only after the viewer exits; its presence signals that the review has been finalized, while its absence signals an in-progress review whose rejections may still change.
+- **[IM.OUT-02a]** The output section shall always include `reviewer` (string, from `git config user.name`) and `rejections` (array of `{file, hunk, line, reason}`).
+- **[IM.OUT-02b]** The output section shall include `exitCode` (number) only after the viewer exits; its presence signals that the review has been finalized, while its absence signals an in-progress review whose rejections may still change.
 - **[IM.OUT-03]** While rejected hunks exist, the viewer shall display one badge per rejected file in the header's output region, each showing the file's rejection count; when the user clicks a badge, the viewer shall navigate to that file's first rejected hunk.
 - **[IM.OUT-04]** The viewer shall display review progress ("X of Y changes viewed") in the header's output region.
+- **[IM.OUT-05]** While in single-file mode (no directory sidebar), the viewer shall display an equivalent review-progress footer at the bottom of the view: a progress bar with "X of Y changes viewed" (collapsing to "All changes viewed · q to close" when complete) and a rejection count when rejected hunks exist.
 
 ### User Preferences (UP)
 
 Fixed for now, configurable later:
 
-- **[UP-01]** The application shall use system monospace font at 13px
+- **[UP-01]** The application shall render diff text in JetBrains Mono at a 13px base size, falling back to the platform monospace font when the webfont is unavailable
 - **[UP-02]** The application shall render tabs as 4 spaces (display only)
 - **[UP-03]** The application shall use a dark color scheme with distinct hues per source
 - **[UP-04]** The application shall never truncate or wrap long lines. The entire content of every line on both sides shall be reachable via horizontal scrolling.
+- **[UP-05]** The diff viewer shall render the focused (active) diff row at 15px for emphasis, while all other rows render at the 13px base size (UP-01).
 
 ### Plugin Distribution (PD)
 
