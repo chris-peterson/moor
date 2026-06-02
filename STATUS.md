@@ -163,7 +163,7 @@ Every non-deferred requirement has implementing code and is Covered. The 2026-05
 | [UP-04] | Never truncate or wrap; horizontal scroll reveals full lines | Done |
 | [UP-05] | Active diff row renders at 15px for emphasis | Done |
 
-### Plugin Distribution (PD) — 6/6
+### Plugin Distribution (PD) — 7/7
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -173,6 +173,7 @@ Every non-deferred requirement has implementing code and is Covered. The 2026-05
 | [PD-04] | `completions zsh [--print]` installs or prints completion | Done |
 | [PD-05] | SessionStart hook warns on wrapper/plugin version drift | Done |
 | [PD-06] | `/moor:moor` slash command forwards args to launcher | Done |
+| [PD-07] | SessionStart hook emits ambient rules (`rules/*.md`) into context | Done |
 
 ## Resolved in the 2026-05-31 audit
 

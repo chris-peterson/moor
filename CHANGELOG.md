@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0
+
+### Features
+- The plugin ships its ambient rules: a SessionStart hook injects
+  `rules/*.md` into the session context (re-injected after compaction), so
+  the sidecar launch contract — read verdicts from `MOOR_CONTEXT`, never
+  launch via raw `git difftool` — holds even when no skill is invoked
+  (PD-07).
+
 ## 0.4.0
 
 ### Features

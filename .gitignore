@@ -3,6 +3,7 @@ node_modules/
 dist/
 .vite/
 docs/SPEC.md
+docs/rules/
 
 *~
 *.bak

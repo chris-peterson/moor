@@ -8,8 +8,6 @@
 # against plugin.json#version, and emits an additionalContext nudge when they
 # differ. Silent when versions match, silent when moor isn't on PATH, never
 # blocks the session.
-#
-# See ai-sdlc/src/recipes/ai-cli-tool.md (Architecture Rule 11).
 
 set -euo pipefail
 

@@ -1,2 +1,3 @@
 - [Home](/)
+- [Ambient rules](/ambient-rules)
 - [Requirements](/SPEC.md)

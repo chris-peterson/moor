@@ -6,6 +6,7 @@ on:
     paths:
       - 'docs/**'
       - 'SPEC.md'
+      - 'rules/**'
   workflow_dispatch:
 
 permissions:
@@ -27,6 +28,8 @@ jobs:
       - uses: actions/configure-pages@v5
       - name: Copy SPEC.md into docs
         run: cp SPEC.md docs/SPEC.md
+      - name: Copy ambient rules into docs
+        run: mkdir -p docs/rules && cp rules/*.md docs/rules/
       - uses: actions/upload-pages-artifact@v4
         with:
           path: docs

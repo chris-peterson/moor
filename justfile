@@ -8,6 +8,7 @@ install-cli:
 
 docs:
     cp SPEC.md docs/SPEC.md
+    mkdir -p docs/rules && cp rules/*.md docs/rules/
     docsify serve docs --open
 
 build:

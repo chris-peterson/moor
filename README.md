@@ -20,7 +20,8 @@ keybindings, and the review-feedback contract, see the docs site above.
 | `electron/` | Electron main process and launch wiring |
 | `bin/moor` | Launcher + CLI — builds `dist/` on first run and launches Electron; also handles `--version`, `install-cli`, and `completions` |
 | `commands/moor.md` | Slash-command shim forwarding `$ARGUMENTS` to `bin/moor` |
-| `hooks/` | `SessionStart` hook that warns when the on-PATH `moor` wrapper drifts from the plugin version |
+| `hooks/` | `SessionStart` hooks: wrapper-drift warning, ambient-rule injection |
+| `rules/` | Ambient rules the `emit-rules.sh` hook injects into every session |
 | `scripts/` | Sample-data generation |
 | `docs/` | Docsify documentation site (deployed to GitHub Pages) |
 | `SPEC.md` | Numbered requirements (EARS) — the behavioral contract |
