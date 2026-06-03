@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import FileDiffView from './components/FileDiffView.jsx';
+import React, { useState, useEffect } from 'react';
 import ReviewShell from './components/ReviewShell.jsx';
 
 function buildQuitMessage() {
@@ -38,8 +37,6 @@ export function App() {
   const [mode, setMode] = useState('loading');
   const [leftPath, setLeftPath] = useState('');
   const [rightPath, setRightPath] = useState('');
-  const [leftContent, setLeftContent] = useState('');
-  const [rightContent, setRightContent] = useState('');
   const [directoryTree, setDirectoryTree] = useState(null);
   const [contextChannel, setContextChannel] = useState({ channelConfigured: false, input: null });
 
@@ -54,22 +51,35 @@ export function App() {
     if (!api) return;
     api.onInitialPaths(async (paths) => {
       if (!paths?.left || !paths?.right) return;
-      setLeftPath(paths.left);
-      setRightPath(paths.right);
 
       if (paths.isDirectory) {
+        setLeftPath(paths.left);
+        setRightPath(paths.right);
         const tree = await api.compareDirectories(paths.left, paths.right);
         setDirectoryTree(tree);
-        setMode('directory');
       } else {
-        const [l, r] = await Promise.all([
-          api.readFile(paths.left),
-          api.readFile(paths.right),
-        ]);
-        setLeftContent(l);
-        setRightContent(r);
-        setMode('diff');
+        // A two-file comparison is a one-file directory diff. Route it through
+        // the same ReviewShell as directory mode so it gets hunk counting,
+        // rejection capture, and the MOOR_CONTEXT verdict. A bare FileDiffView
+        // has none of that machinery and always exits 3 (review never counted).
+        // Base the displayed paths on each file's parent dir so the sidebar and
+        // header show the filename rather than an empty string.
+        const parent = (p) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
+        const name = (paths.right || paths.left).split('/').pop();
+        setLeftPath(parent(paths.left));
+        setRightPath(parent(paths.right));
+        setDirectoryTree({
+          name,
+          type: 'directory',
+          status: 'modified',
+          leftPath: parent(paths.left),
+          rightPath: parent(paths.right),
+          children: [
+            { name, type: 'file', status: 'modified', leftPath: paths.left, rightPath: paths.right },
+          ],
+        });
       }
+      setMode('directory');
     });
   }, [api]);
 
@@ -121,18 +131,7 @@ export function App() {
     );
   }
 
-  return (
-    <div style={containerStyle}>
-      <FileDiffView
-        leftPath={leftPath}
-        rightPath={rightPath}
-        leftFullPath={leftPath}
-        rightFullPath={rightPath}
-        leftContent={leftContent}
-        rightContent={rightContent}
-      />
-    </div>
-  );
+  return null;
 }
 
 export default App;

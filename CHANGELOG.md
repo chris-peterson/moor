@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.1
+
+### Fixes
+- **Two-file mode (`moor file1 file2`) now runs the full review.** It rendered
+  a bare diff with no review machinery — no hunk counting, no rejection
+  capture, no `MOOR_CONTEXT` verdict — so it always exited 3 (EC-04) and
+  callers comparing two files got no diff and no feedback channel. Both file
+  and directory launches now route through the same `ReviewShell`, so a
+  two-file comparison gets hunk counting, rejection-with-reason capture, and a
+  real exit code (0/1/2) written to the sidecar.
+
 ## 0.6.0
 
 ### Features
