@@ -4,7 +4,7 @@
 
 Every non-deferred requirement has implementing code and is Covered. The 2026-05-31 audit closed the four items previously flagged: [UP-01] was reworded to match the shipped JetBrains Mono webfont (with platform-monospace fallback); [NV-13] was decomposed into NV-13a..d with a clause separating it from search-match positioning; and the two reverse-scan behaviors (active-row font zoom, single-file footer) were captured as [UP-05] and [IM.OUT-05]. The audit also decomposed three overloaded requirements ([AS-08], [IM.OUT-02], [FD-03]) into atomic forms.
 
-> **Version note:** `.claude-plugin/plugin.json` reports product version `0.4.0`; this spec is `v0.2`. They version independently — PD-01/PD-05 treat plugin.json as the product-version source of truth — so the mismatch is expected, not drift.
+> **Version note:** the product version in `.claude-plugin/plugin.json` and this spec's version (`v0.2`) move independently — PD-01/PD-05 treat plugin.json as the product-version source of truth — so a mismatch between them is expected, not drift.
 
 ## Requirement Coverage
 
@@ -163,7 +163,7 @@ Every non-deferred requirement has implementing code and is Covered. The 2026-05
 | [UP-04] | Never truncate or wrap; horizontal scroll reveals full lines | Done |
 | [UP-05] | Active diff row renders at 15px for emphasis | Done |
 
-### Plugin Distribution (PD) — 7/7
+### Plugin Distribution (PD) — 8/8
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -174,6 +174,7 @@ Every non-deferred requirement has implementing code and is Covered. The 2026-05
 | [PD-05] | SessionStart hook warns on wrapper/plugin version drift | Done |
 | [PD-06] | `/moor:moor` slash command forwards args to launcher | Done |
 | [PD-07] | SessionStart hook emits ambient rules (`rules/*.md`) into context | Done |
+| [PD-08] | `--help` / `-h` / `help` prints usage and exits zero; no args prints usage to stderr and exits non-zero | Done |
 
 ## Resolved in the 2026-05-31 audit
 

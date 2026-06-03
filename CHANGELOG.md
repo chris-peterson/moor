@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0
+
+### Features
+- **`moor --help` / `-h` / `help`** — Print the usage text and exit zero
+  (PD-08). Previously `--help` was passed through to the viewer as a
+  comparison path.
+- **`moor` with no arguments now prints usage to stderr and exits non-zero**
+  instead of launching the viewer with nothing to diff, which sat on the
+  Loading screen indefinitely.
+
 ## 0.5.0
 
 ### Features

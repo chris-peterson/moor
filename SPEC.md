@@ -197,6 +197,7 @@ moor ships as a Claude Code plugin. These requirements cover the surfaces that m
 - **[PD-05]** On each Claude Code session start, the plugin shall compare the on-PATH `moor` wrapper's reported version against `.claude-plugin/plugin.json`; when they differ, it shall instruct the user to re-run `install-cli`. When `moor` is not on `$PATH`, the check shall be silent.
 - **[PD-06]** The plugin shall expose a `/moor:moor` slash command that forwards its arguments to the launcher.
 - **[PD-07]** On each Claude Code session start (all sources, including after context compaction), the plugin shall emit its ambient rules (`rules/*.md`) into the session context, so the sidecar launch contract (IM.OUT-*) holds even when no skill is invoked.
+- **[PD-08]** The launcher shall accept `--help` (`-h`, `help`) and print the usage text to stdout, exiting zero. When invoked with no arguments, the launcher shall print the same usage text to stderr and exit non-zero rather than launching the viewer with nothing to diff.
 
 ---
 

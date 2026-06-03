@@ -26,6 +26,21 @@ plugin_version() {
     printf '%s\n' "${v%%$'\n'*}"
 }
 
+usage() {
+cat <<'EOF'
+moor — visual diff review
+
+Usage:
+  moor dir1 dir2                          compare directories
+  moor file1 file2                        compare files
+  moor --context <path> dir1 dir2         capture review output via MOOR_CONTEXT contract
+  moor install-cli [--dir <path>]         install/refresh the ~/.local/bin/moor wrapper + completions
+  moor completions zsh [--print]          install or print zsh tab completion
+  moor --version                          print version (from plugin.json)
+  moor --help                             show this help
+EOF
+}
+
 print_completion() {
 cat <<'EOF'
 #compdef moor
@@ -34,7 +49,7 @@ _moor() {
   if (( CURRENT == 2 )); then
     _alternative \
       'commands:command:((install-cli\:"install or refresh the PATH wrapper" completions\:"install or print tab completion"))' \
-      'options:option:((--context\:"review feedback channel (path)" --version\:"print version"))' \
+      'options:option:((--context\:"review feedback channel (path)" --version\:"print version" --help\:"show usage"))' \
       'files:file or directory:_files'
     return
   fi
@@ -108,6 +123,10 @@ exec \"$source\" \"\$@\"
 }
 
 case "${1:-}" in
+    --help|-h|help)
+        usage
+        exit 0
+        ;;
     --version|-v)
         echo "moor $(plugin_version)"
         exit 0
@@ -133,6 +152,13 @@ case "${1:-}" in
         exit 0
         ;;
 esac
+
+# No comparison paths: show usage rather than launching the viewer with
+# nothing to diff (which sits on the Loading screen forever).
+if [ $# -eq 0 ]; then
+    usage >&2
+    exit 1
+fi
 
 # Build if dist doesn't exist
 if [ ! -d "$PLUGIN_ROOT/dist" ]; then
