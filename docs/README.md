@@ -8,6 +8,14 @@ feedback back to the agent that produced the change.
 moor does one thing: show diffs. It is not a merge tool — that's solved
 elsewhere (VS Code `--merge`).
 
+When an agent proposes a change, it hands moor the *why* along with the diff:
+the commit message, the range under review, who authored it. You read the
+intent up top, walk each hunk below, and accept or reject with a keystroke —
+and your verdict travels back to the agent through the [feedback
+channel](#review-feedback-channel).
+
+![moor reviewing a commit: the agent's rationale fills the INPUTS panel while the two-file diff waits for per-hunk accept/reject in OUTPUTS](screenshot.png)
+
 ## Install
 
 moor is distributed through the [chris-peterson Claude Code
