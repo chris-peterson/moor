@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0
+
+### Features
+- Redesigned the review header so you can see what you're reviewing at a
+  glance: the project, branch, and commit message are visible without
+  expanding, and expanding reveals the full commit message plus its details.
+  The `→ inputs` / `← outputs` channel labels are gone, replaced by a quieter
+  colored gutter and a `status` strip.
+- New keyboard shortcuts: `d` / `D` show and hide the change details, `f` / `F`
+  show and hide the file sidebar, and `?` opens an in-app shortcuts overlay. A
+  keyboard reference page was added to the docs.
+
 ## 0.6.1
 
 ### Fixes

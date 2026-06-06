@@ -73,6 +73,8 @@ Vim-style, keyboard-first:
 - **[NV-14]** When the user presses `Shift+J`, the viewer shall mark all unreviewed hunks in the current file as reviewed and navigate to the first hunk of the next file. Rejected hunks remain rejected.
 - **[NV-15]** When the user presses `Shift+K`, the viewer shall navigate to the first hunk of the previous file. Review and rejection state of hunks in the current file shall remain unchanged.
 - **[NV-16]** When the user invokes "open in editor" (NV-08 or CM-05) and the editor lookup returns no result (file not in any open or recent workspace, or editor CLI not found), the viewer shall display a transient error toast with the failure reason for 3 seconds.
+- **[NV-17]** When the user presses `d`, the viewer shall expand the input details panel (IM.IN-01); when the user presses `D` (Shift+d), the viewer shall collapse it — the keyboard companion to IM.IN-01's hover / click-to-expand.
+- **[NV-18]** When the user presses `?`, the viewer shall toggle an overlay listing the keyboard shortcuts; `Escape` or a second `?` shall dismiss it.
 
 ### Directory Diff (DD)
 
@@ -93,6 +95,7 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[DD-13]** When the user attempts to close with one or more unreviewed hunks and no rejected hunks, the viewer shall display a quit confirmation dialog with the existing OK / Cancel actions plus an "Approve anyway" button. "Approve anyway" shall close the viewer with exit code 0 (clean approve) regardless of the unreviewed count.
 - **[DD-14]** While a quit confirmation dialog (DD-12, DD-13) is open, the viewer shall support keyboard navigation between dialog buttons via Tab / Shift+Tab and Left / Right arrow keys; Enter shall activate the focused button and Escape shall cancel.
 - **[DD-15]** While in directory diff mode, when a left-only file and a right-only file are determined to be a rename or move of the same content (e.g., via `git mv`), the viewer shall display the pair as a single entry showing the old → new path, instead of as separate L and R entries. The entry shall contribute one item to the sidebar and hunk counts (DD-06), and its diff view shall show content changes between the two versions (zero-hunk when the rename is content-identical).
+- **[DD-16]** When the user presses `f`, the viewer shall show the file sidebar, and when the user presses `F` (Shift+f), the viewer shall hide it — the keyboard companion to DD-11's collapse / show controls.
 
 ### Search Mode (SM)
 
@@ -158,14 +161,15 @@ When launched with two directories (`git difftool --dir-diff`):
 
 ### Interaction Model (IM)
 
-moor exposes a bidirectional contract with its caller via a JSON file. The caller writes inputs before launch; the viewer writes outputs during and after the review. A context header above the diff view surfaces both sides to the user — `→ inputs` on top, `← outputs` below. When no context channel is configured, a warning banner takes the header's place.
+moor exposes a bidirectional contract with its caller via a JSON file. The caller writes inputs before launch; the viewer writes outputs during and after the review. A context header above the diff view surfaces both sides to the user: the incoming change context on top and review status below, distinguished by a colored left gutter (amber for the change, teal for status) rather than explicit channel labels. When no context channel is configured, a warning banner takes the header's place.
 
 - **[IM-01]** The context channel shall be resolved by checking, in order: the `--context <path>` CLI flag, then the `MOOR_CONTEXT` environment variable. The viewer shall read the file's `input` section on launch and write its `output` section during and after the review.
 - **[IM-02]** When no context channel is configured (neither `--context` nor `MOOR_CONTEXT` is set), the viewer shall display a warning banner in the header so the user can investigate the tooling disconnect rather than discovering it at exit time. The banner shall include a hint that the user can pass `--context <path>` to capture review output.
 
 #### Inputs (caller → viewer)
 
-- **[IM.IN-01]** The input section shall contain a `title` string and a `details` array of `{label, value}` rows. The viewer shall render `title` as a one-line summary and shall reveal `details` on hover or click-to-expand. The caller decides how content maps to these fields — a single commit, a range of commits, or a non-commit context all use the same shape.
+- **[IM.IN-01]** The input section shall contain a `title` string and a `details` array of `{label, value}` rows. The viewer shall render `title` as the change headline and shall reveal the expandable details on hover, click-to-expand, or the `d` / `D` keys (NV-17). The caller decides how content maps to these fields — a single commit, a range of commits, or a non-commit context all use the same shape.
+- **[IM.IN-02]** The viewer shall present the change as a label-less header: an always-visible **location** eyebrow (`project @ branch`, composed from the repository and branch detail rows) and the commit-message **headline** (the `title`); when the caller supplies a beacon **task**, it shall be emphasized in the eyebrow. Expanding shall reveal the rest of the change — the full commit-message body (a `body` / `message` / `description` row, rendered as message prose, not a labeled field) and a provenance grid of the remaining `details` rows, excluding low-signal rows the viewer suppresses (e.g. `range`). The layout shall degrade gracefully when a source row is absent.
 
 #### Outputs (viewer → caller)
 
@@ -231,5 +235,7 @@ git difftool branch       # compare against a branch
 ## Deferred (Future Versions)
 
 - **[FUT-01]** (→ BF) Where a file has both a text and a visual representation (e.g., SVG, Markdown), the diff viewer shall provide a toggle between source diff and rendered preview
+- **[FUT-02]** (→ IM) The input section may include an optional `prev` reference describing a previous diff, using the same shape as the primary input (`left` / `right` paths plus optional `title` / `details`, nestable). Speculative — no caller emits `prev` yet; revisit once anchor's wrapper supplies it.
+- **[FUT-03]** (→ RO) `[prev]` read-only preview of the previous diff: render the link when `prev` is present, open the referenced diff read-only (reject / unreject / rejection-reason / open-in-editor disabled, no output writes), and return to the live review on `Escape` or a back affordance. Speculative companion to FUT-02; not yet implemented.
 - **Syntax highlighting** — language-aware coloring in diff panels
 - **Configurable preferences** — font, colors, ignored patterns

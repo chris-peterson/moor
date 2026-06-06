@@ -1,3 +1,4 @@
 - [Home](/)
+- [Keyboard shortcuts](/keyboard)
 - [Ambient rules](/ambient-rules)
 - [Requirements](/SPEC.md)

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Sidebar from './Sidebar.jsx';
 import FileDiffView from './FileDiffView.jsx';
 import FileNavbar from './FileNavbar.jsx';
-import ContextHeader from './ContextHeader.jsx';
+import ContextHeader, { hasExpandableDetails } from './ContextHeader.jsx';
+import KeyboardHelp from './KeyboardHelp.jsx';
 import { computeLineChanges, countDisplayHunks, computeHunkStartLines, BINARY_SENTINEL } from '../engine/diff.js';
 
 const emptySet = new Set();
@@ -66,6 +67,14 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   const [searchQuery, setSearchQuery] = useState(null);
   const [fileContents, setFileContents] = useState({});
   const [quitDialog, setQuitDialog] = useState(null);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  // Gate the d/D keys on the same predicate ContextHeader uses for its expand
+  // affordance, so the keyboard toggle and the on-screen button agree.
+  const hasDetails = useMemo(() => hasExpandableDetails(inputContext), [inputContext]);
+
+  const toggleDetails = useCallback(() => setDetailsExpanded(v => !v), []);
 
   const handleSidebarResizerMouseDown = useCallback((e) => {
     e.preventDefault();
@@ -342,6 +351,14 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+
+      // NV-18: the help overlay takes precedence; ? or Escape dismisses it.
+      if (helpOpen) {
+        if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); setHelpOpen(false); }
+        return;
+      }
+      if (e.key === '?') { e.preventDefault(); setHelpOpen(true); return; }
+
       if (searchQuery != null) return;
 
       if (quitDialog) {
@@ -353,6 +370,20 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
       }
 
       switch (e.key) {
+        case 'd': // NV-17
+          if (hasDetails) { e.preventDefault(); setDetailsExpanded(true); }
+          break;
+        case 'D': // NV-17
+          if (hasDetails) { e.preventDefault(); setDetailsExpanded(false); }
+          break;
+        case 'f': // DD-16
+          e.preventDefault();
+          setSidebarCollapsed(false);
+          break;
+        case 'F': // DD-16
+          e.preventDefault();
+          setSidebarCollapsed(true);
+          break;
         case 'q':
         case 'Escape':
           e.preventDefault();
@@ -363,7 +394,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [requestClose, searchQuery, quitDialog]);
+  }, [requestClose, searchQuery, quitDialog, helpOpen, hasDetails]);
 
   useEffect(() => {
     if (shellRef.current) shellRef.current.focus();
@@ -407,6 +438,8 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
         totalChanges={totalChanges}
         allViewed={allReviewed}
         onNavigateToRejection={navigateToRejection}
+        detailsExpanded={detailsExpanded}
+        onToggleDetails={toggleDetails}
       />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {draggingSidebar && (
@@ -461,16 +494,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
         )}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {loading ? (
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-muted)',
-              fontFamily: 'var(--font-ui)',
-            }}>
-              Loading...
-            </div>
+            <div style={contentMessageStyle('var(--text-muted)')}>Loading...</div>
           ) : currentFile ? (
             <FileDiffView
               leftPath={relativePath(currentFile.leftPath, leftPath)}
@@ -491,18 +515,10 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
               rejectionReasons={currentRejectionReasons}
               onRejectionReasonsChange={handleRejectionReasonsChange}
               onSearchChange={handleSearchChange}
+              paused={helpOpen}
             />
           ) : (
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-secondary)',
-              fontFamily: 'var(--font-ui)',
-            }}>
-              No differences found
-            </div>
+            <div style={contentMessageStyle('var(--text-secondary)')}>No differences found</div>
           )}
         </div>
       </div>
@@ -521,9 +537,19 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
           onApproveAnyway={() => closeWithExitCode(0)}
         />
       )}
+      {helpOpen && <KeyboardHelp onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }
+
+const contentMessageStyle = (color) => ({
+  flex: 1,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  color,
+  fontFamily: 'var(--font-ui)',
+});
 
 function QuitDialog({ mode, rejectedCount, unreviewedCount, rejectionSummary, onCancel, onSendReviewFeedback, onQuitAnyway, onApproveAnyway }) {
   const dialogRef = useRef(null);

@@ -10,11 +10,11 @@ elsewhere (VS Code `--merge`).
 
 When an agent proposes a change, it hands moor the *why* along with the diff:
 the commit message, the range under review, who authored it. You read the
-intent up top, walk each hunk below, and accept or reject with a keystroke —
+intent up top, walk each change below, and accept or reject with a keystroke —
 and your verdict travels back to the agent through the [feedback
 channel](#review-feedback-channel).
 
-![moor reviewing a commit: the agent's rationale fills the INPUTS panel while the two-file diff waits for per-hunk accept/reject in OUTPUTS](screenshot.png)
+![moor reviewing a commit: the agent's rationale fills the INPUTS panel while the two-file diff waits for per-change accept/reject in OUTPUTS](screenshot.png)
 
 ## Install
 
@@ -69,27 +69,25 @@ Or review a working tree through git:
 git difftool --dir-diff
 ```
 
-moor opens a sidebar of changed files. Walk each diff, mark hunks reviewed or
+moor opens a sidebar of changed files. Walk each diff, mark changes reviewed or
 rejected, and close when done. The process exit code reflects the outcome
 (clean approve `0`, rejection `1`, unreviewed `2`, early close `3`), so a
 calling agent or script can branch on the result.
 
 ## Keyboard reference
 
-Navigation is vim-style and keyboard-first.
+Navigation is vim-style and keyboard-first. The essentials:
 
 | Key | Action |
 |-----|--------|
-| `j` / `k` | Next / previous hunk |
-| `Shift+J` | Mark file reviewed, advance to next file |
-| `Shift+K` | Previous file |
-| `u` | Mark current hunk unreviewed |
-| `r` | Reject current hunk (prompts for an optional reason) |
-| `R` | Unreject current hunk |
-| `i` | Open current hunk in your editor at its line |
+| `j` / `k` | Next / previous change |
+| `r` | Reject current change (prompts for an optional reason) |
+| `i` | Open current change in your editor at its line |
 | `Cmd+F` | Enter search mode |
-| `n` / `N` | Next / previous search match |
 | `q` / `Escape` | Close |
+
+See [Keyboard shortcuts](/keyboard) for the full reference — file navigation,
+scrolling, the reason box, search, and the quit dialog.
 
 ## Review feedback channel
 
@@ -103,7 +101,7 @@ moor --context ./review.json old-dir/ new-dir/
 
 The caller writes `input` (a `title` and `details` rendered in moor's header);
 moor streams `output` back — `exitCode`, `reviewer`, and a `rejections` array
-of `{file, hunk, line, reason}` — flushing on every hunk state change. When no
+of `{file, hunk, line, reason}` — flushing on every state change. When no
 channel is configured, moor shows a banner and still works as a plain viewer.
 
 ## Reference

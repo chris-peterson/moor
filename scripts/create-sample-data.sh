@@ -189,8 +189,30 @@ export const CONFIG = {
 };
 EOF
 
+# A sample MOOR_CONTEXT sidecar so the redesigned change header has data to
+# render: the location eyebrow (repo @ branch), the task, the commit-message
+# headline, and the provenance rows (commit / author; range is suppressed) plus
+# a multi-line body revealed on expand.
+cat > "$SAMPLE_DIR/sample-context.json" << EOF
+{
+  "input": {
+    "title": "Rework the inputs header into a commit-briefing layout that wraps long subjects instead of truncating them",
+    "details": [
+      { "label": "repo", "value": "moor" },
+      { "label": "branch", "value": "redesign-details-panel" },
+      { "label": "task", "value": "redesign the details panel so context reads organically" },
+      { "label": "commit", "value": "a1b2c3d" },
+      { "label": "author", "value": "Chris Peterson <chris.peterson@gettyimages.com>" },
+      { "label": "range", "value": "HEAD~1..HEAD" },
+      { "label": "body", "value": "The expanded details panel rendered a property grid of label/value rows, which read like a form and repeated the commit subject already shown in the inputs bar.\n\nThis reworks it into a briefing: on expand the bar title becomes the full headline, the beacon task sits beneath it, and repo/branch/hash/author/range weave into a single provenance byline." }
+    ]
+  }
+}
+EOF
+
 echo "Sample data created at: $SAMPLE_DIR"
 echo "  left:  $SAMPLE_DIR/left.js"
 echo "  right: $SAMPLE_DIR/right.js"
 echo "  left/:  $SAMPLE_DIR/left/"
 echo "  right/: $SAMPLE_DIR/right/"
+echo "  context: $SAMPLE_DIR/sample-context.json"

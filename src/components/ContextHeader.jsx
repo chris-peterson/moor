@@ -1,4 +1,37 @@
-import React, { useState } from 'react';
+import React from 'react';
+
+// IM.IN-02: the change region reads as a changeset header, not a labeled data
+// channel. Collapsed it answers where (the location eyebrow) and what (the
+// commit-message headline); expanding reveals the rest of the story (commit /
+// author / range / body) as an aligned property grid. Location and the beacon
+// task are composed from conventionally-labeled `details` rows, so the caller
+// contract stays the git-familiar {label, value} array and any missing row
+// simply drops out.
+const LOCATION_PROJECT_LABELS = ['project', 'repo', 'repository'];
+const LOCATION_BRANCH_LABELS = ['branch'];
+const TASK_LABELS = ['task', 'beacon task'];
+const BODY_LABELS = ['body', 'message', 'description'];
+const CONSUMED_LABELS = new Set([...LOCATION_PROJECT_LABELS, ...LOCATION_BRANCH_LABELS, ...TASK_LABELS, ...BODY_LABELS]);
+// Low-signal rows suppressed from the provenance grid (e.g. the diff range,
+// which restates what the surrounding git context already makes obvious).
+const HIDDEN_LABELS = new Set(['range']);
+
+function pickRow(details, labels) {
+  const row = details.find(d => labels.includes(String(d.label).toLowerCase()));
+  return row ? row.value : null;
+}
+
+// Whether expanding the header would reveal anything — the commit body or any
+// provenance row left after the consumed (location/task/body) and hidden
+// (range) labels are removed. ReviewShell gates the `d`/`D` keys on this so the
+// keyboard toggle and the on-screen expand affordance agree.
+export function hasExpandableDetails(context) {
+  const details = (context && Array.isArray(context.details)) ? context.details : [];
+  return details.some(d => {
+    const l = String(d.label).toLowerCase();
+    return BODY_LABELS.includes(l) || (!CONSUMED_LABELS.has(l) && !HIDDEN_LABELS.has(l));
+  });
+}
 
 export function ContextHeader({
   context,
@@ -8,9 +41,9 @@ export function ContextHeader({
   totalChanges = 0,
   allViewed = false,
   onNavigateToRejection,
+  detailsExpanded = false,
+  onToggleDetails,
 }) {
-  const [detailsExpanded, setDetailsExpanded] = useState(false);
-
   if (!channelConfigured) {
     return (
       <div style={styles.shell}>
@@ -39,45 +72,66 @@ export function ContextHeader({
 
   const hasInput = !!(context && context.title);
   const details = (context && Array.isArray(context.details)) ? context.details : [];
-  const hasDetails = details.length > 0;
+
+  const project = pickRow(details, LOCATION_PROJECT_LABELS);
+  const branch = pickRow(details, LOCATION_BRANCH_LABELS);
+  const task = pickRow(details, TASK_LABELS);
+  const body = pickRow(details, BODY_LABELS);
+  const secondary = details.filter(d => {
+    const l = String(d.label).toLowerCase();
+    return !CONSUMED_LABELS.has(l) && !HIDDEN_LABELS.has(l);
+  });
+  const hasLocation = !!(project || branch);
+  const hasEyebrow = hasLocation || !!task;
+  const hasGrid = secondary.length > 0;
+  // Expanding reveals the full message (subject headline + body) plus provenance.
+  const hasExpandable = !!body || hasGrid;
 
   const progress = totalChanges > 0 ? viewedChanges / totalChanges : 0;
 
   return (
     <div style={styles.shell}>
       {hasInput && (
-        <div
-          style={{
-            ...styles.row(28),
-            borderBottom: '1px solid var(--border)',
-            ...(detailsExpanded && hasDetails ? { paddingTop: '8px', paddingBottom: '10px', alignItems: 'start' } : null),
-          }}
-        >
+        <div style={styles.changeRegion}>
           <div style={styles.gutter('left')} />
-          <span style={styles.channelLabel('left')}>
-            <span style={styles.arrow}>→</span>
-            <span>inputs</span>
-          </span>
-          <div style={styles.inputTitle}>{context.title}</div>
-          {hasDetails && (
-            <button
-              type="button"
-              onClick={() => setDetailsExpanded(v => !v)}
-              style={styles.expandButton(detailsExpanded)}
-              aria-expanded={detailsExpanded}
-              aria-label={detailsExpanded ? 'Hide details' : 'Show details'}
-            >
-              <span>details</span>
-              <span style={styles.expandChevron(detailsExpanded)}>▾</span>
-            </button>
+          <div style={styles.changeTop}>
+            {hasEyebrow && (
+              <div style={styles.eyebrow}>
+                {project && <span style={styles.eyebrowProject}>{project}</span>}
+                {project && branch && <span style={styles.eyebrowAt}>@</span>}
+                {branch && <span style={styles.eyebrowBranch}>{branch}</span>}
+                {task && hasLocation && <span style={styles.eyebrowSep}>·</span>}
+                {task && <span style={styles.eyebrowTask}>{task}</span>}
+              </div>
+            )}
+            {hasExpandable && (
+              <button
+                type="button"
+                onClick={() => onToggleDetails?.()}
+                style={styles.expandButton(detailsExpanded)}
+                aria-expanded={detailsExpanded}
+                aria-label={detailsExpanded ? 'Hide details' : 'Show details'}
+                title={detailsExpanded ? 'Hide details (D)' : 'Show details (d)'}
+              >
+                <span>details</span>
+                <span style={styles.expandChevron(detailsExpanded)}>▾</span>
+              </button>
+            )}
+          </div>
+
+          <div style={styles.headline}>{context.title}</div>
+
+          {detailsExpanded && body && (
+            <div style={styles.bodyText}>{body}</div>
           )}
-          {detailsExpanded && hasDetails && (
-            <dl style={styles.detailsList}>
-              {details.map(({ label, value }, i) => (
-                <div key={`${label}-${i}`} style={styles.detailsItem}>
-                  <dt style={styles.detailsLabel}>{label}</dt>
-                  <dd style={styles.detailsValue}>{value}</dd>
-                </div>
+
+          {detailsExpanded && hasGrid && (
+            <dl style={styles.grid}>
+              {secondary.map(({ label, value }, i) => (
+                <React.Fragment key={`${label}-${i}`}>
+                  <dt style={styles.gridLabel}>{label}</dt>
+                  <dd style={styles.gridValue}>{value}</dd>
+                </React.Fragment>
               ))}
             </dl>
           )}
@@ -86,10 +140,7 @@ export function ContextHeader({
 
       <div style={styles.row(28)}>
         <div style={styles.gutter('right')} />
-        <span style={styles.channelLabel('right')}>
-          <span style={styles.arrow}>←</span>
-          <span>outputs</span>
-        </span>
+        <span style={styles.channelLabel('right')}>status</span>
 
         <div style={styles.badges}>
           {rejectionBadges.map(({ fileIndex, count, name }) => (
@@ -169,43 +220,90 @@ const styles = {
     opacity: 0.8,
   }),
 
-  channelLabel: (side) => ({
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px',
-    color: channelColor(side),
-    fontFamily: 'var(--font-mono)',
-    fontSize: '10px',
-    fontWeight: 700,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-    flexShrink: 0,
-    userSelect: 'none',
-    paddingTop: '1px',
-  }),
-
-  arrow: {
-    fontSize: '13px',
-    fontWeight: 700,
-    lineHeight: 1,
-    letterSpacing: 0,
+  // The change region is a label-less block: a colored gutter marks it as the
+  // incoming change context, and the content (eyebrow + headline) speaks for
+  // itself — no "INPUTS" channel jargon.
+  changeRegion: {
+    position: 'relative',
+    paddingLeft: '14px',
+    paddingRight: '12px',
+    paddingTop: '8px',
+    paddingBottom: '10px',
+    borderBottom: '1px solid var(--border)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '5px',
   },
 
-  inputTitle: {
-    fontFamily: 'var(--font-ui)',
-    fontSize: '13px',
-    color: 'var(--text-primary)',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    minWidth: 0,
+  changeTop: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '12px',
+    minHeight: '18px',
+  },
+
+  // Eyebrow: where the change lives. Always visible (location is context you
+  // shouldn't have to expand for); the branch carries the input-channel amber.
+  eyebrow: {
+    display: 'flex',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    gap: '6px',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '12px',
     lineHeight: 1.4,
+    minWidth: 0,
+  },
+
+  eyebrowProject: {
+    color: 'var(--text-primary)',
+    fontWeight: 600,
+  },
+
+  eyebrowAt: {
+    color: 'var(--text-muted)',
+  },
+
+  eyebrowBranch: {
+    color: 'var(--text-secondary)',
+  },
+
+  eyebrowSep: {
+    color: 'var(--text-muted)',
+  },
+
+  eyebrowTask: {
+    color: 'var(--text-primary)',
+    fontWeight: 600,
+  },
+
+  // Headline: what the change is. The commit-message subject, always visible.
+  headline: {
+    color: 'var(--text-primary)',
+    fontFamily: 'var(--font-ui)',
+    fontSize: '14px',
+    fontWeight: 600,
+    lineHeight: 1.4,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+  },
+
+  // The commit body, revealed on expand as a continuation of the message.
+  bodyText: {
+    color: 'var(--text-secondary)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '12px',
+    lineHeight: 1.55,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    margin: '1px 0 0 0',
   },
 
   expandButton: (expanded) => ({
     display: 'inline-flex',
     alignItems: 'center',
     gap: '5px',
+    marginLeft: 'auto',
     border: '1px solid var(--border)',
     background: expanded ? 'var(--bg-hover)' : 'transparent',
     color: 'var(--text-secondary)',
@@ -229,44 +327,62 @@ const styles = {
     lineHeight: 1,
   }),
 
-  detailsList: {
-    gridColumn: '2 / -1',
-    margin: '4px 0 0 0',
+  // Expanded: the rest of the story — an aligned label/value property grid.
+  grid: {
+    margin: '3px 0 2px 0',
     padding: '10px 14px',
     background: 'var(--bg-deep)',
     border: '1px solid var(--border)',
     borderRadius: '4px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
+    display: 'grid',
+    gridTemplateColumns: 'max-content 1fr',
+    columnGap: '16px',
+    rowGap: '5px',
+    alignItems: 'baseline',
     animation: 'details-reveal 0.18s ease',
   },
 
-  detailsItem: {
-    display: 'grid',
-    gridTemplateColumns: '100px 1fr',
-    columnGap: '14px',
-    fontSize: '12px',
-    lineHeight: 1.5,
-  },
-
-  detailsLabel: {
+  gridLabel: {
     color: 'var(--text-muted)',
     fontFamily: 'var(--font-mono)',
     textTransform: 'uppercase',
     fontSize: '10px',
     fontWeight: 600,
     letterSpacing: '0.1em',
-    paddingTop: '2px',
     margin: 0,
   },
 
-  detailsValue: {
+  gridValue: {
     color: 'var(--text-primary)',
     fontFamily: 'var(--font-mono)',
+    fontSize: '12px',
+    lineHeight: 1.5,
     margin: 0,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
+    minWidth: 0,
+  },
+
+  channelLabel: (side) => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    color: channelColor(side),
+    fontFamily: 'var(--font-mono)',
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    flexShrink: 0,
+    userSelect: 'none',
+    paddingTop: '1px',
+  }),
+
+  arrow: {
+    fontSize: '13px',
+    fontWeight: 700,
+    lineHeight: 1,
+    letterSpacing: 0,
   },
 
   badges: {

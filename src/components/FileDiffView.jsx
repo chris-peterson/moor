@@ -150,7 +150,7 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
 
 const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|bmp|webp|svg|ico)$/i;
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, onNavigatePrevFile, startAtEnd, startAtHunk, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange, rejectionReasons: externalRejectionReasons, onRejectionReasonsChange, onSearchChange }) {
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, onNavigatePrevFile, startAtEnd, startAtHunk, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange, rejectionReasons: externalRejectionReasons, onRejectionReasonsChange, onSearchChange, paused = false }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
@@ -628,6 +628,9 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // NV-18: while the help overlay is open the shell owns the keyboard.
+      if (paused) return;
+
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault();
         if (searchActive) {
@@ -763,7 +766,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hunkRanges, currentHunk, reviewedHunks, rejectedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, searchActive, navigateMatch, exitSearch, beginReject, setRejectionReasons, rejectingHunk]);
+  }, [hunkRanges, currentHunk, reviewedHunks, rejectedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, searchActive, navigateMatch, exitSearch, beginReject, setRejectionReasons, rejectingHunk, paused]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;

@@ -1,8 +1,8 @@
 # Status
 
-**Spec:** v0.2 | **Audited:** 2026-05-31 | **Coverage:** all non-deferred requirements Done
+**Spec:** v0.2 | **Audited:** 2026-06-06 | **Coverage:** all non-deferred requirements have implementing code
 
-Every non-deferred requirement has implementing code and is Covered. The 2026-05-31 audit closed the four items previously flagged: [UP-01] was reworded to match the shipped JetBrains Mono webfont (with platform-monospace fallback); [NV-13] was decomposed into NV-13a..d with a clause separating it from search-match positioning; and the two reverse-scan behaviors (active-row font zoom, single-file footer) were captured as [UP-05] and [IM.OUT-05]. The audit also decomposed three overloaded requirements ([AS-08], [IM.OUT-02], [FD-03]) into atomic forms.
+The 2026-06-05 details-panel work shipped four active requirements (implemented 2026-06-06): the label-less changeset header ([IM.IN-02]) — always-visible location eyebrow + commit-message headline, expanding to the full message body and a provenance grid — plus keyboard expand/collapse ([NV-17]), the `?` shortcuts overlay ([NV-18]), and the `f`/`F` sidebar toggle ([DD-16]). They landed in `ContextHeader.jsx` (the changeset header, dropping the `→ inputs` / `← outputs` channel labels for a quiet gutter cue + `status` strip), `ReviewShell.jsx` (lifted details state, global `d`/`D`/`f`/`F`/`?` keys), `FileDiffView.jsx` (`paused` prop), and the new `KeyboardHelp.jsx`. The `prev` reference and the `[prev]` read-only preview are speculative future work ([FUT-02], [FUT-03]) — no caller emits `prev` yet. A speculative implementation was prototyped this session and then removed before shipping (it was unreachable without a caller); the FUT entries document the design for when it's built. The 2026-05-31 audit closed the four items previously flagged: [UP-01] was reworded to match the shipped JetBrains Mono webfont (with platform-monospace fallback); [NV-13] was decomposed into NV-13a..d with a clause separating it from search-match positioning; and the two reverse-scan behaviors (active-row font zoom, single-file footer) were captured as [UP-05] and [IM.OUT-05]. The audit also decomposed three overloaded requirements ([AS-08], [IM.OUT-02], [FD-03]) into atomic forms.
 
 > **Version note:** the product version in `.claude-plugin/plugin.json` and this spec's version (`v0.2`) move independently — PD-01/PD-05 treat plugin.json as the product-version source of truth — so a mismatch between them is expected, not drift.
 
@@ -22,7 +22,7 @@ Every non-deferred requirement has implementing code and is Covered. The 2026-05
 | [FD-08] | Binary file detection | Done |
 | [FD-09] | Dim reviewed hunks | Done |
 
-### Navigation (NV) — 20/20
+### Navigation (NV) — 22/22
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -46,8 +46,10 @@ Every non-deferred requirement has implementing code and is Covered. The 2026-05
 | [NV-14] | Shift+J marks file reviewed and advances to next file | Done |
 | [NV-15] | Shift+K navigates to previous file | Done |
 | [NV-16] | Transient error toast when open-in-editor fails | Done |
+| [NV-17] | d/D expand/collapse input details panel | Done |
+| [NV-18] | `?` toggles keyboard-shortcuts overlay | Done |
 
-### Directory Diff (DD) — 15/15
+### Directory Diff (DD) — 16/16
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -66,6 +68,7 @@ Every non-deferred requirement has implementing code and is Covered. The 2026-05
 | [DD-13] | Quit dialog "Approve anyway" exits 0 with unreviewed hunks | Done |
 | [DD-14] | Quit dialog keyboard nav (Tab, arrows, Enter, Escape) | Done |
 | [DD-15] | Rename/move detection (`git mv`) — single entry instead of L+R | Done |
+| [DD-16] | f/F show/hide sidebar (keyboard companion to DD-11) | Done |
 
 ### Search Mode (SM) — 6/6
 
@@ -139,13 +142,14 @@ Every non-deferred requirement has implementing code and is Covered. The 2026-05
 | [AS-08e] | Single available component → that component alone | Done |
 | [AS-08f] | No `moor —` title prefix | Done |
 
-### Interaction Model (IM) — 9/9
+### Interaction Model (IM) — 10/10
 
 | Req | Description | Status |
 |-----|-------------|--------|
 | [IM-01] | Channel resolution: `--context` flag, then `MOOR_CONTEXT` env var | Done |
 | [IM-02] | Warning banner when no context channel is configured | Done |
-| [IM.IN-01] | Render `input.title` + `input.details` in header (caller-defined shape) | Done |
+| [IM.IN-01] | Render `input.title` + `input.details` in header (caller-defined shape); reveal via hover/click/`d`-`D` | Done |
+| [IM.IN-02] | Label-less changeset header: location eyebrow + message headline always visible; expand reveals body + provenance grid | Done |
 | [IM.OUT-01] | Stream `output` writes, flushing on every hunk state change | Done |
 | [IM.OUT-02a] | Output always includes `reviewer` + `rejections[{file,hunk,line,reason}]` | Done |
 | [IM.OUT-02b] | `exitCode` present only after exit (finalization signal) | Done |
@@ -204,3 +208,5 @@ Both behaviors that traced to no requirement are now captured in the spec:
 | Req | Description |
 |-----|-------------|
 | [FUT-01] | Preview/source toggle for visual text files (ex-BF-02) |
+| [FUT-02] | Optional `prev` input reference (ex-IM.IN-03) — speculative; no caller emits it yet |
+| [FUT-03] | `[prev]` read-only preview of the previous diff (ex-RO-01..04) — speculative; not implemented |

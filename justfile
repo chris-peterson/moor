@@ -26,6 +26,13 @@ diff: sample-data build
 dir-diff: sample-data build
     ./bin/moor {{sample_dir}}/left {{sample_dir}}/right
 
+# Launch with a sample MOOR_CONTEXT so the redesigned inputs header (Location /
+# Context, details panel, [prev] read-only preview) has data to render. The
+# fixture is copied to /tmp so the committed sample stays free of review output.
+diff-context: sample-data build
+    cp {{sample_dir}}/sample-context.json /tmp/moor-sample-context.json
+    MOOR_CONTEXT=/tmp/moor-sample-context.json ./bin/moor {{sample_dir}}/left.js {{sample_dir}}/right.js
+
 gitconfig_repo := home_directory() / "src/getty/cpeterson/gitconfig"
 
 git-install: build
