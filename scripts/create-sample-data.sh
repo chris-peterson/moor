@@ -203,6 +203,7 @@ cat > "$SAMPLE_DIR/sample-context.json" << EOF
       { "label": "task", "value": "redesign the details panel so context reads organically" },
       { "label": "commit", "value": "a1b2c3d" },
       { "label": "author", "value": "Chris Peterson <chris.peterson@gettyimages.com>" },
+      { "label": "date", "value": "Fri Jun 6 12:29:25 2026 -0700" },
       { "label": "range", "value": "HEAD~1..HEAD" },
       { "label": "body", "value": "The expanded details panel rendered a property grid of label/value rows, which read like a form and repeated the commit subject already shown in the inputs bar.\n\nThis reworks it into a briefing: on expand the bar title becomes the full headline, the beacon task sits beneath it, and repo/branch/hash/author/range weave into a single provenance byline." }
     ]
