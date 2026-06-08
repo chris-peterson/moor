@@ -123,7 +123,7 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
   return (
     <div onClick={row.type !== 'equal' ? onClick : undefined} onContextMenu={row.type !== 'equal' ? onContextMenu : undefined} style={{ display: 'flex', height: ROW_HEIGHT + 'px', cursor: row.type !== 'equal' ? 'pointer' : 'default' }}>
       <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0, background: barColor }} />
-      <div style={{ width: leftWidth + 'px', display: 'flex', overflow: 'hidden', background: cellBg(leftType, 'left') }}>
+      <div style={{ width: leftWidth + 'px', display: 'flex', overflow: 'clip', background: cellBg(leftType, 'left') }}>
         <span style={lineNumStyle}>{row.leftNum ?? ''}</span>
         <span style={codeStyle}>
           {searchQuery && !dimmed
@@ -134,7 +134,7 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
         </span>
       </div>
       <div onMouseDown={onResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
-      <div style={{ width: rightWidth + 'px', display: 'flex', overflow: 'hidden', background: cellBg(rightType, 'right') }}>
+      <div style={{ width: rightWidth + 'px', display: 'flex', overflow: 'clip', background: cellBg(rightType, 'right') }}>
         <span style={lineNumStyle}>{row.rightNum ?? ''}</span>
         <span style={codeStyle}>
           {searchQuery && !dimmed
@@ -874,7 +874,12 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     )}
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       {/* Main column: scroll container (with sticky header) + hscrollbar */}
-      <div ref={contentAreaRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+      {/* position:relative confines the absolutely-positioned measurement
+          container below; without it, that container's containing block is the
+          viewport and its wide hidden lines make the document horizontally
+          scrollable. overflow:clip (not hidden) clips without creating a scroll
+          container, so a text-selection drag can't auto-scroll the app offscreen. */}
+      <div ref={contentAreaRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'clip', minWidth: 0, position: 'relative' }}>
 
         {/* Hidden measurement container for the longest lines. Lives inside the
             React tree so font CSS resolves identically to the rendered rows;
@@ -939,7 +944,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', background: 'var(--bg-deep)' }}
+              style={{ flex: 1, overflowY: 'auto', overflowX: 'clip', background: 'var(--bg-deep)' }}
             >
               {/* Sticky file path header */}
               <div ref={headerRef} style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--bg-panel)' }}>
