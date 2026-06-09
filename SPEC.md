@@ -62,10 +62,10 @@ Vim-style, keyboard-first:
 - **[NV-07]** When the user presses `r`, the viewer shall reject the current hunk (visually distinct from reviewed; excluded from "unreviewed" counts)
 - **[NV-08]** When the user presses `i`, the viewer shall open the current hunk's file in the configured editor at the hunk's line number
 - **[NV-09]** When the user clicks the currently-selected hunk, the viewer shall mark it as reviewed
-- **[NV-10]** When the user presses `R` (shift+r), the viewer shall unreject the current hunk (restoring it to unreviewed)
-- **[NV-11]** When the user presses `r`, the viewer shall display an inline text area for an optional rejection reason; Enter confirms, Shift+Enter inserts a newline, Escape confirms without a reason
-- **[NV-12]** While a rejected hunk has a rejection reason, the viewer shall display the reason as a persistent note below the hunk; clicking the note shall open it for editing, and clicking the ✕ shall remove the note (the hunk remains rejected)
-- **[NV-13]** The viewer shall position the viewport when navigating between hunks, per the lettered sub-requirements below. NV-13 governs hunk navigation only; search-match scroll positioning (the `scrollToRow` helper) is intentionally a separate behavior, so the two are not expected to share positioning math.
+- ~~**[NV-10]**~~ Removed — the keyboard rejection-delete (`Shift+R`) dropped; a single keystroke too easily discarded a typed rejection reason. Deleting a rejection is now mouse-only via the context menu (CM-06), which confirms first.
+- **[NV-11]** When the user presses `r`, the viewer shall display an inline text area for an optional rejection reason that grows to fit its content; Enter confirms, Shift+Enter inserts a newline, Escape confirms without a reason. The editor shall also offer a "Convert to note" action that moves the typed text into the review notes (NV-19, CM-07) without rejecting the hunk.
+- **[NV-12]** While a rejected hunk has a rejection reason, the viewer shall display the reason as a persistent note below the hunk; clicking the note shall open it for editing, and clicking the ✕ shall remove the note after a confirmation (the hunk remains rejected)
+- **[NV-13]** The viewer shall position the viewport when navigating between hunks, per the lettered sub-requirements below.
   - **[NV-13a]** When navigating to a hunk that is already fully visible in the viewport, the viewer shall not scroll.
   - **[NV-13b]** Otherwise the viewer shall scroll so that one line of context above the hunk is visible at the top of the viewport, with the hunk's first line on the second visible row.
   - **[NV-13c]** If the hunk begins at the first line of the file, the viewer shall align the hunk's first line flush with the top of the viewport. If the hunk would fit in the viewport flush to the top but not with the context-above row, the viewer shall align the hunk flush so the bottom is in view. The viewer shall not push the hunk's first line below the second visible row, even when the hunk is taller than the viewport.
@@ -73,8 +73,10 @@ Vim-style, keyboard-first:
 - **[NV-14]** When the user presses `Shift+J`, the viewer shall mark all unreviewed hunks in the current file as reviewed and navigate to the first hunk of the next file. Rejected hunks remain rejected.
 - **[NV-15]** When the user presses `Shift+K`, the viewer shall navigate to the first hunk of the previous file. Review and rejection state of hunks in the current file shall remain unchanged.
 - **[NV-16]** When the user invokes "open in editor" (NV-08 or CM-05) and the editor lookup returns no result (file not in any open or recent workspace, or editor CLI not found), the viewer shall display a transient error toast with the failure reason for 3 seconds.
-- **[NV-17]** When the user presses `d`, the viewer shall expand the input details panel (IM.IN-01); when the user presses `D` (Shift+d), the viewer shall collapse it — the keyboard companion to IM.IN-01's hover / click-to-expand.
+- **[NV-17]** When the user presses `d` (either case), the viewer shall toggle the input details panel (IM.IN-01) — the keyboard companion to IM.IN-01's hover / click-to-expand.
 - **[NV-18]** When the user presses `?`, the viewer shall toggle an overlay listing the keyboard shortcuts; `Escape` or a second `?` shall dismiss it.
+- **[NV-19]** When the user presses `n` (either case) or activates the "+ note" control, the viewer shall open a panel for managing a list of free-text review notes. Each note may be edited inline; deleting a note shall require an explicit control that confirms first, since a typed note is hard to recreate. Notes are reviewer guidance for minor tweaks, distinct from per-hunk rejections (NV-07), and shall not affect review completion or the exit code.
+- **[NV-20]** When the user presses `=` / `+` or `-`, the viewer shall zoom the interface in or out; `0` shall reset the zoom. No modifier key shall be required.
 
 ### Directory Diff (DD)
 
@@ -95,16 +97,19 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[DD-13]** When the user attempts to close with one or more unreviewed hunks and no rejected hunks, the viewer shall display a quit confirmation dialog with the existing OK / Cancel actions plus an "Approve anyway" button. "Approve anyway" shall close the viewer with exit code 0 (clean approve) regardless of the unreviewed count.
 - **[DD-14]** While a quit confirmation dialog (DD-12, DD-13) is open, the viewer shall support keyboard navigation between dialog buttons via Tab / Shift+Tab and Left / Right arrow keys; Enter shall activate the focused button and Escape shall cancel.
 - **[DD-15]** While in directory diff mode, when a left-only file and a right-only file are determined to be a rename or move of the same content (e.g., via `git mv`), the viewer shall display the pair as a single entry showing the old → new path, instead of as separate L and R entries. The entry shall contribute one item to the sidebar and hunk counts (DD-06), and its diff view shall show content changes between the two versions (zero-hunk when the rename is content-identical).
-- **[DD-16]** When the user presses `f`, the viewer shall show the file sidebar, and when the user presses `F` (Shift+f), the viewer shall hide it — the keyboard companion to DD-11's collapse / show controls.
+- **[DD-16]** When the user presses `f` (either case), the viewer shall toggle the file sidebar — the keyboard companion to DD-11's collapse / show controls.
 
 ### Search Mode (SM)
 
-- **[SM-01]** When the user presses `Cmd+F`, the viewer shall enter search mode with a text input field
-- **[SM-02]** While in search mode, the viewer shall match content across all lines, not just changed lines within hunks
-- **[SM-03]** While in search mode in directory diff, the viewer shall temporarily hide files that contain no matches
-- **[SM-04]** While in search mode, the viewer shall dim non-matching hunks
-- **[SM-05]** While in search mode, when the user presses `n` / `N`, the viewer shall jump to the next / previous match
-- **[SM-06]** While in search mode, when the user presses `Escape`, the viewer shall exit search mode and restore the normal view
+Search mode was removed — low value and limited in capability. The `n` / `N`
+keys it used are repurposed for review notes (NV-19).
+
+- ~~**[SM-01]**~~ Removed — in-diff search dropped
+- ~~**[SM-02]**~~ Removed
+- ~~**[SM-03]**~~ Removed
+- ~~**[SM-04]**~~ Removed
+- ~~**[SM-05]**~~ Removed — `n` / `N` repurposed for review notes (NV-19)
+- ~~**[SM-06]**~~ Removed
 
 ### Context Menu (CM)
 
@@ -113,7 +118,8 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[CM-03]** The context menu shall include "Mark as unreviewed" (see NV-05)
 - **[CM-04]** The context menu shall include "Reject" (see NV-07)
 - **[CM-05]** The context menu shall include "Open in editor" (see NV-08)
-- **[CM-06]** When the selected hunk is rejected, the context menu shall include "Unreject" (see NV-10)
+- **[CM-06]** When the selected hunk is rejected, the context menu shall include "Delete" (removing the rejection); when the hunk has a typed rejection reason, selecting it shall confirm before discarding the reason
+- **[CM-07]** When the selected hunk is rejected with a typed reason, the context menu shall include "Convert to note", which moves the reason into the review notes (NV-19) — carrying the hunk's file and line — and deletes the rejection
 
 ### Review Feedback (RV)
 
@@ -173,12 +179,13 @@ moor exposes a bidirectional contract with its caller via a JSON file. The calle
 
 #### Outputs (viewer → caller)
 
-- **[IM.OUT-01]** The viewer shall write review state to the context file's `output` section continuously, flushing after every hunk state change (review, unreview, reject, unreject, rejection-reason edit). On exit, the file shall reflect the final state.
+- **[IM.OUT-01]** The viewer shall write review state to the context file's `output` section continuously, flushing after every hunk state change (review, unreview, reject, delete a rejection, rejection-reason edit) and after a review-note edit (NV-19). On exit, the file shall reflect the final state.
 - **[IM.OUT-02a]** The output section shall always include `reviewer` (string, from `git config user.name`) and `rejections` (array of `{file, hunk, line, reason}`).
 - **[IM.OUT-02b]** The output section shall include `exitCode` (number) only after the viewer exits; its presence signals that the review has been finalized, while its absence signals an in-progress review whose rejections may still change.
 - **[IM.OUT-03]** While rejected hunks exist, the viewer shall display one badge per rejected file in the header's output region, each showing the file's rejection count; when the user clicks a badge, the viewer shall navigate to that file's first rejected hunk.
 - **[IM.OUT-04]** The viewer shall display review progress ("X of Y changes viewed") in the header's output region.
 - **[IM.OUT-05]** While in single-file mode (no directory sidebar), the viewer shall display an equivalent review-progress footer at the bottom of the view: a progress bar with "X of Y changes viewed" (collapsing to "All changes viewed · q to close" when complete) and a rejection count when rejected hunks exist.
+- **[IM.OUT-06]** Where the reviewer has entered one or more review notes (NV-19), the output section shall include `notes` — an array of `{ note, file?, line? }`. `file` / `line` identify the source change for a note converted from a rejection (CM-07) and are absent for an ambient note. The notes are free-text guidance for the calling agent, distinct from `rejections`; the agent interprets them.
 
 ### User Preferences (UP)
 
@@ -236,6 +243,6 @@ git difftool branch       # compare against a branch
 
 - **[FUT-01]** (→ BF) Where a file has both a text and a visual representation (e.g., SVG, Markdown), the diff viewer shall provide a toggle between source diff and rendered preview
 - **[FUT-02]** (→ IM) The input section may include an optional `prev` reference describing a previous diff, using the same shape as the primary input (`left` / `right` paths plus optional `title` / `details`, nestable). Speculative — no caller emits `prev` yet; revisit once anchor's wrapper supplies it.
-- **[FUT-03]** (→ RO) `[prev]` read-only preview of the previous diff: render the link when `prev` is present, open the referenced diff read-only (reject / unreject / rejection-reason / open-in-editor disabled, no output writes), and return to the live review on `Escape` or a back affordance. Speculative companion to FUT-02; not yet implemented.
+- **[FUT-03]** (→ RO) `[prev]` read-only preview of the previous diff: render the link when `prev` is present, open the referenced diff read-only (reject / delete / rejection-reason / open-in-editor disabled, no output writes), and return to the live review on `Escape` or a back affordance. Speculative companion to FUT-02; not yet implemented.
 - **Syntax highlighting** — language-aware coloring in diff panels
 - **Configurable preferences** — font, colors, ignored patterns

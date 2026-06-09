@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { statusColor, statusLabel } from '../engine/file-status.js';
 
-function SidebarNode({ node, depth, files, currentIndex, viewed, rejectedFiles, onSelect, expanded, onToggle, hiddenFiles }) {
+function SidebarNode({ node, depth, files, currentIndex, viewed, rejectedFiles, onSelect, expanded, onToggle, fileStats }) {
   const isDir = node.type === 'directory';
   const isIdentical = node.status === 'identical';
   const nodeKey = node.leftPath || node.rightPath || node.name;
@@ -12,7 +12,11 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, rejectedFiles, 
   const isViewed = viewed.has(fileIndex);
   const isRejected = !isDir && rejectedFiles && rejectedFiles.has(fileIndex);
   const isClickable = !isDir && fileIndex >= 0;
-  const isHidden = hiddenFiles && fileIndex >= 0 && hiddenFiles.has(fileIndex);
+
+  const stat = !isDir && fileStats ? fileStats[fileIndex] : null;
+  const statTitle = stat && (stat.added > 0 || stat.removed > 0)
+    ? `${node.name}  −${stat.removed} +${stat.added}`
+    : node.name;
 
   const handleClick = useCallback(() => {
     if (isDir) {
@@ -23,29 +27,17 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, rejectedFiles, 
   }, [isDir, isClickable, nodeKey, fileIndex, onToggle, onSelect]);
 
   if (isIdentical && !isDir) return null;
-  if (isHidden) return null;
 
-  const hasVisibleChildren = (dirNode) => {
-    if (!dirNode.children) return false;
-    return dirNode.children.some(c => {
-      if (c.type === 'directory') return hasVisibleChildren(c);
-      if (c.status === 'identical') return false;
-      const idx = files.indexOf(c);
-      return !(hiddenFiles && idx >= 0 && hiddenFiles.has(idx));
-    });
-  };
-
-  const hasNonIdenticalChildren = isDir && (hiddenFiles
-    ? hasVisibleChildren(node)
-    : node.children?.some(c =>
-        c.status !== 'identical' || (c.type === 'directory' && c.summary && (c.summary.modified > 0 || c.summary.leftOnly > 0 || c.summary.rightOnly > 0 || c.summary.renamed > 0))
-      ));
+  const hasNonIdenticalChildren = isDir && node.children?.some(c =>
+    c.status !== 'identical' || (c.type === 'directory' && c.summary && (c.summary.modified > 0 || c.summary.leftOnly > 0 || c.summary.rightOnly > 0 || c.summary.renamed > 0))
+  );
   if (isDir && !hasNonIdenticalChildren) return null;
 
   return (
     <>
       <div
         onClick={handleClick}
+        title={isDir ? undefined : statTitle}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -102,14 +94,14 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, rejectedFiles, 
           onSelect={onSelect}
           expanded={expanded}
           onToggle={onToggle}
-          hiddenFiles={hiddenFiles}
+          fileStats={fileStats}
         />
       ))}
     </>
   );
 }
 
-export function Sidebar({ tree, files, currentIndex, viewed, rejectedFiles, onSelect, width, onCollapse, hiddenFiles }) {
+export function Sidebar({ tree, files, currentIndex, viewed, rejectedFiles, onSelect, width, onCollapse, fileStats }) {
   const [expanded, setExpanded] = useState(() => {
     const set = new Set();
     const expandAll = (node) => {
@@ -214,7 +206,7 @@ export function Sidebar({ tree, files, currentIndex, viewed, rejectedFiles, onSe
             onSelect={onSelect}
             expanded={expanded}
             onToggle={onToggle}
-            hiddenFiles={hiddenFiles}
+            fileStats={fileStats}
           />
         ))}
       </div>

@@ -17,7 +17,6 @@ const GROUPS = [
     title: 'Reject',
     rows: [
       [['r'], 'Reject current change (optional reason)'],
-      [['⇧R'], 'Unreject current change'],
     ],
   },
   {
@@ -28,17 +27,17 @@ const GROUPS = [
     ],
   },
   {
-    title: 'Search',
+    title: 'Notes',
     rows: [
-      [['⌘F'], 'Enter search'],
-      [['n', 'N'], 'Next / previous match'],
+      [['n'], 'Open notes panel (add / edit / delete)'],
     ],
   },
   {
     title: 'View',
     rows: [
-      [['d', 'D'], 'Show / hide details'],
-      [['f', 'F'], 'Show / hide file sidebar'],
+      [['d'], 'Toggle details'],
+      [['f'], 'Toggle file sidebar'],
+      [['=', '-'], 'Zoom in / out (0 resets)'],
       [['?'], 'Toggle this help'],
     ],
   },

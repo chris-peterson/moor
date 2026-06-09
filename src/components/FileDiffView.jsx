@@ -7,28 +7,6 @@ function expandTabs(str) {
   return str == null ? '' : str.replaceAll('\t', TAB_SPACES);
 }
 
-function SearchHighlight({ text, query, isCurrent }) {
-  if (!query || !text) return expandTabs(text);
-  const expanded = expandTabs(text);
-  const lower = expanded.toLowerCase();
-  const qLower = query.toLowerCase();
-  const parts = [];
-  let lastIdx = 0;
-  let idx = lower.indexOf(qLower);
-  while (idx !== -1) {
-    if (idx > lastIdx) parts.push(expanded.slice(lastIdx, idx));
-    parts.push(
-      <span key={idx} style={{ background: 'var(--color-search)', color: 'var(--bg-deep)', borderRadius: '2px' }}>
-        {expanded.slice(idx, idx + qLower.length)}
-      </span>
-    );
-    lastIdx = idx + qLower.length;
-    idx = lower.indexOf(qLower, lastIdx);
-  }
-  if (lastIdx < expanded.length) parts.push(expanded.slice(lastIdx));
-  return parts.length > 0 ? <>{parts}</> : expandTabs(text);
-}
-
 function areSimilarEnough(a, b) {
   if (!a || !b) return false;
   // Compare distinct word tokens, not characters — English sentences always
@@ -76,9 +54,9 @@ function CharDiffSpans({ oldStr, newStr, side }) {
   );
 }
 
-function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick, onContextMenu, searchQuery, searchDimmed }) {
+function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick, onContextMenu }) {
   const fontSize = active ? '15px' : '13px';
-  const dimmed = (reviewed && !active) || searchDimmed;
+  const dimmed = reviewed && !active;
 
   const barColor = active
     ? (rejected ? 'var(--color-conflict)' : 'var(--color-accent)')
@@ -126,22 +104,18 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
       <div style={{ width: leftWidth + 'px', display: 'flex', overflow: 'clip', background: cellBg(leftType, 'left') }}>
         <span style={lineNumStyle}>{row.leftNum ?? ''}</span>
         <span style={codeStyle}>
-          {searchQuery && !dimmed
-            ? <SearchHighlight text={row.leftLine} query={searchQuery} />
-            : showCharDiff
-              ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="left" />
-              : expandTabs(row.leftLine)}
+          {showCharDiff
+            ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="left" />
+            : expandTabs(row.leftLine)}
         </span>
       </div>
       <div onMouseDown={onResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
       <div style={{ width: rightWidth + 'px', display: 'flex', overflow: 'clip', background: cellBg(rightType, 'right') }}>
         <span style={lineNumStyle}>{row.rightNum ?? ''}</span>
         <span style={codeStyle}>
-          {searchQuery && !dimmed
-            ? <SearchHighlight text={row.rightLine} query={searchQuery} />
-            : showCharDiff
-              ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="right" />
-              : expandTabs(row.rightLine)}
+          {showCharDiff
+            ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="right" />
+            : expandTabs(row.rightLine)}
         </span>
       </div>
     </div>
@@ -150,7 +124,7 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
 
 const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|bmp|webp|svg|ico)$/i;
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, onNavigatePrevFile, startAtEnd, startAtHunk, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange, rejectionReasons: externalRejectionReasons, onRejectionReasonsChange, onSearchChange, paused = false }) {
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, onNavigatePrevFile, startAtEnd, startAtHunk, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange, rejectionReasons: externalRejectionReasons, onRejectionReasonsChange, onAddNote, paused = false }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
@@ -206,10 +180,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const rejectCompletedRef = useRef(false);
   const [splitPercent, setSplitPercent] = useState(50);
   const [draggingResizer, setDraggingResizer] = useState(false);
-  const [searchActive, setSearchActive] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
-  const searchInputRef = useRef(null);
   const [contextMenu, setContextMenu] = useState(null);
   const [errorToast, setErrorToast] = useState(null);
   const errorToastTimerRef = useRef(null);
@@ -310,11 +280,21 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     return () => { window.__moorQuitState = null; };
   }, [hunkRanges, rows, reviewedHunks, rejectedHunks, rejectionReasons, onNavigateNext, leftPath, rightPath]);
 
+  // Grow the rejection-reason textarea to fit its content (capped), so a
+  // multi-line reason isn't crammed into a fixed two-row box.
+  const resizeRejectInput = useCallback(() => {
+    const el = rejectInputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 320) + 'px';
+  }, []);
+
   useEffect(() => {
     if (rejectingHunk != null && rejectInputRef.current) {
       rejectInputRef.current.focus();
+      resizeRejectInput();
     }
-  }, [rejectingHunk]);
+  }, [rejectingHunk, resizeRejectInput]);
 
   const activeRowSet = useMemo(() => {
     if (hunkRanges.length === 0) return new Set();
@@ -356,64 +336,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     const codeAreaWidth = Math.max(0, Math.min(leftW, rightW) - 64);
     return Math.max(0, maxContentWidth - codeAreaWidth);
   }, [maxContentWidth, viewportWidth, splitPercent]);
-
-  const searchMatches = useMemo(() => {
-    if (!searchActive || !searchQuery) return [];
-    const q = searchQuery.toLowerCase();
-    const matches = [];
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const leftMatch = row.leftLine && row.leftLine.toLowerCase().includes(q);
-      const rightMatch = row.rightLine && row.rightLine.toLowerCase().includes(q);
-      if (leftMatch || rightMatch) matches.push(i);
-    }
-    return matches;
-  }, [searchActive, searchQuery, rows]);
-
-  const searchMatchingHunks = useMemo(() => {
-    if (!searchActive || !searchQuery) return null;
-    const set = new Set();
-    for (const rowIdx of searchMatches) {
-      const hIdx = rowToHunk.get(rowIdx);
-      if (hIdx != null) set.add(hIdx);
-    }
-    return set;
-  }, [searchActive, searchQuery, searchMatches, rowToHunk]);
-
-  useEffect(() => {
-    if (onSearchChange) onSearchChange(searchActive ? searchQuery : null);
-  }, [searchActive, searchQuery, onSearchChange]);
-
-  useEffect(() => {
-    if (searchActive && searchInputRef.current) searchInputRef.current.focus();
-  }, [searchActive]);
-
-  const scrollToRow = useCallback((rowIdx) => {
-    if (!scrollContainerRef.current) return;
-    const top = rowIdx * ROW_HEIGHT;
-    const bottom = top + ROW_HEIGHT;
-    const ev = Math.max(0, viewportHeight - headerHeight);
-    const visibleTop = scrollContainerRef.current.scrollTop;
-    const visibleBottom = visibleTop + ev;
-    if (top < visibleTop || bottom > visibleBottom) {
-      scrollContainerRef.current.scrollTop = Math.max(0, top - ev / 3);
-    }
-  }, [viewportHeight, headerHeight]);
-
-  const navigateMatch = useCallback((direction) => {
-    if (searchMatches.length === 0) return;
-    const nextIdx = direction === 'next'
-      ? (currentMatchIdx + 1) % searchMatches.length
-      : (currentMatchIdx - 1 + searchMatches.length) % searchMatches.length;
-    setCurrentMatchIdx(nextIdx);
-    scrollToRow(searchMatches[nextIdx]);
-  }, [searchMatches, currentMatchIdx, scrollToRow]);
-
-  const exitSearch = useCallback(() => {
-    setSearchActive(false);
-    setSearchQuery('');
-    setCurrentMatchIdx(0);
-  }, []);
 
   useEffect(() => {
     if (onHunkChange) onHunkChange(currentHunk, hunkRanges.length);
@@ -519,6 +441,23 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     setRejectingHunk(null);
   }, [setRejectedHunks, setReviewedHunks, setRejectionReasons]);
 
+  // Convert the in-progress rejection into a review note (CM-07): the text
+  // becomes an ambient-but-located note, and the hunk is left un-rejected.
+  // Guarded by rejectCompletedRef so the textarea's blur doesn't re-reject.
+  const convertEditingToNote = useCallback((hunkIdx, text) => {
+    rejectCompletedRef.current = true;
+    const trimmed = (text || '').trim();
+    if (trimmed && onAddNote) {
+      const range = hunkRanges[hunkIdx];
+      const row = range ? rows[range.start] : null;
+      const line = row?.rightNum || row?.leftNum || 1;
+      onAddNote({ note: trimmed, file: rightFullPath || leftFullPath || rightPath || leftPath, line });
+    }
+    setRejectedHunks(prev => { const next = new Set(prev); next.delete(hunkIdx); return next; });
+    setRejectionReasons(prev => { const next = new Map(prev); next.delete(hunkIdx); return next; });
+    setRejectingHunk(null);
+  }, [hunkRanges, rows, rightFullPath, leftFullPath, rightPath, leftPath, onAddNote, setRejectedHunks, setRejectionReasons]);
+
   const handleRowClick = useCallback((rowIdx) => {
     const hIdx = rowToHunk.get(rowIdx);
     if (hIdx == null) return;
@@ -562,7 +501,20 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       actions.push({ label: 'Reject', action: () => beginReject(h) });
     } else {
       actions.push({ label: 'Edit rejection note', action: () => beginReject(h) });
-      actions.push({ label: 'Unreject', action: () => {
+      if (onAddNote && rejectionReasons.get(h)) {
+        actions.push({ label: 'Convert to note', action: () => {
+          // Preserve the reason as a review note (carrying the source location),
+          // then delete the rejection — no data loss.
+          const row = hunkRanges[h] ? rows[hunkRanges[h].start] : null;
+          const line = row?.rightNum || row?.leftNum || 1;
+          onAddNote({ note: rejectionReasons.get(h), file: rightFullPath || leftFullPath || rightPath || leftPath, line });
+          setRejectedHunks(prev => { const next = new Set(prev); next.delete(h); return next; });
+          setRejectionReasons(prev => { const next = new Map(prev); next.delete(h); return next; });
+        }});
+      }
+      actions.push({ label: 'Delete', action: () => {
+        // Deleting the rejection discards the typed reason — confirm first.
+        if (rejectionReasons.get(h) && !window.confirm('Delete this rejection and discard its note?')) return;
         setRejectedHunks(prev => { const next = new Set(prev); next.delete(h); return next; });
         setRejectionReasons(prev => { const next = new Map(prev); next.delete(h); return next; });
       }});
@@ -573,7 +525,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       actions.push({ label: 'Open in editor', action: () => handleOpenInEditor(line) });
     }
     return actions;
-  }, [contextMenu, reviewedHunks, rejectedHunks, hunkRanges, rows, rightPath, setReviewedHunks, setRejectedHunks, setRejectionReasons, beginReject, handleOpenInEditor]);
+  }, [contextMenu, reviewedHunks, rejectedHunks, rejectionReasons, hunkRanges, rows, rightPath, leftPath, rightFullPath, leftFullPath, onAddNote, setReviewedHunks, setRejectedHunks, setRejectionReasons, beginReject, handleOpenInEditor]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -617,7 +569,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       }
     }
     setCurrentHunk(initial);
-    setCurrentMatchIdx(0);
   }, [leftContent, rightContent]);
 
   useEffect(() => {
@@ -631,35 +582,8 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       // NV-18: while the help overlay is open the shell owns the keyboard.
       if (paused) return;
 
-      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
-        e.preventDefault();
-        if (searchActive) {
-          if (searchInputRef.current) { searchInputRef.current.focus(); searchInputRef.current.select(); }
-        } else {
-          setSearchActive(true);
-        }
-        return;
-      }
-
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
       if (rejectingHunk != null) return;
-
-      if (searchActive) {
-        switch (e.key) {
-          case 'n':
-            e.preventDefault();
-            navigateMatch('next');
-            return;
-          case 'N':
-            e.preventDefault();
-            navigateMatch('prev');
-            return;
-          case 'Escape':
-            e.preventDefault();
-            exitSearch();
-            return;
-        }
-      }
 
       switch (e.key) {
         case 'j': {
@@ -738,12 +662,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           beginReject(currentHunk);
           break;
         }
-        case 'R': {
-          e.preventDefault();
-          setRejectedHunks(prev => { const next = new Set(prev); next.delete(currentHunk); return next; });
-          setRejectionReasons(prev => { const next = new Map(prev); next.delete(currentHunk); return next; });
-          break;
-        }
         case 'i': {
           e.preventDefault();
           if (window.moor?.openInEditor && rightPath && hunkRanges[currentHunk]) {
@@ -766,7 +684,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hunkRanges, currentHunk, reviewedHunks, rejectedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, searchActive, navigateMatch, exitSearch, beginReject, setRejectionReasons, rejectingHunk, paused]);
+  }, [hunkRanges, currentHunk, reviewedHunks, rejectedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, beginReject, setRejectionReasons, rejectingHunk, paused]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -948,7 +866,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
             >
               {/* Sticky file path header */}
               <div ref={headerRef} style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--bg-panel)' }}>
-                <div style={{ display: 'flex', borderBottom: searchActive ? 'none' : '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
                   <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0 }} />
                   <div style={headerCellStyle(leftPath === rightPath ? 'transparent' : 'var(--color-left)', leftWidth)}>
                     {leftPath === rightPath ? '' : (leftPath || '(empty)')}
@@ -956,64 +874,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                   <div onMouseDown={handleResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
                   <div style={headerCellStyle('var(--color-right)', rightWidth)}>{rightPath || '(empty)'}</div>
                 </div>
-                {searchActive && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '4px 12px',
-                    background: 'var(--bg-surface)',
-                    borderBottom: '1px solid var(--border)',
-                  }}>
-                    <input
-                      ref={searchInputRef}
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => { setSearchQuery(e.target.value); setCurrentMatchIdx(0); }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); exitSearch(); }
-                        if (e.key === 'Enter') { e.preventDefault(); navigateMatch(e.shiftKey ? 'prev' : 'next'); e.target.blur(); }
-                      }}
-                      placeholder="Search..."
-                      style={{
-                        flex: 1,
-                        maxWidth: '300px',
-                        padding: '3px 8px',
-                        background: 'var(--bg-deep)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '3px',
-                        color: 'var(--text-primary)',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '12px',
-                        outline: 'none',
-                      }}
-                      onFocus={(e) => { e.target.style.borderColor = 'var(--color-accent)'; }}
-                      onBlur={(e) => { e.target.style.borderColor = 'var(--border)'; }}
-                    />
-                    <span style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '11px',
-                      color: searchMatches.length > 0 ? 'var(--text-secondary)' : 'var(--color-conflict)',
-                    }}>
-                      {searchQuery
-                        ? `${searchMatches.length > 0 ? currentMatchIdx + 1 : 0}/${searchMatches.length}`
-                        : ''}
-                    </span>
-                    <span
-                      onClick={exitSearch}
-                      style={{
-                        cursor: 'pointer',
-                        color: 'var(--text-muted)',
-                        fontSize: '16px',
-                        lineHeight: 1,
-                        padding: '0 2px',
-                      }}
-                      title="Close search (Esc)"
-                    >
-                      ✕
-                    </span>
-                  </div>
-                )}
               </div>
 
               {/* Virtual scroll content */}
@@ -1046,39 +906,80 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                       pointerEvents: 'auto',
                     }}>
                       {isEditing ? (
-                        <textarea
-                          ref={rejectInputRef}
-                          key={`edit-${hIdx}`}
-                          defaultValue={rejectInitialValue}
-                          rows={2}
-                          placeholder="Rejection reason (optional) — Enter to confirm, Shift+Enter for newline, Escape to skip"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault();
-                              completeRejection(rejectingHunk, e.target.value.trim() || null);
-                            } else if (e.key === 'Escape') {
-                              e.preventDefault();
-                              completeRejection(rejectingHunk, null);
-                            }
-                            e.stopPropagation();
-                          }}
-                          onBlur={() => {
-                            completeRejection(rejectingHunk, rejectInputRef.current?.value.trim() || null);
-                          }}
-                          style={{
-                            width: '100%',
-                            boxSizing: 'border-box',
-                            padding: '4px 8px',
-                            fontSize: '13px',
-                            fontFamily: 'var(--font-ui)',
-                            background: 'var(--bg-panel)',
-                            color: 'var(--text-primary)',
-                            border: '1px solid var(--color-conflict)',
-                            borderRadius: '3px',
-                            outline: 'none',
-                            resize: 'vertical',
-                          }}
-                        />
+                        <div style={{
+                          background: 'var(--bg-panel)',
+                          border: '1px solid var(--color-conflict)',
+                          borderRadius: '3px',
+                        }}>
+                          <textarea
+                            ref={rejectInputRef}
+                            key={`edit-${hIdx}`}
+                            defaultValue={rejectInitialValue}
+                            rows={2}
+                            onInput={resizeRejectInput}
+                            placeholder="Rejection reason (optional)"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                completeRejection(rejectingHunk, e.target.value.trim() || null);
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                completeRejection(rejectingHunk, null);
+                              }
+                              e.stopPropagation();
+                            }}
+                            onBlur={() => {
+                              completeRejection(rejectingHunk, rejectInputRef.current?.value.trim() || null);
+                            }}
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              boxSizing: 'border-box',
+                              padding: '4px 8px',
+                              fontSize: '13px',
+                              fontFamily: 'var(--font-ui)',
+                              background: 'transparent',
+                              color: 'var(--text-primary)',
+                              border: 'none',
+                              outline: 'none',
+                              resize: 'none',
+                              overflow: 'auto',
+                            }}
+                          />
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '3px 8px',
+                            borderTop: '1px solid var(--border)',
+                          }}>
+                            {onAddNote && (
+                              <button
+                                type="button"
+                                // onMouseDown + preventDefault keeps the textarea
+                                // focused so its blur doesn't reject the hunk
+                                // before we convert it to a note.
+                                onMouseDown={(e) => { e.preventDefault(); convertEditingToNote(rejectingHunk, rejectInputRef.current?.value || ''); }}
+                                style={{
+                                  background: 'transparent',
+                                  border: '1px solid var(--color-accent-border)',
+                                  color: 'var(--color-accent)',
+                                  fontFamily: 'var(--font-mono)',
+                                  fontSize: '10px',
+                                  fontWeight: 600,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.08em',
+                                  padding: '2px 8px',
+                                  borderRadius: '3px',
+                                  cursor: 'pointer',
+                                }}
+                              >Convert to note</button>
+                            )}
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
+                              Enter confirms · Shift+Enter newline · Esc skips
+                            </span>
+                          </div>
+                        </div>
                       ) : (
                         <div
                           onClick={() => beginReject(hIdx)}
@@ -1099,6 +1000,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                           <span
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (!window.confirm('Remove this note? The change stays rejected.')) return;
                               setRejectionReasons(prev => { const next = new Map(prev); next.delete(hIdx); return next; });
                             }}
                             style={{ opacity: 0.5, cursor: 'pointer', fontSize: '11px' }}
@@ -1112,8 +1014,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                 <div style={{ position: 'absolute', top: startIdx * ROW_HEIGHT + 'px', left: 0, right: 0 }}>
                   {visibleRows.map((row, i) => {
                     const idx = startIdx + i;
-                    const hIdx = rowToHunk.get(idx);
-                    const isSearchDimmed = searchMatchingHunks != null && hIdx != null && !searchMatchingHunks.has(hIdx);
                     return (
                       <DiffRow
                         key={idx}
@@ -1127,8 +1027,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                         onResizerMouseDown={handleResizerMouseDown}
                         onClick={() => handleRowClick(idx)}
                         onContextMenu={(e) => handleRowContextMenu(e, idx)}
-                        searchQuery={searchActive ? searchQuery : null}
-                        searchDimmed={isSearchDimmed}
                       />
                     );
                   })}

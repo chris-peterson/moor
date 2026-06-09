@@ -1,8 +1,10 @@
 # Status
 
-**Spec:** v0.2 | **Audited:** 2026-06-06 | **Coverage:** all non-deferred requirements have implementing code
+**Spec:** v0.2 | **Audited:** 2026-06-09 | **Coverage:** all non-deferred requirements have implementing code
 
 The 2026-06-05 details-panel work shipped four active requirements (implemented 2026-06-06): the label-less changeset header ([IM.IN-02]) — always-visible location eyebrow + commit-message headline, expanding to the full message body and a provenance grid — plus keyboard expand/collapse ([NV-17]), the `?` shortcuts overlay ([NV-18]), and the `f`/`F` sidebar toggle ([DD-16]). They landed in `ContextHeader.jsx` (the changeset header, dropping the `→ inputs` / `← outputs` channel labels for a quiet gutter cue + `status` strip), `ReviewShell.jsx` (lifted details state, global `d`/`D`/`f`/`F`/`?` keys), `FileDiffView.jsx` (`paused` prop), and the new `KeyboardHelp.jsx`. The `prev` reference and the `[prev]` read-only preview are speculative future work ([FUT-02], [FUT-03]) — no caller emits `prev` yet. A speculative implementation was prototyped this session and then removed before shipping (it was unreachable without a caller); the FUT entries document the design for when it's built. The 2026-05-31 audit closed the four items previously flagged: [UP-01] was reworded to match the shipped JetBrains Mono webfont (with platform-monospace fallback); [NV-13] was decomposed into NV-13a..d with a clause separating it from search-match positioning; and the two reverse-scan behaviors (active-row font zoom, single-file footer) were captured as [UP-05] and [IM.OUT-05]. The audit also decomposed three overloaded requirements ([AS-08], [IM.OUT-02], [FD-03]) into atomic forms.
+
+The 2026-06-09 change removed search mode ([SM-01]..[SM-06] retired — low value and limited) and repurposed its `n` key for review notes ([NV-19]): a list of free-text notes, added ambiently via a "+ note" control or converted from a rejection's reason ([CM-07]), surfaced in `output` as a `notes` array of `{note, file?, line?}` ([IM.OUT-06]). To stop a single keystroke from discarding hard-to-recreate text, the keyboard rejection-delete (`Shift+R`) was dropped ([NV-10] retired; deleting a rejection is now mouse-only via CM-06's "Delete", which confirms), note/reason deletion is explicit and confirmed ([NV-12], [NV-19]), and there is no single-key note clear. The same change documented two behaviors shipped earlier as drift: zoom keys ([NV-20] — `=` / `-`, `0` resets, no modifier) and the case-insensitive `d` / `f` toggles ([NV-17], [DD-16]); the toggles now ignore modified keypresses, fixing `Cmd+F` also toggling the sidebar.
 
 > **Version note:** the product version in `.claude-plugin/plugin.json` and this spec's version (`v0.2`) move independently — PD-01/PD-05 treat plugin.json as the product-version source of truth — so a mismatch between them is expected, not drift.
 
@@ -22,7 +24,7 @@ The 2026-06-05 details-panel work shipped four active requirements (implemented 
 | [FD-08] | Binary file detection | Done |
 | [FD-09] | Dim reviewed hunks | Done |
 
-### Navigation (NV) — 22/22
+### Navigation (NV) — 23/23
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -35,10 +37,10 @@ The 2026-06-05 details-panel work shipped four active requirements (implemented 
 | [NV-07] | r reject current hunk | Done |
 | [NV-08] | i open in editor | Done |
 | [NV-09] | Click current hunk marks reviewed | Done |
-| [NV-10] | R (shift+r) unreject current hunk | Done |
-| [NV-11] | Inline rejection reason input | Done |
-| [NV-12] | Persistent rejection reason note | Done |
-| [NV-13] | Hunk-navigation viewport positioning (umbrella; search-match positioning is separate) | Done |
+| ~~[NV-10]~~ | Removed — keyboard rejection-delete dropped; use context menu (CM-06) | — |
+| [NV-11] | Inline rejection reason input (auto-grows; "Convert to note" CTA) | Done |
+| [NV-12] | Persistent rejection reason note; ✕ confirms before removing | Done |
+| [NV-13] | Hunk-navigation viewport positioning (umbrella) | Done |
 | [NV-13a] | Don't scroll if hunk already fully visible | Done |
 | [NV-13b] | One line of context above, hunk first line on second row | Done |
 | [NV-13c] | Flush-to-top (first-line hunks) and flush-to-bottom (tall-hunk) edge cases | Done |
@@ -46,8 +48,10 @@ The 2026-06-05 details-panel work shipped four active requirements (implemented 
 | [NV-14] | Shift+J marks file reviewed and advances to next file | Done |
 | [NV-15] | Shift+K navigates to previous file | Done |
 | [NV-16] | Transient error toast when open-in-editor fails | Done |
-| [NV-17] | d/D expand/collapse input details panel | Done |
+| [NV-17] | d toggles input details panel (either case) | Done |
 | [NV-18] | `?` toggles keyboard-shortcuts overlay | Done |
+| [NV-19] | n / "+ note" opens notes panel; list of notes, inline edit, confirmed delete | Done |
+| [NV-20] | =/-/0 zoom in/out/reset, no modifier | Done |
 
 ### Directory Diff (DD) — 16/16
 
@@ -68,20 +72,15 @@ The 2026-06-05 details-panel work shipped four active requirements (implemented 
 | [DD-13] | Quit dialog "Approve anyway" exits 0 with unreviewed hunks | Done |
 | [DD-14] | Quit dialog keyboard nav (Tab, arrows, Enter, Escape) | Done |
 | [DD-15] | Rename/move detection (`git mv`) — single entry instead of L+R | Done |
-| [DD-16] | f/F show/hide sidebar (keyboard companion to DD-11) | Done |
+| [DD-16] | f toggles sidebar, either case (keyboard companion to DD-11) | Done |
 
-### Search Mode (SM) — 6/6
+### Search Mode (SM) — removed
 
-| Req | Description | Status |
-|-----|-------------|--------|
-| [SM-01] | Cmd+F enters search mode | Done |
-| [SM-02] | Match all content, not just hunks | Done |
-| [SM-03] | Hide non-matching files in sidebar | Done |
-| [SM-04] | Dim non-matching hunks | Done |
-| [SM-05] | n/N jump between matches | Done |
-| [SM-06] | Escape exits search mode | Done |
+Search mode was removed (low value, limited capability); [SM-01]..[SM-06] are
+retired and excluded from the coverage count. The `n` / `N` keys are
+repurposed for review notes ([NV-19]).
 
-### Context Menu (CM) — 6/6
+### Context Menu (CM) — 7/7
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -90,7 +89,8 @@ The 2026-06-05 details-panel work shipped four active requirements (implemented 
 | [CM-03] | Mark as unreviewed | Done |
 | [CM-04] | Reject | Done |
 | [CM-05] | Open in editor | Done |
-| [CM-06] | Unreject (when hunk is rejected) | Done |
+| [CM-06] | Delete rejection (when hunk is rejected); confirms before discarding a typed reason | Done |
+| [CM-07] | Convert rejection to note (moves reason + location into notes, deletes rejection) | Done |
 
 ### Review Feedback (RV) — 2/2
 
@@ -142,7 +142,7 @@ The 2026-06-05 details-panel work shipped four active requirements (implemented 
 | [AS-08e] | Single available component → that component alone | Done |
 | [AS-08f] | No `moor —` title prefix | Done |
 
-### Interaction Model (IM) — 10/10
+### Interaction Model (IM) — 11/11
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -150,12 +150,13 @@ The 2026-06-05 details-panel work shipped four active requirements (implemented 
 | [IM-02] | Warning banner when no context channel is configured | Done |
 | [IM.IN-01] | Render `input.title` + `input.details` in header (caller-defined shape); reveal via hover/click/`d`-`D` | Done |
 | [IM.IN-02] | Label-less changeset header: location eyebrow + message headline always visible; expand reveals body + provenance grid | Done |
-| [IM.OUT-01] | Stream `output` writes, flushing on every hunk state change | Done |
+| [IM.OUT-01] | Stream `output` writes, flushing on every hunk state change and note edit | Done |
 | [IM.OUT-02a] | Output always includes `reviewer` + `rejections[{file,hunk,line,reason}]` | Done |
 | [IM.OUT-02b] | `exitCode` present only after exit (finalization signal) | Done |
 | [IM.OUT-03] | Rejection badges in header's output region | Done |
 | [IM.OUT-04] | Review progress in header's output region | Done |
 | [IM.OUT-05] | Single-file-mode footer progress bar (q-to-close, rejection count) | Done |
+| [IM.OUT-06] | Output includes optional `note` string (free-text agent guidance) | Done |
 
 ### User Preferences (UP) — 5/5
 

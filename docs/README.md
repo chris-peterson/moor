@@ -83,11 +83,11 @@ Navigation is vim-style and keyboard-first. The essentials:
 | `j` / `k` | Next / previous change |
 | `r` | Reject current change (prompts for an optional reason) |
 | `i` | Open current change in your editor at its line |
-| `Cmd+F` | Enter search mode |
+| `n` | Open the review-notes panel |
 | `q` / `Escape` | Close |
 
 See [Keyboard shortcuts](/keyboard) for the full reference — file navigation,
-scrolling, the reason box, search, and the quit dialog.
+scrolling, the reason box, review notes, and the quit dialog.
 
 ## Review feedback channel
 
@@ -100,9 +100,11 @@ moor --context ./review.json old-dir/ new-dir/
 ```
 
 The caller writes `input` (a `title` and `details` rendered in moor's header);
-moor streams `output` back — `exitCode`, `reviewer`, and a `rejections` array
-of `{file, hunk, line, reason}` — flushing on every state change. When no
-channel is configured, moor shows a banner and still works as a plain viewer.
+moor streams `output` back — `exitCode`, `reviewer`, a `rejections` array of
+`{file, hunk, line, reason}`, and an optional `notes` array of
+`{note, file?, line?}` (free-text guidance for minor tweaks) — flushing on every
+state change. When no channel is configured, moor shows a banner and still works
+as a plain viewer.
 
 ## Reference
 

@@ -1,6 +1,8 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
 contextBridge.exposeInMainWorld('moor', {
+  zoomBy: (delta) => webFrame.setZoomLevel(webFrame.getZoomLevel() + delta),
+  zoomReset: () => webFrame.setZoomLevel(0),
   readFile: (filePath) => ipcRenderer.invoke('read-file', { filePath }),
   readFileAsDataUrl: (filePath) => ipcRenderer.invoke('read-file-as-data-url', { filePath }),
   compareDirectories: (leftPath, rightPath) => ipcRenderer.invoke('compare-directories', { leftPath, rightPath }),

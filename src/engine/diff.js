@@ -229,6 +229,25 @@ export function computeHunkStartLines(leftContent, rightContent) {
   return starts;
 }
 
+// Count added / removed lines between two file versions, matching git's
+// +/- stat semantics: a changed line is one removal plus one addition. Binary
+// files report zero (the line model doesn't apply).
+export function computeContentLineStats(leftContent, rightContent) {
+  if (leftContent === BINARY_SENTINEL || rightContent === BINARY_SENTINEL) {
+    return { added: 0, removed: 0 };
+  }
+  const leftLines = leftContent ? leftContent.split('\n') : [];
+  const rightLines = rightContent ? rightContent.split('\n') : [];
+  const hunks = computeLineChanges(leftLines, rightLines);
+  let added = 0;
+  let removed = 0;
+  for (const h of hunks) {
+    if (h.type === 'insert') added += h.newEnd - h.newStart + 1;
+    else if (h.type === 'delete') removed += h.oldEnd - h.oldStart + 1;
+  }
+  return { added, removed };
+}
+
 export function diffLines(oldText, newText) {
   const oldLines = oldText.length === 0 ? [] : oldText.split('\n');
   const newLines = newText.length === 0 ? [] : newText.split('\n');

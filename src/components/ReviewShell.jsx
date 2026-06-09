@@ -4,7 +4,7 @@ import FileDiffView from './FileDiffView.jsx';
 import FileNavbar from './FileNavbar.jsx';
 import ContextHeader, { hasExpandableDetails } from './ContextHeader.jsx';
 import KeyboardHelp from './KeyboardHelp.jsx';
-import { computeLineChanges, countDisplayHunks, computeHunkStartLines, BINARY_SENTINEL } from '../engine/diff.js';
+import { computeLineChanges, countDisplayHunks, computeHunkStartLines, computeContentLineStats, BINARY_SENTINEL } from '../engine/diff.js';
 
 const emptySet = new Set();
 const emptyMap = new Map();
@@ -57,6 +57,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   const [targetHunk, setTargetHunk] = useState(null);
   const [showToast, setShowToast] = useState(false);
   const [hunkCounts, setHunkCounts] = useState({});
+  const [lineStats, setLineStats] = useState({});
   const [perFileReviewedHunks, setPerFileReviewedHunks] = useState({});
   const [perFileRejectedHunks, setPerFileRejectedHunks] = useState({});
   const [perFileRejectionReasons, setPerFileRejectionReasons] = useState({});
@@ -64,17 +65,79 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   const [sidebarWidth, setSidebarWidth] = useState(220);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [draggingSidebar, setDraggingSidebar] = useState(false);
-  const [searchQuery, setSearchQuery] = useState(null);
   const [fileContents, setFileContents] = useState({});
   const [quitDialog, setQuitDialog] = useState(null);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  // NV-19: a list of review notes. Each is { id, note, file, line } — file/line
+  // are null for an ambient note (the "+ note" CTA) and carry the source change
+  // for a note converted from a rejection (CM-07).
+  const [notes, setNotes] = useState([]);
+  const [notesPanelOpen, setNotesPanelOpen] = useState(false);
+  const noteIdRef = useRef(0);
+
+  const totalLineStats = useMemo(() => {
+    let added = 0;
+    let removed = 0;
+    for (const s of Object.values(lineStats)) {
+      added += s.added;
+      removed += s.removed;
+    }
+    return { added, removed };
+  }, [lineStats]);
 
   // Gate the d/D keys on the same predicate ContextHeader uses for its expand
-  // affordance, so the keyboard toggle and the on-screen button agree.
-  const hasDetails = useMemo(() => hasExpandableDetails(inputContext), [inputContext]);
+  // affordance, so the keyboard toggle and the on-screen button agree. The
+  // header expands for either context details or a non-empty line-change stat.
+  const hasDetails = useMemo(
+    () => hasExpandableDetails(inputContext) || totalLineStats.added > 0 || totalLineStats.removed > 0,
+    [inputContext, totalLineStats],
+  );
 
   const toggleDetails = useCallback(() => setDetailsExpanded(v => !v), []);
+
+  // Append a note. `partial` is { note?, file?, line? } — convert-to-note
+  // (CM-07) passes the reason text plus the source file/line; the "+ note" CTA
+  // and the `n` key pass nothing and open the panel on a fresh ambient note.
+  const addNote = useCallback((partial = {}) => {
+    const id = ++noteIdRef.current;
+    setNotes(prev => [...prev, {
+      id,
+      note: partial.note ?? '',
+      file: partial.file ?? null,
+      line: partial.line ?? null,
+    }]);
+    return id;
+  }, []);
+
+  const updateNote = useCallback((id, text) => {
+    setNotes(prev => prev.map(n => (n.id === id ? { ...n, note: text } : n)));
+  }, []);
+
+  const deleteNote = useCallback((id) => {
+    setNotes(prev => prev.filter(n => n.id !== id));
+  }, []);
+
+  // The `n` key / "+ note" CTA: open the panel, seeding an empty ambient note
+  // to type into when there are none yet. Empty notes are pruned on close.
+  const openNotes = useCallback(() => {
+    setNotes(prev => (prev.length === 0 ? [{ id: ++noteIdRef.current, note: '', file: null, line: null }] : prev));
+    setNotesPanelOpen(true);
+  }, []);
+
+  // Drop empty notes when the panel closes so a seeded-but-unused note vanishes.
+  const closeNotes = useCallback(() => {
+    setNotes(prev => prev.filter(n => n.note.trim()));
+    setNotesPanelOpen(false);
+  }, []);
+
+  // The cleaned, output-ready shape: trimmed text, location only when present,
+  // no internal id.
+  const outNotes = useMemo(() => notes
+    .map(n => ({ note: (n.note || '').trim(), file: n.file, line: n.line }))
+    .filter(n => n.note)
+    .map(n => ({ note: n.note, ...(n.file ? { file: n.file } : {}), ...(n.line != null ? { line: n.line } : {}) })),
+    [notes]);
 
   const handleSidebarResizerMouseDown = useCallback((e) => {
     e.preventDefault();
@@ -105,12 +168,15 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
       if (cancelled) return;
       const counts = {};
       const contents = {};
+      const stats = {};
       for (let i = 0; i < entries.length; i++) {
         contents[i] = entries[i];
         counts[i] = hunkCountFor(entries[i].left, entries[i].right);
+        stats[i] = computeContentLineStats(entries[i].left, entries[i].right);
       }
       setHunkCounts(counts);
       setFileContents(contents);
+      setLineStats(stats);
     })();
     return () => { cancelled = true; };
   }, [api, files]);
@@ -200,24 +266,6 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   const currentRejectionReasons = perFileRejectionReasons[currentIndex] || emptyMap;
   const handleRejectionReasonsChange = useIndexedSetter(setPerFileRejectionReasons, currentIndex, emptyMap);
 
-  const handleSearchChange = useCallback((query) => {
-    setSearchQuery(query);
-  }, []);
-
-  const searchHiddenFiles = useMemo(() => {
-    if (!searchQuery) return null;
-    const q = searchQuery.toLowerCase();
-    const hidden = new Set();
-    for (let i = 0; i < files.length; i++) {
-      const c = fileContents[i];
-      if (!c) continue;
-      const leftMatch = c.left && c.left.toLowerCase().includes(q);
-      const rightMatch = c.right && c.right.toLowerCase().includes(q);
-      if (!leftMatch && !rightMatch) hidden.add(i);
-    }
-    return hidden;
-  }, [searchQuery, files, fileContents]);
-
   const totalRejected = Object.values(perFileRejectedHunks).reduce((n, s) => n + s.size, 0);
 
   const rejectedFiles = useMemo(() => {
@@ -287,27 +335,28 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
       rejected: totalRejected,
       unreviewed: Math.max(0, unreviewed),
       rejections: liveRejections,
+      notes: outNotes.length ? outNotes : undefined,
     };
     return () => { window.__moorQuitState = null; };
-  }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalRejected, liveRejections]);
+  }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalRejected, liveRejections, outNotes]);
 
   useEffect(() => {
     if (!api?.writeOutput) return;
     // Coalesce rapid state changes (typing a rejection reason fires per-keystroke
     // effects) into one IPC write per frame.
     const handle = requestAnimationFrame(() => {
-      api.writeOutput({ rejections: liveRejections });
+      api.writeOutput({ rejections: liveRejections, ...(outNotes.length ? { notes: outNotes } : {}) });
     });
     return () => cancelAnimationFrame(handle);
-  }, [api, liveRejections]);
+  }, [api, liveRejections, outNotes]);
 
   const closeWithExitCode = useCallback((exitCode) => {
     if (window.moor?.forceClose) {
-      window.moor.forceClose({ exitCode, rejections: liveRejections });
+      window.moor.forceClose({ exitCode, rejections: liveRejections, ...(outNotes.length ? { notes: outNotes } : {}) });
     } else {
       onClose();
     }
-  }, [liveRejections, onClose]);
+  }, [liveRejections, outNotes, onClose]);
 
   const unreviewedCount = Math.max(0, totalChanges - reviewedChanges - totalRejected);
 
@@ -352,6 +401,11 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
 
+      // Ignore keys chorded with a modifier — Cmd+F, Cmd+D, Cmd+=, etc. belong
+      // to the OS / app menu. Without this, e.g. Cmd+F would also fire the bare
+      // `f` sidebar toggle.
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
       // NV-18: the help overlay takes precedence; ? or Escape dismisses it.
       if (helpOpen) {
         if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); setHelpOpen(false); }
@@ -359,7 +413,10 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
       }
       if (e.key === '?') { e.preventDefault(); setHelpOpen(true); return; }
 
-      if (searchQuery != null) return;
+      if (notesPanelOpen) {
+        if (e.key === 'Escape') { e.preventDefault(); closeNotes(); }
+        return;
+      }
 
       if (quitDialog) {
         if (e.key === 'Escape') {
@@ -370,19 +427,33 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
       }
 
       switch (e.key) {
-        case 'd': // NV-17
-          if (hasDetails) { e.preventDefault(); setDetailsExpanded(true); }
+        case 'd': // NV-17: either casing toggles details
+        case 'D':
+          if (hasDetails) { e.preventDefault(); toggleDetails(); }
           break;
-        case 'D': // NV-17
-          if (hasDetails) { e.preventDefault(); setDetailsExpanded(false); }
-          break;
-        case 'f': // DD-16
+        case 'f': // DD-16: either casing toggles the file sidebar
+        case 'F':
           e.preventDefault();
-          setSidebarCollapsed(false);
+          setSidebarCollapsed(v => !v);
           break;
-        case 'F': // DD-16
+        case '=': // zoom in — no modifier required
+        case '+':
           e.preventDefault();
-          setSidebarCollapsed(true);
+          api?.zoomBy?.(1);
+          break;
+        case '-': // zoom out
+        case '_':
+          e.preventDefault();
+          api?.zoomBy?.(-1);
+          break;
+        case '0': // reset zoom
+          e.preventDefault();
+          api?.zoomReset?.();
+          break;
+        case 'n': // NV-19: open the notes panel (seeds an ambient note if empty)
+        case 'N':
+          e.preventDefault();
+          openNotes();
           break;
         case 'q':
         case 'Escape':
@@ -394,7 +465,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [requestClose, searchQuery, quitDialog, helpOpen, hasDetails]);
+  }, [requestClose, quitDialog, helpOpen, hasDetails, toggleDetails, api, notesPanelOpen, openNotes, closeNotes]);
 
   useEffect(() => {
     if (shellRef.current) shellRef.current.focus();
@@ -440,6 +511,9 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
         onNavigateToRejection={navigateToRejection}
         detailsExpanded={detailsExpanded}
         onToggleDetails={toggleDetails}
+        lineStats={totalLineStats}
+        noteCount={outNotes.length}
+        onOpenNotes={openNotes}
       />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {draggingSidebar && (
@@ -477,7 +551,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
               onSelect={navigateTo}
               width={sidebarWidth}
               onCollapse={() => setSidebarCollapsed(true)}
-              hiddenFiles={searchHiddenFiles}
+              fileStats={lineStats}
             />
             <div
               onMouseDown={handleSidebarResizerMouseDown}
@@ -514,7 +588,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
               onRejectedHunksChange={handleRejectedHunksChange}
               rejectionReasons={currentRejectionReasons}
               onRejectionReasonsChange={handleRejectionReasonsChange}
-              onSearchChange={handleSearchChange}
+              onAddNote={addNote}
               paused={helpOpen}
             />
           ) : (
@@ -535,6 +609,16 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
           onSendReviewFeedback={() => closeWithExitCode(1)}
           onQuitAnyway={() => closeWithExitCode(2)}
           onApproveAnyway={() => closeWithExitCode(0)}
+        />
+      )}
+      {notesPanelOpen && (
+        <NotesPanel
+          notes={notes}
+          basePath={rightPath || leftPath}
+          onAdd={() => addNote()}
+          onUpdate={updateNote}
+          onDelete={deleteNote}
+          onClose={closeNotes}
         />
       )}
       {helpOpen && <KeyboardHelp onClose={() => setHelpOpen(false)} />}
@@ -628,7 +712,7 @@ function QuitDialog({ mode, rejectedCount, unreviewedCount, rejectionSummary, on
                 <ul style={{ margin: '4px 0 0 0', paddingLeft: '18px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                   {items.map(({ hunk, reason }) => (
                     <li key={hunk}>
-                      hunk {hunk + 1}{reason ? `: ${reason}` : ' (no reason)'}
+                      change {hunk + 1}{reason ? `: ${reason}` : ' (no reason)'}
                     </li>
                   ))}
                 </ul>
@@ -655,6 +739,133 @@ function QuitDialog({ mode, rejectedCount, unreviewedCount, rejectionSummary, on
           <button style={baseBtn} onClick={onCancel}>Cancel</button>
           <button style={baseBtn} onClick={onApproveAnyway}>Approve anyway</button>
           <button style={primaryBtn} onClick={onQuitAnyway} autoFocus>Quit anyway</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// NV-19: the review-notes panel — a list of free-text notes for the agent.
+// Ambient notes (the "+ note" CTA / `n` key) carry no location; notes converted
+// from a rejection (CM-07) carry the source file and line. Editing is inline;
+// deleting a note confirms first, since a typed note is hard to recreate.
+function NotesPanel({ notes, basePath, onAdd, onUpdate, onDelete, onClose }) {
+  const [confirmingId, setConfirmingId] = useState(null);
+  const lastRef = useRef(null);
+
+  // Focus the newest note's textarea when the panel opens or a note is added.
+  useEffect(() => {
+    if (lastRef.current) {
+      lastRef.current.focus();
+      const len = lastRef.current.value.length;
+      lastRef.current.setSelectionRange(len, len);
+    }
+  }, [notes.length]);
+
+  const overlay = {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0, 0, 0, 0.55)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2000,
+    fontFamily: 'var(--font-ui)',
+  };
+  const dialog = {
+    background: 'var(--bg-surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    padding: '20px 24px',
+    minWidth: '520px',
+    maxWidth: '680px',
+    color: 'var(--text-primary)',
+    boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)',
+  };
+  const heading = { margin: '0 0 6px 0', fontSize: '15px', fontWeight: 600 };
+  const sub = { fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' };
+  const list = { display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '50vh', overflow: 'auto', margin: '12px 0' };
+  const card = { border: '1px solid var(--border)', borderRadius: '4px', padding: '8px 10px', background: 'var(--bg-deep)' };
+  const cardTop = { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px', minHeight: '16px' };
+  const locStyle = { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--color-right)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+  const ambientStyle = { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' };
+  const footer = { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '14px' };
+  const baseBtn = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '13px',
+    padding: '6px 14px',
+    borderRadius: '4px',
+    border: '1px solid var(--border)',
+    background: 'var(--bg-deep)',
+    color: 'var(--text-primary)',
+    cursor: 'pointer',
+  };
+  const primaryBtn = { ...baseBtn, background: 'var(--color-accent)', borderColor: 'var(--color-accent)', color: 'var(--bg-deep)', fontWeight: 600 };
+  const linkBtn = { ...baseBtn, background: 'transparent', color: 'var(--color-accent)', borderColor: 'var(--color-accent-border)' };
+  const xBtn = { background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px', lineHeight: 1, padding: '0 2px' };
+  const confirmBtn = { ...baseBtn, padding: '2px 8px', fontSize: '11px', color: 'var(--color-conflict)', borderColor: 'var(--color-conflict)' };
+  const keepBtn = { ...baseBtn, padding: '2px 8px', fontSize: '11px' };
+
+  const textareaStyle = {
+    width: '100%',
+    boxSizing: 'border-box',
+    padding: '6px 8px',
+    fontSize: '13px',
+    fontFamily: 'var(--font-ui)',
+    background: 'var(--bg-surface)',
+    color: 'var(--text-primary)',
+    border: '1px solid var(--border)',
+    borderRadius: '3px',
+    outline: 'none',
+    resize: 'vertical',
+  };
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div
+        style={dialog}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') onClose(); }}
+        role="dialog"
+        aria-modal="true"
+      >
+        <h2 style={heading}>Review notes</h2>
+        <div style={sub}>Free-text guidance for the agent — minor tweaks, separate from rejections.</div>
+        <div style={list}>
+          {notes.length === 0 && (
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px 0' }}>No notes yet.</div>
+          )}
+          {notes.map((n, i) => (
+            <div key={n.id} style={card}>
+              <div style={cardTop}>
+                {n.file
+                  ? <span style={locStyle}>{relativePath(n.file, basePath)}{n.line != null ? `:${n.line}` : ''}</span>
+                  : <span style={ambientStyle}>note</span>}
+                <div style={{ flex: 1 }} />
+                {confirmingId === n.id ? (
+                  <>
+                    <button type="button" style={confirmBtn} onClick={() => onDelete(n.id)}>Delete</button>
+                    <button type="button" style={keepBtn} onClick={() => setConfirmingId(null)}>Keep</button>
+                  </>
+                ) : (
+                  <button type="button" style={xBtn} title="Delete note" onClick={() => setConfirmingId(n.id)}>✕</button>
+                )}
+              </div>
+              <textarea
+                ref={i === notes.length - 1 ? lastRef : null}
+                value={n.note}
+                onChange={(e) => onUpdate(n.id, e.target.value)}
+                rows={2}
+                placeholder="Note for the agent…"
+                style={textareaStyle}
+              />
+            </div>
+          ))}
+        </div>
+        <div style={footer}>
+          <button type="button" style={linkBtn} onClick={onAdd}>+ Add note</button>
+          <div style={{ flex: 1 }} />
+          <button type="button" style={primaryBtn} onClick={onClose}>Done</button>
         </div>
       </div>
     </div>

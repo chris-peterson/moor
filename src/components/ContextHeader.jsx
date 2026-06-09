@@ -43,6 +43,9 @@ export function ContextHeader({
   onNavigateToRejection,
   detailsExpanded = false,
   onToggleDetails,
+  lineStats = null,
+  noteCount = 0,
+  onOpenNotes,
 }) {
   if (!channelConfigured) {
     return (
@@ -83,7 +86,8 @@ export function ContextHeader({
   });
   const hasLocation = !!(project || branch);
   const hasEyebrow = hasLocation || !!task;
-  const hasGrid = secondary.length > 0;
+  const hasLineStats = !!(lineStats && (lineStats.added > 0 || lineStats.removed > 0));
+  const hasGrid = secondary.length > 0 || hasLineStats;
   // Expanding reveals the full message (subject headline + body) plus provenance.
   const hasExpandable = !!body || hasGrid;
 
@@ -94,7 +98,7 @@ export function ContextHeader({
       {hasInput && (
         <div style={styles.changeRegion}>
           <div style={styles.gutter('left')} />
-          <div style={styles.changeTop}>
+          <div style={styles.changeMain}>
             {hasEyebrow && (
               <div style={styles.eyebrow}>
                 {project && <span style={styles.eyebrowProject}>{project}</span>}
@@ -104,36 +108,46 @@ export function ContextHeader({
                 {task && <span style={styles.eyebrowTask}>{task}</span>}
               </div>
             )}
-            {hasExpandable && (
+            <div style={styles.headline}>{context.title}</div>
+            {detailsExpanded && body && (
+              <div style={styles.bodyText}>{body}</div>
+            )}
+          </div>
+
+          {hasExpandable && (
+            <div style={styles.changeAside}>
               <button
                 type="button"
                 onClick={() => onToggleDetails?.()}
                 style={styles.expandButton(detailsExpanded)}
                 aria-expanded={detailsExpanded}
                 aria-label={detailsExpanded ? 'Hide details' : 'Show details'}
-                title={detailsExpanded ? 'Hide details (D)' : 'Show details (d)'}
+                title={detailsExpanded ? 'Hide details (d)' : 'Show details (d)'}
               >
                 <span>details</span>
                 <span style={styles.expandChevron(detailsExpanded)}>▾</span>
               </button>
-            )}
-          </div>
-
-          <div style={styles.headline}>{context.title}</div>
-
-          {detailsExpanded && body && (
-            <div style={styles.bodyText}>{body}</div>
-          )}
-
-          {detailsExpanded && hasGrid && (
-            <dl style={styles.grid}>
-              {secondary.map(({ label, value }, i) => (
-                <React.Fragment key={`${label}-${i}`}>
-                  <dt style={styles.gridLabel}>{label}</dt>
-                  <dd style={styles.gridValue}>{value}</dd>
-                </React.Fragment>
-              ))}
-            </dl>
+              {detailsExpanded && hasGrid && (
+                <dl style={styles.grid}>
+                  {secondary.map(({ label, value }, i) => (
+                    <React.Fragment key={`${label}-${i}`}>
+                      <dt style={styles.gridLabel}>{label}</dt>
+                      <dd style={styles.gridValue}>{value}</dd>
+                    </React.Fragment>
+                  ))}
+                  {hasLineStats && (
+                    <>
+                      <dt style={styles.gridLabel}>lines</dt>
+                      <dd style={styles.gridValue}>
+                        <span style={styles.statRemoved}>−{lineStats.removed}</span>
+                        {' '}
+                        <span style={styles.statAdded}>+{lineStats.added}</span>
+                      </dd>
+                    </>
+                  )}
+                </dl>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -156,6 +170,21 @@ export function ContextHeader({
               <span style={styles.badgeName}>{name}</span>
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => onOpenNotes?.()}
+            style={styles.noteChip}
+            title={noteCount ? `${noteCount} review note${noteCount === 1 ? '' : 's'} — click to manage` : 'Add a review note'}
+          >
+            {noteCount > 0 ? (
+              <>
+                <span style={styles.noteChipLabel}>notes</span>
+                <span style={styles.noteChipCount}>{noteCount}</span>
+              </>
+            ) : (
+              <span style={styles.noteChipLabel}>+ note</span>
+            )}
+          </button>
         </div>
 
         <div style={styles.progressGroup}>
@@ -222,7 +251,10 @@ const styles = {
 
   // The change region is a label-less block: a colored gutter marks it as the
   // incoming change context, and the content (eyebrow + headline) speaks for
-  // itself — no "INPUTS" channel jargon.
+  // itself — no "INPUTS" channel jargon. Two columns: the message on the left,
+  // the details button + provenance card on the right. The right column fills
+  // the vertical space beside the message rather than stacking beneath it, so
+  // expanding doesn't make the header taller than the message already is.
   changeRegion: {
     position: 'relative',
     paddingLeft: '14px',
@@ -231,15 +263,25 @@ const styles = {
     paddingBottom: '10px',
     borderBottom: '1px solid var(--border)',
     display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: '16px',
+  },
+
+  changeMain: {
+    flex: '1 1 auto',
+    minWidth: 0,
+    display: 'flex',
     flexDirection: 'column',
     gap: '5px',
   },
 
-  changeTop: {
+  changeAside: {
+    flexShrink: 0,
     display: 'flex',
-    alignItems: 'flex-start',
-    gap: '12px',
-    minHeight: '18px',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: '6px',
   },
 
   // Eyebrow: where the change lives. Always visible (location is context you
@@ -303,7 +345,6 @@ const styles = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '5px',
-    marginLeft: 'auto',
     border: '1px solid var(--border)',
     background: expanded ? 'var(--bg-hover)' : 'transparent',
     color: 'var(--text-secondary)',
@@ -327,19 +368,35 @@ const styles = {
     lineHeight: 1,
   }),
 
-  // Expanded: the rest of the story — an aligned label/value property grid.
+  // Expanded: the rest of the story — an aligned label/value property grid,
+  // a compact card in the right column.
   grid: {
-    margin: '3px 0 2px 0',
-    padding: '10px 14px',
+    margin: 0,
+    padding: '8px 12px',
     background: 'var(--bg-deep)',
     border: '1px solid var(--border)',
     borderRadius: '4px',
     display: 'grid',
-    gridTemplateColumns: 'max-content 1fr',
-    columnGap: '16px',
-    rowGap: '5px',
+    gridTemplateColumns: 'max-content minmax(0, 1fr)',
+    columnGap: '14px',
+    rowGap: '4px',
     alignItems: 'baseline',
     animation: 'details-reveal 0.18s ease',
+    minWidth: '220px',
+    maxWidth: '460px',
+    boxSizing: 'border-box',
+  },
+
+  // Line-change stat: matches the diff view's added (right) / removed (left)
+  // colors so the counts read the same as the highlighted lines.
+  statAdded: {
+    color: 'var(--color-right)',
+    fontWeight: 600,
+  },
+
+  statRemoved: {
+    color: 'var(--color-left)',
+    fontWeight: 600,
   },
 
   gridLabel: {
@@ -421,6 +478,38 @@ const styles = {
 
   badgeName: {
     color: 'var(--text-primary)',
+  },
+
+  // The review-notes control (NV-19) reads as a status chip in the accent
+  // color — distinct from the red rejection badges since notes are non-blocking.
+  // Doubles as the "+ note" CTA when there are none yet.
+  noteChip: {
+    display: 'inline-flex',
+    alignItems: 'baseline',
+    gap: '6px',
+    padding: '2px 8px',
+    background: 'var(--color-accent-bg)',
+    border: '1px solid var(--color-accent-border)',
+    color: 'var(--text-primary)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '11px',
+    cursor: 'pointer',
+    borderRadius: '2px',
+    flexShrink: 0,
+  },
+
+  noteChipLabel: {
+    color: 'var(--color-accent)',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    fontSize: '9px',
+    letterSpacing: '0.1em',
+    flexShrink: 0,
+  },
+
+  noteChipCount: {
+    color: 'var(--text-primary)',
+    fontWeight: 700,
   },
 
   progressGroup: {

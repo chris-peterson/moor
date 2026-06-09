@@ -30,6 +30,7 @@ function buildClosePayload() {
   return {
     exitCode,
     rejections: state?.rejections || [],
+    ...(state?.notes && state.notes.length ? { notes: state.notes } : {}),
   };
 }
 

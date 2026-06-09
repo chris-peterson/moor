@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { diffLines, diffChars, computeLineChanges } from './diff.js';
+import { diffLines, diffChars, computeLineChanges, computeContentLineStats, BINARY_SENTINEL } from './diff.js';
 
 describe('computeLineChanges', () => {
   test('identical arrays produce a single equal hunk', () => {
@@ -88,5 +88,37 @@ describe('diffChars (hybrid word/char)', () => {
     const inserted = parts.filter(p => p.type === 'insert').map(p => p.value).join('');
     assert.equal(deleted, 'true');
     assert.equal(inserted, 'false');
+  });
+});
+
+describe('computeContentLineStats', () => {
+  test('counts pure additions', () => {
+    const stats = computeContentLineStats('a\nc', 'a\nb\nc');
+    assert.deepEqual(stats, { added: 1, removed: 0 });
+  });
+
+  test('counts pure deletions', () => {
+    const stats = computeContentLineStats('a\nb\nc', 'a\nc');
+    assert.deepEqual(stats, { added: 0, removed: 1 });
+  });
+
+  test('a changed line counts as one removal and one addition', () => {
+    const stats = computeContentLineStats('a\nb\nc', 'a\nB\nc');
+    assert.deepEqual(stats, { added: 1, removed: 1 });
+  });
+
+  test('identical content has no changes', () => {
+    const stats = computeContentLineStats('a\nb', 'a\nb');
+    assert.deepEqual(stats, { added: 0, removed: 0 });
+  });
+
+  test('empty side reports the other side as added/removed', () => {
+    assert.deepEqual(computeContentLineStats('', 'a\nb'), { added: 2, removed: 0 });
+    assert.deepEqual(computeContentLineStats('a\nb', ''), { added: 0, removed: 2 });
+  });
+
+  test('binary content reports zero', () => {
+    assert.deepEqual(computeContentLineStats(BINARY_SENTINEL, 'a'), { added: 0, removed: 0 });
+    assert.deepEqual(computeContentLineStats('a', BINARY_SENTINEL), { added: 0, removed: 0 });
   });
 });
