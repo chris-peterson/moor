@@ -62,7 +62,7 @@ function CharDiffSpans({ oldStr, newStr, side }) {
 
 function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick, onContextMenu, onGutterMouseDown, onRowEnter }) {
   const fontSize = active ? '15px' : '13px';
-  const dimmed = reviewed && !active;
+  const dimmed = reviewed;
 
   const barColor = active
     ? 'var(--color-accent)'
@@ -111,7 +111,7 @@ function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLe
   // old (left) side would be ambiguous. Pressing the right gutter starts the
   // click / drag / long-press gesture; code-area text stays selectable.
   // onMouseEnter extends a range drag. The left gutter is inert (a click on a
-  // changed row still marks it reviewed via the row's onClick).
+  // changed row still toggles its reviewed state via the row's onClick).
   return (
     <div
       onClick={isHunk ? onClick : undefined}
@@ -453,16 +453,23 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     setScrollLeft(0);
   }, [currentHunk, hunkRanges, viewportHeight, headerHeight]);
 
-  const markRowReviewed = useCallback((rowIdx) => {
-    const hIdx = rowToHunk.get(rowIdx);
-    if (hIdx == null) return;
+  const toggleHunkReviewed = useCallback((hIdx) => {
     setReviewedHunks(prev => {
       const next = new Set(prev);
-      next.add(hIdx);
+      if (next.has(hIdx)) next.delete(hIdx);
+      else next.add(hIdx);
       return next;
     });
+  }, [setReviewedHunks]);
+
+  // A plain click toggles the clicked row's hunk reviewed/unreviewed (NV-06)
+  // and focuses it.
+  const toggleRowReviewed = useCallback((rowIdx) => {
+    const hIdx = rowToHunk.get(rowIdx);
+    if (hIdx == null) return;
+    toggleHunkReviewed(hIdx);
     setCurrentHunk(hIdx);
-  }, [rowToHunk, setReviewedHunks]);
+  }, [rowToHunk, toggleHunkReviewed]);
 
   const markCurrentReviewed = useCallback(() => {
     setReviewedHunks(prev => {
@@ -560,9 +567,9 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       if (p.moved) {
         openComposerForRows(p.startRow, p.endRow);
       } else {
-        // Plain click: a changed line marks reviewed; an unchanged (context)
+        // Plain click: a changed line toggles reviewed; an unchanged (context)
         // line opens a single-line comment (CO-04).
-        if (rowToHunk.has(p.startRow)) markRowReviewed(p.startRow);
+        if (rowToHunk.has(p.startRow)) toggleRowReviewed(p.startRow);
         else openComposerForRows(p.startRow, p.startRow);
         setSelection(null);
       }
@@ -573,21 +580,14 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
     };
-  }, [openComposerForRows, markRowReviewed, rowToHunk]);
+  }, [openComposerForRows, toggleRowReviewed, rowToHunk]);
 
-  // Plain click on the code area marks reviewed (NV-06/09). Gutter clicks are
+  // Plain click on the code area toggles reviewed (NV-06). Gutter clicks are
   // owned by the gesture above, so ignore clicks that originate there.
   const handleRowClick = useCallback((e, rowIdx) => {
     if (e.target?.dataset?.gutter) return;
-    const hIdx = rowToHunk.get(rowIdx);
-    if (hIdx == null) return;
-    setReviewedHunks(prev => {
-      const next = new Set(prev);
-      next.add(hIdx);
-      return next;
-    });
-    setCurrentHunk(hIdx);
-  }, [rowToHunk, setReviewedHunks]);
+    toggleRowReviewed(rowIdx);
+  }, [toggleRowReviewed]);
 
   const handleRowContextMenu = useCallback((e, rowIdx) => {
     e.preventDefault();

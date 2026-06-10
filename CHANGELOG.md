@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
+
+### Breaking
+- **Sidecar `output` schema.** The `rejections` and `notes` arrays are replaced
+  by a single `comments` array of `{body, action, file?, startLine?, endLine?}`.
+  Callers that read `output.rejections` / `output.notes` must switch to
+  `output.comments` (exit code `1` now means one or more `fix-now` comments).
 
 ### Features
 - **Comments replace rejections and notes.** Per-hunk rejections and free-text
@@ -15,12 +21,29 @@
   lines, so you can flag a bug in neighboring code; each comment bands the lines
   it covers with an action-colored outline. Hunk review state is now binary
   (reviewed / unreviewed).
+- **Clicking a change toggles its reviewed state, and dims it on the spot.** A
+  reviewed change dims as soon as you click it — previously the dim appeared
+  only after you navigated away — and clicking a reviewed change again marks it
+  unreviewed.
+- **Two-column details panel.** The expanded details show the commit message on
+  the left and the provenance card on the right, with a removed/added
+  line-change stat (`−M +N`) and per-file counts as sidebar hover hints.
+  Expanding no longer grows the panel's height.
+- **Keyboard refinements.** The `d` (details) and `f` (sidebar) toggles are
+  case-insensitive, and bare `=` / `-` / `0` control zoom. Letter toggles ignore
+  modified keypresses, so `Cmd+F` no longer also toggles the sidebar.
 
-### Breaking
-- **Sidecar `output` schema.** The `rejections` and `notes` arrays are replaced
-  by a single `comments` array of `{body, action, file?, startLine?, endLine?}`.
-  Callers that read `output.rejections` / `output.notes` must switch to
-  `output.comments` (exit code `1` now means one or more `fix-now` comments).
+### Fixes
+- **Dragging a selection no longer scrolls the diff offscreen.** Selecting text
+  and dragging past the edge could auto-scroll the whole view away with no
+  scrollbar to recover; the clip containers no longer act as scroll containers.
+- **Destructive single-keystroke bindings removed.** Deleting review feedback
+  goes through a confirmed control rather than a bare keystroke, protecting
+  hard-to-recreate text.
+
+### Other
+- In-diff search was removed (it added little, and frees the `n` / `N` keys).
+- The user-facing label "hunk" is now "change" throughout the viewer.
 
 ## 0.7.0
 

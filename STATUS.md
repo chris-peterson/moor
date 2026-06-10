@@ -1,12 +1,14 @@
 # Status
 
-**Spec:** v0.2 | **Audited:** 2026-06-09 | **Coverage:** all non-deferred requirements have implementing code
+**Spec:** v0.2 | **Audited:** 2026-06-10 | **Coverage:** all non-deferred requirements have implementing code
 
-The 2026-06-09 comments redesign reconciled the former per-hunk rejections and free-text notes into one **comment** concept (new category [CO-01]..[CO-08], `src/engine/comments.js`). A comment carries a `body`, an `action` (`fix-now` / `fix-later` / `consider`, defaulting to `consider`), and a target — the changeset, a file, or a line range. Only `fix-now` gates the exit code (EC-01/02), earns the red sidebar/badge treatment, and gates the quit dialog; `fix-later` (amber) and `consider` (accent) are advisory. Hunk review state is now binary (reviewed / unreviewed) — "blocking" is a comment property, not a third hunk state. Range comments are created from the new (right) side's line-number gutter (drag = range, long-press = single line; a plain click marks a changed line reviewed but comments an unchanged context line, so neighboring code can be flagged — [CO-04]; the old/left gutter is inert, since feedback references the new file), by Space / Enter on the current hunk ([NV-07]), or by the context-menu "Comment" ([CM-04]); changeset and file comments come from the header / file-header controls ([CO-05]) and the comments panel ([CO-08], `n` key). Each range comment bands its covered lines with an action-colored outline ([CO-07]). The sidecar `output` now carries a single `comments[]` array ([IM.OUT-02a]) — `rejections[]` and `notes[]` are gone. Retired: [NV-11], [NV-12] (→ [CO-06]/[CO-07]), [CM-07] (→ the action control), [IM.OUT-06] (→ `comments[]`). The work landed in `comments.js` (action vocabulary + output projection), `ReviewShell.jsx` (comment state, CommentsPanel, fix-now badges/summary), `FileDiffView.jsx` (gutter gesture, composer, comment bars), `ContextHeader.jsx`, `Sidebar.jsx`, `Minimap.jsx`, `KeyboardHelp.jsx`, `App.jsx` (exit code), and `electron/main.js` (close-payload default).
+The 2026-06-09 comments redesign reconciled the former per-hunk rejections and free-text notes into one **comment** concept (new category [CO-01]..[CO-08], `src/engine/comments.js`). A comment carries a `body`, an `action` (`fix-now` / `fix-later` / `consider`, defaulting to `consider`), and a target — the changeset, a file, or a line range. Only `fix-now` gates the exit code (EC-01/02), earns the red sidebar/badge treatment, and gates the quit dialog; `fix-later` (amber) and `consider` (accent) are advisory. Hunk review state is now binary (reviewed / unreviewed) — "blocking" is a comment property, not a third hunk state. Range comments are created from the new (right) side's line-number gutter (drag = range, long-press = single line; a plain click toggles a changed line's reviewed state but comments an unchanged context line, so neighboring code can be flagged — [CO-04]; the old/left gutter is inert, since feedback references the new file), by Space / Enter on the current hunk ([NV-07]), or by the context-menu "Comment" ([CM-04]); changeset and file comments come from the header / file-header controls ([CO-05]) and the comments panel ([CO-08], `n` key). Each range comment bands its covered lines with an action-colored outline ([CO-07]). The sidecar `output` now carries a single `comments[]` array ([IM.OUT-02a]) — `rejections[]` and `notes[]` are gone. Retired: [NV-11], [NV-12] (→ [CO-06]/[CO-07]), [CM-07] (→ the action control), [IM.OUT-06] (→ `comments[]`). The work landed in `comments.js` (action vocabulary + output projection), `ReviewShell.jsx` (comment state, CommentsPanel, fix-now badges/summary), `FileDiffView.jsx` (gutter gesture, composer, comment bars), `ContextHeader.jsx`, `Sidebar.jsx`, `Minimap.jsx`, `KeyboardHelp.jsx`, `App.jsx` (exit code), and `electron/main.js` (close-payload default).
 
 The 2026-06-05 details-panel work shipped four active requirements (implemented 2026-06-06): the label-less changeset header ([IM.IN-02]) — always-visible location eyebrow + commit-message headline, expanding to the full message body and a provenance grid — plus keyboard expand/collapse ([NV-17]), the `?` shortcuts overlay ([NV-18]), and the `f`/`F` sidebar toggle ([DD-16]). They landed in `ContextHeader.jsx` (the changeset header, dropping the `→ inputs` / `← outputs` channel labels for a quiet gutter cue + `status` strip), `ReviewShell.jsx` (lifted details state, global `d`/`D`/`f`/`F`/`?` keys), `FileDiffView.jsx` (`paused` prop), and the new `KeyboardHelp.jsx`. The `prev` reference and the `[prev]` read-only preview are speculative future work ([FUT-02], [FUT-03]) — no caller emits `prev` yet. A speculative implementation was prototyped this session and then removed before shipping (it was unreachable without a caller); the FUT entries document the design for when it's built. The 2026-05-31 audit closed the four items previously flagged: [UP-01] was reworded to match the shipped JetBrains Mono webfont (with platform-monospace fallback); [NV-13] was decomposed into NV-13a..d with a clause separating it from search-match positioning; and the two reverse-scan behaviors (active-row font zoom, single-file footer) were captured as [UP-05] and [IM.OUT-05]. The audit also decomposed three overloaded requirements ([AS-08], [IM.OUT-02], [FD-03]) into atomic forms.
 
 An earlier 2026-06-09 change removed search mode ([SM-01]..[SM-06] retired — low value and limited) and freed its `n` key (now the comments panel, [NV-19]); the keyboard rejection-delete (`Shift+R`) was dropped ([NV-10] retired). It also documented two behaviors shipped earlier as drift: zoom keys ([NV-20] — `=` / `-`, `0` resets, no modifier) and the case-insensitive `d` / `f` toggles ([NV-17], [DD-16]); the toggles now ignore modified keypresses, fixing `Cmd+F` also toggling the sidebar. (Its review-notes step was superseded the same day by the comments redesign described above.)
+
+The 2026-06-10 change made clicking a hunk **toggle** its reviewed state (was one-way mark-reviewed) and dim it immediately on click rather than only after navigating away ([NV-06], [CO-04] reworded; [FD-09] dim now fires while the hunk is still active). [NV-09] was retired into [NV-06] — clicking *a hunk* already covers the currently-selected one, so the separate click-the-current-hunk rule was redundant. `u` and the context menu remain the keyboard/menu unreview paths.
 
 > **Version note:** the product version in `.claude-plugin/plugin.json` and this spec's version (`v0.2`) move independently — PD-01/PD-05 treat plugin.json as the product-version source of truth — so a mismatch between them is expected, not drift.
 
@@ -26,7 +28,7 @@ An earlier 2026-06-09 change removed search mode ([SM-01]..[SM-06] retired — l
 | [FD-08] | Binary file detection | Done |
 | [FD-09] | Dim reviewed hunks | Done |
 
-### Navigation (NV) — 21/21
+### Navigation (NV) — 20/20
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -35,10 +37,10 @@ An earlier 2026-06-09 change removed search mode ([SM-01]..[SM-06] retired — l
 | [NV-03] | Scroll wheel/trackpad | Done |
 | [NV-04] | Land on first unreviewed hunk (fallback: first hunk) | Done |
 | [NV-05] | u mark current hunk unreviewed | Done |
-| [NV-06] | Click hunk marks reviewed | Done |
+| [NV-06] | Click hunk toggles reviewed | Done |
 | [NV-07] | Space / Enter comment on current hunk | Done |
 | [NV-08] | i open in editor | Done |
-| [NV-09] | Click current hunk marks reviewed | Done |
+| ~~[NV-09]~~ | Subsumed by [NV-06] — *a hunk* includes the current one | — |
 | ~~[NV-10]~~ | Removed — keyboard rejection-delete dropped | — |
 | ~~[NV-11]~~ | Superseded by [CO-06] — comment composer replaces reject editor | — |
 | ~~[NV-12]~~ | Superseded by [CO-07] — comment bar replaces rejection-reason note | — |
@@ -89,7 +91,7 @@ repurposed for the comments panel ([NV-19]).
 | [CO-01] | Comment = body + action + target; reconciles rejections / notes | Done |
 | [CO-02] | Target: changeset / file / line range (changed or context lines) | Done |
 | [CO-03] | Action defaults to `consider`; settable consider / fix-later / fix-now; only fix-now gates | Done |
-| [CO-04] | New-side gutter: click = review (changed) / comment (context), drag = range, long-press = single line; left gutter inert | Done |
+| [CO-04] | New-side gutter: click = toggle review (changed) / comment (context), drag = range, long-press = single line; left gutter inert | Done |
 | [CO-05] | Header control = changeset comment; file-header control = file comment | Done |
 | [CO-06] | Inline composer: auto-grow textarea + action control; Enter / Shift+Enter / Esc | Done |
 | [CO-07] | Banded line range (action-colored outline) + persistent comment bar; click to edit, confirmed delete | Done |
