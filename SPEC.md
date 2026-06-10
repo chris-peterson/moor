@@ -64,10 +64,6 @@ Vim-style, keyboard-first:
 - **[NV-06]** When the user clicks a hunk — including the currently-focused one — the viewer shall toggle its reviewed state and focus it: clicking an unreviewed hunk marks it reviewed (equivalent to advancing past it with `j`), and clicking a reviewed hunk marks it unreviewed
 - **[NV-07]** When the user presses Space or Enter, the viewer shall open a comment composer anchored to the current hunk's line range (CO-06). The hunk's review state is unchanged — commenting is orthogonal to review.
 - **[NV-08]** When the user presses `i`, the viewer shall open the current hunk's file in the configured editor at the hunk's line number
-- ~~**[NV-09]**~~ Subsumed by NV-06 — clicking *a hunk* already includes the currently-selected one, so the click-the-current-hunk case needs no separate requirement
-- ~~**[NV-10]**~~ Removed — the keyboard rejection-delete (`Shift+R`) dropped; a single keystroke too easily discarded a typed rejection reason. Deleting a rejection is now mouse-only via the context menu (CM-06), which confirms first.
-- ~~**[NV-11]**~~ Superseded by CO-06 — the comment composer replaces the reject-reason editor (one composer for all actions; severity/action chosen via the action control, not a separate flow)
-- ~~**[NV-12]**~~ Superseded by CO-07 — the persistent comment bar replaces the rejection-reason note
 - **[NV-13]** The viewer shall position the viewport when navigating between hunks, per the lettered sub-requirements below.
   - **[NV-13a]** When navigating to a hunk that is already fully visible in the viewport, the viewer shall not scroll.
   - **[NV-13b]** Otherwise the viewer shall scroll so that one line of context above the hunk is visible at the top of the viewport, with the hunk's first line on the second visible row.
@@ -102,18 +98,6 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[DD-15]** While in directory diff mode, when a left-only file and a right-only file are determined to be a rename or move of the same content (e.g., via `git mv`), the viewer shall display the pair as a single entry showing the old → new path, instead of as separate L and R entries. The entry shall contribute one item to the sidebar and hunk counts (DD-06), and its diff view shall show content changes between the two versions (zero-hunk when the rename is content-identical).
 - **[DD-16]** When the user presses `f` (either case), the viewer shall toggle the file sidebar — the keyboard companion to DD-11's collapse / show controls.
 
-### Search Mode (SM)
-
-Search mode was removed — low value and limited in capability. The `n` / `N`
-keys it used are repurposed for the comments panel (NV-19).
-
-- ~~**[SM-01]**~~ Removed — in-diff search dropped
-- ~~**[SM-02]**~~ Removed
-- ~~**[SM-03]**~~ Removed
-- ~~**[SM-04]**~~ Removed
-- ~~**[SM-05]**~~ Removed — `n` / `N` repurposed for the comments panel (NV-19)
-- ~~**[SM-06]**~~ Removed
-
 ### Context Menu (CM)
 
 - **[CM-01]** When the user right-clicks a hunk, the viewer shall display a context menu
@@ -122,7 +106,6 @@ keys it used are repurposed for the comments panel (NV-19).
 - **[CM-04]** The context menu shall include "Comment" (compose a comment on the clicked line — see CO-06)
 - **[CM-05]** The context menu shall include "Open in editor" (see NV-08)
 - **[CM-06]** When the selected hunk has one or more comments, the context menu shall include "Delete comment" (removing the hunk's comment); when a comment has a typed body, selecting it shall confirm before discarding
-- ~~**[CM-07]**~~ Retired — "Convert to note" is replaced by the CO-03 action control; lowering a comment's action to `consider` is the successor
 
 ### Comments (CO)
 
@@ -140,14 +123,11 @@ A **comment** is review feedback the reviewer leaves for the change's author. Co
 ### Review Feedback (RV)
 
 - **[RV-01]** When all hunks have been reviewed, the viewer shall display a transient "Review Complete!" notification
-- ~~**[RV-02]**~~ Superseded by IM.OUT-04 (progress now lives in the header's output region)
-- ~~**[RV-03]**~~ Superseded by IM.OUT-03 (fix-now badges now live in the header's output region)
 - **[RV-04]** While a file has one or more `fix-now` comments, the viewer shall display that file's sidebar entry in red
 
 ### Binary Formats (BF)
 
 - **[BF-01]** When a recognized image file is opened, the diff viewer shall display the images side-by-side
-- ~~**[BF-02]**~~ Deferred — see FUT-01
 
 ### Diff Algorithm (DA)
 
@@ -179,7 +159,6 @@ A **comment** is review feedback the reviewer leaves for the change's author. Co
 - **[EC-02]** When closed with one or more `fix-now` comments, the application shall exit with code 1
 - **[EC-03]** When closed with one or more unreviewed hunks and no `fix-now` comments, the application shall exit with code 2
 - **[EC-04]** When closed before hunk counting completes or before any review interaction, the application shall exit with code 3
-- ~~**[EC-05]**~~ Superseded by IM-01 / IM.OUT-01 / IM.OUT-02 (sidecar contract moves to MOOR_CONTEXT)
 
 ### Interaction Model (IM)
 
@@ -201,7 +180,6 @@ moor exposes a bidirectional contract with its caller via a JSON file. The calle
 - **[IM.OUT-03]** While `fix-now` comments exist, the viewer shall display one badge per affected file in the header's output region, each showing the file's `fix-now` count; when the user clicks a badge, the viewer shall navigate to that file's first `fix-now` comment.
 - **[IM.OUT-04]** The viewer shall display review progress ("X of Y changes viewed") in the header's output region.
 - **[IM.OUT-05]** While in single-file mode (no directory sidebar), the viewer shall display an equivalent review-progress footer at the bottom of the view: a progress bar with "X of Y changes viewed" (collapsing to "All changes viewed · q to close" when complete) and a `fix-now` count when such comments exist.
-- ~~**[IM.OUT-06]**~~ Superseded by IM.OUT-02a — `comments[]` subsumes the former `notes[]` (a note is now a `consider` comment).
 
 ### User Preferences (UP)
 

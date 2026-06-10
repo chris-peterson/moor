@@ -40,10 +40,6 @@ The 2026-06-10 change made clicking a hunk **toggle** its reviewed state (was on
 | [NV-06] | Click hunk toggles reviewed | Done |
 | [NV-07] | Space / Enter comment on current hunk | Done |
 | [NV-08] | i open in editor | Done |
-| ~~[NV-09]~~ | Subsumed by [NV-06] — *a hunk* includes the current one | — |
-| ~~[NV-10]~~ | Removed — keyboard rejection-delete dropped | — |
-| ~~[NV-11]~~ | Superseded by [CO-06] — comment composer replaces reject editor | — |
-| ~~[NV-12]~~ | Superseded by [CO-07] — comment bar replaces rejection-reason note | — |
 | [NV-13] | Hunk-navigation viewport positioning (umbrella) | Done |
 | [NV-13a] | Don't scroll if hunk already fully visible | Done |
 | [NV-13b] | One line of context above, hunk first line on second row | Done |
@@ -78,12 +74,6 @@ The 2026-06-10 change made clicking a hunk **toggle** its reviewed state (was on
 | [DD-15] | Rename/move detection (`git mv`) — single entry instead of L+R | Done |
 | [DD-16] | f toggles sidebar, either case (keyboard companion to DD-11) | Done |
 
-### Search Mode (SM) — removed
-
-Search mode was removed (low value, limited capability); [SM-01]..[SM-06] are
-retired and excluded from the coverage count. The `n` / `N` keys are
-repurposed for the comments panel ([NV-19]).
-
 ### Comments (CO) — 8/8
 
 | Req | Description | Status |
@@ -107,7 +97,6 @@ repurposed for the comments panel ([NV-19]).
 | [CM-04] | Comment (compose on the clicked line) | Done |
 | [CM-05] | Open in editor | Done |
 | [CM-06] | Delete comment (when hunk has comments); confirms before discarding a typed body | Done |
-| ~~[CM-07]~~ | Retired — "Convert to note" replaced by the [CO-03] action control | — |
 
 ### Review Feedback (RV) — 2/2
 
@@ -173,7 +162,6 @@ repurposed for the comments panel ([NV-19]).
 | [IM.OUT-03] | Fix-now badges in header's output region | Done |
 | [IM.OUT-04] | Review progress in header's output region | Done |
 | [IM.OUT-05] | Single-file-mode footer progress bar (q-to-close, fix-now count) | Done |
-| ~~[IM.OUT-06]~~ | Superseded by [IM.OUT-02a] — `comments[]` subsumes `notes[]` | — |
 
 ### User Preferences (UP) — 5/5
 
