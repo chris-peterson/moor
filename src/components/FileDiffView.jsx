@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useCallback, useState, useEffect, useLayoutEffect } from 'react';
 import { computeLineChanges, diffChars, buildDisplayRows, BINARY_SENTINEL } from '../engine/diff.js';
+import { DEFAULT_ACTION, ACTIONS, isBlocking, commentToOutput, actionColor, actionBg, actionLabel } from '../engine/comments.js';
 import Minimap from './Minimap.jsx';
 
 const TAB_SPACES = '    ';
@@ -26,6 +27,11 @@ const H_SCROLL_STEP = 40;
 const V_SCROLL_STEP = ROW_HEIGHT * 3;
 const RESIZER_WIDTH = 5;
 const BAR_WIDTH = 3;
+// CO-04 gesture thresholds: a press that moves more than DRAG_PX, or onto
+// another row, is a range drag; a press held LONG_PRESS_MS without moving is a
+// single-line comment; a quick release is a plain review click.
+const LONG_PRESS_MS = 400;
+const DRAG_PX = 4;
 
 function CharDiffSpans({ oldStr, newStr, side }) {
   const parts = useMemo(() => diffChars(oldStr || '', newStr || ''), [oldStr, newStr]);
@@ -54,15 +60,15 @@ function CharDiffSpans({ oldStr, newStr, side }) {
   );
 }
 
-function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick, onContextMenu }) {
+function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick, onContextMenu, onGutterMouseDown, onRowEnter }) {
   const fontSize = active ? '15px' : '13px';
   const dimmed = reviewed && !active;
 
   const barColor = active
-    ? (rejected ? 'var(--color-conflict)' : 'var(--color-accent)')
-    : (rejected ? 'var(--color-conflict)' : 'transparent');
+    ? 'var(--color-accent)'
+    : (commentAction ? actionColor(commentAction) : 'transparent');
 
-  const lineNumStyle = {
+  const gutterStyle = {
     width: '48px',
     minWidth: '48px',
     textAlign: 'right',
@@ -76,7 +82,8 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
   };
 
   const cellBg = (type, side) => {
-    if (rejected) return 'var(--color-conflict-bg)';
+    if (selected) return 'var(--color-accent-bg)';
+    if (commentAction) return actionBg(commentAction);
     if (dimmed) return 'var(--bg-reviewed)';
     if (type === 'delete' && side === 'left') return 'var(--color-left-bg)';
     if (type === 'insert' && side === 'right') return 'var(--color-right-bg)';
@@ -97,12 +104,24 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
   const showCharDiff = isModify && areSimilarEnough(row.leftLine, row.rightLine);
   const leftType = isModify ? 'delete' : row.type;
   const rightType = isModify ? 'insert' : row.type;
+  const isHunk = row.type !== 'equal';
 
+  // The comment affordance (CO-04) lives on the NEW (right) side's line-number
+  // gutter only — review feedback references the new file, so commenting on the
+  // old (left) side would be ambiguous. Pressing the right gutter starts the
+  // click / drag / long-press gesture; code-area text stays selectable.
+  // onMouseEnter extends a range drag. The left gutter is inert (a click on a
+  // changed row still marks it reviewed via the row's onClick).
   return (
-    <div onClick={row.type !== 'equal' ? onClick : undefined} onContextMenu={row.type !== 'equal' ? onContextMenu : undefined} style={{ display: 'flex', height: ROW_HEIGHT + 'px', cursor: row.type !== 'equal' ? 'pointer' : 'default' }}>
+    <div
+      onClick={isHunk ? onClick : undefined}
+      onContextMenu={onContextMenu}
+      onMouseEnter={() => onRowEnter(idx)}
+      style={{ display: 'flex', height: ROW_HEIGHT + 'px', cursor: isHunk ? 'pointer' : 'default' }}
+    >
       <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0, background: barColor }} />
       <div style={{ width: leftWidth + 'px', display: 'flex', overflow: 'clip', background: cellBg(leftType, 'left') }}>
-        <span style={lineNumStyle}>{row.leftNum ?? ''}</span>
+        <span style={{ ...gutterStyle, cursor: isHunk ? 'pointer' : 'default' }}>{row.leftNum ?? ''}</span>
         <span style={codeStyle}>
           {showCharDiff
             ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="left" />
@@ -111,7 +130,7 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
       </div>
       <div onMouseDown={onResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
       <div style={{ width: rightWidth + 'px', display: 'flex', overflow: 'clip', background: cellBg(rightType, 'right') }}>
-        <span style={lineNumStyle}>{row.rightNum ?? ''}</span>
+        <span data-gutter="1" onMouseDown={(e) => onGutterMouseDown(e, idx)} style={{ ...gutterStyle, cursor: 'pointer' }}>{row.rightNum ?? ''}</span>
         <span style={codeStyle}>
           {showCharDiff
             ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="right" />
@@ -124,11 +143,13 @@ function DiffRow({ row, active, reviewed, rejected, scrollLeft, leftWidth, right
 
 const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|bmp|webp|svg|ico)$/i;
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, onNavigatePrevFile, startAtEnd, startAtHunk, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, rejectedHunks: externalRejectedHunks, onRejectedHunksChange, rejectionReasons: externalRejectionReasons, onRejectionReasonsChange, onAddNote, paused = false }) {
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, onNavigatePrevFile, startAtEnd, startAtRow, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, fileComments = [], onAddComment, onUpdateComment, onSetCommentAction, onDeleteComment, onAddFileComment, paused = false }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
   const isImage = isBinary && (IMAGE_EXTENSIONS.test(leftPath || '') || IMAGE_EXTENSIONS.test(rightPath || ''));
+
+  const fileKey = rightFullPath || leftFullPath || rightPath || leftPath || '';
 
   const [leftDataUrl, setLeftDataUrl] = useState(null);
   const [rightDataUrl, setRightDataUrl] = useState(null);
@@ -159,7 +180,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const headerRef = useRef(null);
   const hScrollRef = useRef(null);
 
-
   const [scrollTop, setScrollTop] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
@@ -169,15 +189,18 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const [internalReviewedHunks, setInternalReviewedHunks] = useState(() => new Set());
   const reviewedHunks = externalReviewedHunks || internalReviewedHunks;
   const setReviewedHunks = onReviewedHunksChange || setInternalReviewedHunks;
-  const [internalRejectedHunks, setInternalRejectedHunks] = useState(() => new Set());
-  const rejectedHunks = externalRejectedHunks || internalRejectedHunks;
-  const setRejectedHunks = onRejectedHunksChange || setInternalRejectedHunks;
-  const [internalRejectionReasons, setInternalRejectionReasons] = useState(() => new Map());
-  const rejectionReasons = externalRejectionReasons || internalRejectionReasons;
-  const setRejectionReasons = onRejectionReasonsChange || setInternalRejectionReasons;
-  const [rejectingHunk, setRejectingHunk] = useState(null);
-  const rejectInputRef = useRef(null);
-  const rejectCompletedRef = useRef(false);
+  // CO-06: the inline comment composer. null when closed; otherwise
+  // { commentId|null, action, body, target } where target is a range.
+  const [composing, setComposing] = useState(null);
+  const composerRef = useRef(null);
+  // Mirror `composing` into a ref and guard commits so Enter-then-blur (or a
+  // StrictMode double-invoke) can't write the same comment twice.
+  const composingRef = useRef(null);
+  const committedRef = useRef(false);
+  useEffect(() => { composingRef.current = composing; }, [composing]);
+  // The live line-range selection during a gutter drag (CO-04).
+  const [selection, setSelection] = useState(null);
+  const pressRef = useRef(null);
   const [splitPercent, setSplitPercent] = useState(50);
   const [draggingResizer, setDraggingResizer] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
@@ -199,13 +222,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const contextMenuRef = useRef(null);
   const totalHeight = rows.length * ROW_HEIGHT;
   // NV-13 bottom pad: lets a hunk near end-of-file scroll into the
-  // "second visible row" position even when the file isn't tall enough
-  // to fill the viewport from that anchor.
+  // "second visible row" position even when the file isn't tall enough.
   const bottomPad = Math.max(0, viewportHeight - headerHeight - 2 * ROW_HEIGHT);
 
   const widestCandidates = useMemo(() => {
-    // Top-K longest by char count, not just #1: wide glyphs (CJK, emoji, fallback
-    // fonts) can make a slightly shorter line render wider than the longest one.
     const K = 10;
     const all = [];
     for (const row of rows) {
@@ -231,10 +251,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       setMaxContentWidth(max + 8);
     };
     recompute();
-    // ResizeObserver fires whenever a measured element's size changes —
-    // including the asynchronous font swap when JetBrains Mono finishes loading
-    // from Google Fonts. The initial measurement uses the fallback monospace
-    // (typically narrower); the observer triggers a recompute once JBM lands.
     const observer = new ResizeObserver(recompute);
     for (const child of el.children) observer.observe(child);
     return () => observer.disconnect();
@@ -262,39 +278,37 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     return map;
   }, [hunkRanges]);
 
+  const lineForRow = useCallback((rowIdx) => {
+    const row = rows[rowIdx];
+    return row?.rightNum ?? row?.leftNum ?? 1;
+  }, [rows]);
+
+  // Standalone-mode (no ReviewShell parent) quit-state mirror. In the app every
+  // FileDiffView has an onNavigateNext, so this is the defensive path only.
   useEffect(() => {
     if (onNavigateNext) return;
-    const totalHunks = hunkRanges.length;
-    const reviewed = reviewedHunks.size;
-    const rejected = rejectedHunks.size;
-    const unreviewed = Math.max(0, totalHunks - reviewed - rejected);
-    const rejections = [];
-    for (const hunkIdx of rejectedHunks) {
-      const range = hunkRanges[hunkIdx];
-      if (!range) continue;
-      const row = rows[range.start];
-      const reason = rejectionReasons.get(hunkIdx) ?? null;
-      rejections.push({ file: rightPath || leftPath, hunk: hunkIdx, line: row?.rightNum || row?.leftNum || 1, reason });
-    }
-    window.__moorQuitState = { rejected, unreviewed, rejections };
+    const unreviewed = Math.max(0, hunkRanges.length - reviewedHunks.size);
+    const fixNow = fileComments.filter(c => isBlocking(c.action) && (c.body || '').trim()).length;
+    window.__moorQuitState = { fixNow, unreviewed, comments: fileComments.map(commentToOutput).filter(c => c.body) };
     return () => { window.__moorQuitState = null; };
-  }, [hunkRanges, rows, reviewedHunks, rejectedHunks, rejectionReasons, onNavigateNext, leftPath, rightPath]);
+  }, [hunkRanges, reviewedHunks, fileComments, onNavigateNext]);
 
-  // Grow the rejection-reason textarea to fit its content (capped), so a
-  // multi-line reason isn't crammed into a fixed two-row box.
-  const resizeRejectInput = useCallback(() => {
-    const el = rejectInputRef.current;
+  // Grow the composer textarea to fit its content (capped).
+  const resizeComposer = useCallback(() => {
+    const el = composerRef.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 320) + 'px';
   }, []);
 
   useEffect(() => {
-    if (rejectingHunk != null && rejectInputRef.current) {
-      rejectInputRef.current.focus();
-      resizeRejectInput();
+    if (composing && composerRef.current) {
+      composerRef.current.focus();
+      const len = composerRef.current.value.length;
+      composerRef.current.setSelectionRange(len, len);
+      resizeComposer();
     }
-  }, [rejectingHunk, resizeRejectInput]);
+  }, [composing, resizeComposer]);
 
   const activeRowSet = useMemo(() => {
     if (hunkRanges.length === 0) return new Set();
@@ -316,23 +330,60 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     return set;
   }, [hunkRanges, reviewedHunks]);
 
-  const rejectedRowSet = useMemo(() => {
-    const set = new Set();
-    for (const hIdx of rejectedHunks) {
-      const range = hunkRanges[hIdx];
-      if (range) {
-        for (let i = range.start; i <= range.end; i++) set.add(i);
+  // Per-row action of the highest-severity comment covering it — drives the row
+  // tint, the bar, and the minimap markers. The in-progress composer counts too,
+  // so the range bands while you type.
+  const rowActionMap = useMemo(() => {
+    const rank = { 'consider': 0, 'fix-later': 1, 'fix-now': 2 };
+    const map = new Map();
+    const apply = (startRow, endRow, action) => {
+      if (startRow == null) return;
+      for (let i = startRow; i <= endRow; i++) {
+        const cur = map.get(i);
+        if (cur == null || rank[action] > rank[cur]) map.set(i, action);
       }
+    };
+    for (const c of fileComments) apply(c.target?.startRow, c.target?.endRow, c.action);
+    if (composing && composing.target?.type === 'range') {
+      apply(composing.target.startRow, composing.target.endRow, composing.action);
     }
+    return map;
+  }, [fileComments, composing]);
+
+  const commentRowColors = useMemo(() => {
+    const map = new Map();
+    for (const [rowIdx, action] of rowActionMap) map.set(rowIdx, actionColor(action));
+    return map;
+  }, [rowActionMap]);
+
+  // CO-07: one outline band per comment range (and the live composer range),
+  // spanning its rows in the action color so the covered lines are unmistakable.
+  const commentBands = useMemo(() => {
+    const bands = [];
+    for (const c of fileComments) {
+      const t = c.target || {};
+      if (t.startRow == null) continue;
+      if (composing && composing.commentId === c.id) continue; // composer band covers it
+      bands.push({ key: `band-${c.id}`, startRow: t.startRow, endRow: t.endRow, action: c.action });
+    }
+    if (composing && composing.target?.type === 'range') {
+      bands.push({ key: 'band-composing', startRow: composing.target.startRow, endRow: composing.target.endRow, action: composing.action });
+    }
+    return bands;
+  }, [fileComments, composing]);
+
+  const selectionRowSet = useMemo(() => {
+    if (!selection) return null;
+    const set = new Set();
+    for (let i = selection.startRow; i <= selection.endRow; i++) set.add(i);
     return set;
-  }, [hunkRanges, rejectedHunks]);
+  }, [selection]);
 
   const maxScroll = useMemo(() => {
     if (!viewportWidth) return 0;
     const availableWidth = Math.max(0, viewportWidth - BAR_WIDTH - RESIZER_WIDTH);
     const leftW = Math.round(availableWidth * splitPercent / 100);
     const rightW = availableWidth - leftW;
-    // Line number column reserves 48 + 8 (padding-right); code area also has 8 padding-left.
     const codeAreaWidth = Math.max(0, Math.min(leftW, rightW) - 64);
     return Math.max(0, maxContentWidth - codeAreaWidth);
   }, [maxContentWidth, viewportWidth, splitPercent]);
@@ -345,40 +396,36 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const scrolledForKey = useRef(null);
   useLayoutEffect(() => {
     if (!scrollContainerRef.current) return;
-    const fileKey = `${leftPath ?? ''}|${rightPath ?? ''}`;
+    const fileKeyId = `${leftPath ?? ''}|${rightPath ?? ''}`;
     if (hunkRanges.length === 0) {
       scrollContainerRef.current.scrollTop = 0;
-      scrolledForKey.current = fileKey;
+      scrolledForKey.current = fileKeyId;
       return;
     }
-    const isFirstScrollForFile = scrolledForKey.current !== fileKey;
-    // On file change, currentHunk is still the previous file's value. The
-    // file-change layoutEffect below will update it via setCurrentHunk, but
-    // that fires after this one — running NV-4 here instead lets us scroll
-    // to the correct hunk in a single pass and avoids a second smooth-scroll
-    // in the follow-up render.
+    const isFirstScrollForFile = scrolledForKey.current !== fileKeyId;
+    // IM.OUT-03: a fix-now badge navigates to a specific row — scroll straight
+    // to it on the first pass for the file.
+    if (isFirstScrollForFile && startAtRow != null) {
+      scrollContainerRef.current.scrollTop = Math.max(0, (startAtRow - 1) * ROW_HEIGHT);
+      scrolledForKey.current = fileKeyId;
+      setScrollLeft(0);
+      return;
+    }
     let effectiveHunk = currentHunk;
     if (isFirstScrollForFile) {
-      if (startAtHunk != null) {
-        effectiveHunk = startAtHunk;
-      } else if (startAtEnd) {
+      if (startAtEnd) {
         effectiveHunk = hunkRanges.length - 1;
       } else {
+        // NV-04: first unreviewed hunk; fall back to the first hunk.
         effectiveHunk = 0;
         for (let i = 0; i < hunkRanges.length; i++) {
-          if (!reviewedHunks.has(i) && !rejectedHunks.has(i)) {
-            effectiveHunk = i;
-            break;
-          }
+          if (!reviewedHunks.has(i)) { effectiveHunk = i; break; }
         }
       }
     }
     const range = hunkRanges[effectiveHunk];
     if (!range) return;
-    scrolledForKey.current = fileKey;
-    // NV-13: compute the ideal target — one line of context above the hunk
-    // by default; slide flush to keep the bottom in view when needed; top
-    // on row 2 for hunks taller than the viewport.
+    scrolledForKey.current = fileKeyId;
     const topAtRow2 = Math.max(0, (range.start - 1) * ROW_HEIGHT);
     const scrollForBottom = (range.end + 1) * ROW_HEIGHT + headerHeight - viewportHeight;
     const topFlush = range.start * ROW_HEIGHT;
@@ -392,12 +439,8 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     }
     target = Math.max(0, target);
     if (isFirstScrollForFile) {
-      // Cross-file navigation: jump instantly so the user lands oriented.
       scrollContainerRef.current.scrollTop = target;
     } else {
-      // In-file navigation: skip if the hunk is already fully visible,
-      // otherwise smooth-scroll to draw the eye. NV-13 says don't scroll —
-      // that includes preserving horizontal scroll.
       const ev = Math.max(0, viewportHeight - headerHeight);
       const visibleTop = scrollContainerRef.current.scrollTop;
       const hunkTopY = range.start * ROW_HEIGHT;
@@ -410,73 +453,148 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     setScrollLeft(0);
   }, [currentHunk, hunkRanges, viewportHeight, headerHeight]);
 
+  const markRowReviewed = useCallback((rowIdx) => {
+    const hIdx = rowToHunk.get(rowIdx);
+    if (hIdx == null) return;
+    setReviewedHunks(prev => {
+      const next = new Set(prev);
+      next.add(hIdx);
+      return next;
+    });
+    setCurrentHunk(hIdx);
+  }, [rowToHunk, setReviewedHunks]);
+
   const markCurrentReviewed = useCallback(() => {
-    if (rejectedHunks.has(currentHunk)) return;
     setReviewedHunks(prev => {
       const next = new Set(prev);
       next.add(currentHunk);
       return next;
     });
-  }, [currentHunk, rejectedHunks]);
+  }, [currentHunk, setReviewedHunks]);
 
-  const [rejectInitialValue, setRejectInitialValue] = useState('');
+  // CO-06: open the composer on a row range (a new comment).
+  const openComposerForRows = useCallback((rowA, rowB) => {
+    const startRow = Math.min(rowA, rowB);
+    const endRow = Math.max(rowA, rowB);
+    const target = {
+      type: 'range',
+      file: fileKey,
+      startLine: lineForRow(startRow),
+      endLine: lineForRow(endRow),
+      startRow,
+      endRow,
+    };
+    setSelection(null);
+    const hIdx = rowToHunk.get(startRow);
+    if (hIdx != null) setCurrentHunk(hIdx);
+    committedRef.current = false;
+    setComposing({ commentId: null, action: DEFAULT_ACTION, body: '', target });
+  }, [fileKey, lineForRow, rowToHunk]);
 
-  const beginReject = useCallback((hunkIdx) => {
-    rejectCompletedRef.current = false;
-    setRejectInitialValue(rejectionReasons.get(hunkIdx) || '');
-    setRejectingHunk(hunkIdx);
-  }, [rejectionReasons]);
+  const editComment = useCallback((comment) => {
+    committedRef.current = false;
+    setComposing({ commentId: comment.id, action: comment.action, body: comment.body, target: comment.target });
+  }, []);
 
-  const completeRejection = useCallback((hunkIdx, reason) => {
-    if (rejectCompletedRef.current) return;
-    rejectCompletedRef.current = true;
-    setRejectedHunks(prev => { const next = new Set(prev); next.add(hunkIdx); return next; });
-    setReviewedHunks(prev => { const next = new Set(prev); next.delete(hunkIdx); return next; });
-    setRejectionReasons(prev => {
-      const next = new Map(prev);
-      if (reason) next.set(hunkIdx, reason);
-      else next.delete(hunkIdx);
+  // CO-06: Enter confirms; Escape confirms a non-empty comment or discards an
+  // empty one. A new empty comment is dropped; an existing one emptied is deleted.
+  const closeComposer = useCallback(() => {
+    if (committedRef.current) return;
+    committedRef.current = true;
+    const cur = composingRef.current;
+    const text = (composerRef.current?.value || '').trim();
+    if (cur) {
+      if (cur.commentId == null) {
+        if (text && onAddComment) onAddComment({ body: text, action: cur.action, target: cur.target });
+      } else if (text && onUpdateComment) {
+        onUpdateComment(cur.commentId, { body: text, action: cur.action });
+      } else if (!text && onDeleteComment) {
+        onDeleteComment(cur.commentId);
+      }
+    }
+    setComposing(null);
+  }, [onAddComment, onUpdateComment, onDeleteComment]);
+
+  // CO-04 gesture: begin from a line-number gutter press.
+  const beginGutterGesture = useCallback((e, rowIdx) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    if (pressRef.current?.timer) clearTimeout(pressRef.current.timer);
+    const timer = setTimeout(() => {
+      const p = pressRef.current;
+      if (!p) return;
+      p.longPressed = true;
+      openComposerForRows(p.startRow, p.startRow);
+    }, LONG_PRESS_MS);
+    pressRef.current = { startRow: rowIdx, endRow: rowIdx, startY: e.clientY, moved: false, longPressed: false, timer };
+    // Selection highlight appears once a drag actually starts (handleRowEnter),
+    // so a plain click doesn't flash the row.
+  }, [openComposerForRows]);
+
+  const handleRowEnter = useCallback((rowIdx) => {
+    const p = pressRef.current;
+    if (!p || p.longPressed) return;
+    if (rowIdx !== p.startRow) {
+      p.moved = true;
+      if (p.timer) { clearTimeout(p.timer); p.timer = null; }
+    }
+    p.endRow = rowIdx;
+    setSelection({ startRow: Math.min(p.startRow, rowIdx), endRow: Math.max(p.startRow, rowIdx) });
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e) => {
+      const p = pressRef.current;
+      if (!p || p.longPressed) return;
+      if (!p.moved && Math.abs(e.clientY - p.startY) > DRAG_PX) {
+        p.moved = true;
+        if (p.timer) { clearTimeout(p.timer); p.timer = null; }
+      }
+    };
+    const onUp = () => {
+      const p = pressRef.current;
+      if (!p) return;
+      if (p.timer) clearTimeout(p.timer);
+      pressRef.current = null;
+      if (p.longPressed) return; // composer already opened by the timer
+      if (p.moved) {
+        openComposerForRows(p.startRow, p.endRow);
+      } else {
+        // Plain click: a changed line marks reviewed; an unchanged (context)
+        // line opens a single-line comment (CO-04).
+        if (rowToHunk.has(p.startRow)) markRowReviewed(p.startRow);
+        else openComposerForRows(p.startRow, p.startRow);
+        setSelection(null);
+      }
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, [openComposerForRows, markRowReviewed, rowToHunk]);
+
+  // Plain click on the code area marks reviewed (NV-06/09). Gutter clicks are
+  // owned by the gesture above, so ignore clicks that originate there.
+  const handleRowClick = useCallback((e, rowIdx) => {
+    if (e.target?.dataset?.gutter) return;
+    const hIdx = rowToHunk.get(rowIdx);
+    if (hIdx == null) return;
+    setReviewedHunks(prev => {
+      const next = new Set(prev);
+      next.add(hIdx);
       return next;
     });
-    setRejectingHunk(null);
-  }, [setRejectedHunks, setReviewedHunks, setRejectionReasons]);
-
-  // Convert the in-progress rejection into a review note (CM-07): the text
-  // becomes an ambient-but-located note, and the hunk is left un-rejected.
-  // Guarded by rejectCompletedRef so the textarea's blur doesn't re-reject.
-  const convertEditingToNote = useCallback((hunkIdx, text) => {
-    rejectCompletedRef.current = true;
-    const trimmed = (text || '').trim();
-    if (trimmed && onAddNote) {
-      const range = hunkRanges[hunkIdx];
-      const row = range ? rows[range.start] : null;
-      const line = row?.rightNum || row?.leftNum || 1;
-      onAddNote({ note: trimmed, file: rightFullPath || leftFullPath || rightPath || leftPath, line });
-    }
-    setRejectedHunks(prev => { const next = new Set(prev); next.delete(hunkIdx); return next; });
-    setRejectionReasons(prev => { const next = new Map(prev); next.delete(hunkIdx); return next; });
-    setRejectingHunk(null);
-  }, [hunkRanges, rows, rightFullPath, leftFullPath, rightPath, leftPath, onAddNote, setRejectedHunks, setRejectionReasons]);
-
-  const handleRowClick = useCallback((rowIdx) => {
-    const hIdx = rowToHunk.get(rowIdx);
-    if (hIdx == null) return;
-    if (!rejectedHunks.has(hIdx)) {
-      setReviewedHunks(prev => {
-        const next = new Set(prev);
-        next.add(hIdx);
-        return next;
-      });
-    }
     setCurrentHunk(hIdx);
-  }, [rowToHunk, rejectedHunks, setReviewedHunks]);
+  }, [rowToHunk, setReviewedHunks]);
 
   const handleRowContextMenu = useCallback((e, rowIdx) => {
-    const hIdx = rowToHunk.get(rowIdx);
-    if (hIdx == null) return;
     e.preventDefault();
-    setCurrentHunk(hIdx);
-    setContextMenu({ x: e.clientX, y: e.clientY, hunk: hIdx });
+    const hIdx = rowToHunk.get(rowIdx);
+    if (hIdx != null) setCurrentHunk(hIdx);
+    // hunk is null for a context line — the menu still offers Comment.
+    setContextMenu({ x: e.clientX, y: e.clientY, hunk: hIdx ?? null, row: rowIdx });
   }, [rowToHunk]);
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
@@ -484,54 +602,31 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const contextMenuActions = useMemo(() => {
     if (!contextMenu) return [];
     const h = contextMenu.hunk;
-    const isReviewed = reviewedHunks.has(h);
-    const isRejected = rejectedHunks.has(h);
+    const row = contextMenu.row;
     const actions = [];
-    if (!isReviewed && !isRejected) {
-      actions.push({ label: 'Mark as reviewed', action: () => {
-        setReviewedHunks(prev => { const next = new Set(prev); next.add(h); return next; });
-      }});
-    }
-    if (isReviewed) {
-      actions.push({ label: 'Mark as unreviewed', action: () => {
-        setReviewedHunks(prev => { const next = new Set(prev); next.delete(h); return next; });
-      }});
-    }
-    if (!isRejected) {
-      actions.push({ label: 'Reject', action: () => beginReject(h) });
-    } else {
-      actions.push({ label: 'Edit rejection note', action: () => beginReject(h) });
-      if (onAddNote && rejectionReasons.get(h)) {
-        actions.push({ label: 'Convert to note', action: () => {
-          // Preserve the reason as a review note (carrying the source location),
-          // then delete the rejection — no data loss.
-          const row = hunkRanges[h] ? rows[hunkRanges[h].start] : null;
-          const line = row?.rightNum || row?.leftNum || 1;
-          onAddNote({ note: rejectionReasons.get(h), file: rightFullPath || leftFullPath || rightPath || leftPath, line });
-          setRejectedHunks(prev => { const next = new Set(prev); next.delete(h); return next; });
-          setRejectionReasons(prev => { const next = new Map(prev); next.delete(h); return next; });
+    // Review actions only on a changed line (a context line has no hunk).
+    if (h != null) {
+      if (!reviewedHunks.has(h)) {
+        actions.push({ label: 'Mark as reviewed', action: () => {
+          setReviewedHunks(prev => { const next = new Set(prev); next.add(h); return next; });
+        }});
+      } else {
+        actions.push({ label: 'Mark as unreviewed', action: () => {
+          setReviewedHunks(prev => { const next = new Set(prev); next.delete(h); return next; });
         }});
       }
-      actions.push({ label: 'Delete', action: () => {
-        // Deleting the rejection discards the typed reason — confirm first.
-        if (rejectionReasons.get(h) && !window.confirm('Delete this rejection and discard its note?')) return;
-        setRejectedHunks(prev => { const next = new Set(prev); next.delete(h); return next; });
-        setRejectionReasons(prev => { const next = new Map(prev); next.delete(h); return next; });
-      }});
     }
-    if (window.moor?.openInEditor && rightPath && hunkRanges[h]) {
-      const row = rows[hunkRanges[h].start];
-      const line = row?.rightNum || row?.leftNum || 1;
+    // CM-04: comment on the clicked line (changed or context).
+    actions.push({ label: 'Comment', action: () => openComposerForRows(row, row) });
+    if (window.moor?.openInEditor && rightPath) {
+      const line = lineForRow(row);
       actions.push({ label: 'Open in editor', action: () => handleOpenInEditor(line) });
     }
     return actions;
-  }, [contextMenu, reviewedHunks, rejectedHunks, rejectionReasons, hunkRanges, rows, rightPath, leftPath, rightFullPath, leftFullPath, onAddNote, setReviewedHunks, setRejectedHunks, setRejectionReasons, beginReject, handleOpenInEditor]);
+  }, [contextMenu, reviewedHunks, rightPath, lineForRow, setReviewedHunks, openComposerForRows, handleOpenInEditor]);
 
   useEffect(() => {
     if (!contextMenu) return;
-    // Dismiss only on outside interaction. Don't rely on stopPropagation from
-    // menu items — React synthetic events and native document listeners don't
-    // play well together and can drop the click before the action runs.
     const onMouseDown = (e) => {
       if (contextMenuRef.current && contextMenuRef.current.contains(e.target)) return;
       setContextMenu(null);
@@ -545,30 +640,24 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     };
   }, [contextMenu]);
 
-  // useLayoutEffect (not useEffect): the scroll layoutEffect above needs the
-  // updated currentHunk before paint, otherwise the user sees a flash of the
-  // stale scroll position from the previous file.
   useLayoutEffect(() => {
     setScrollTop(0);
     setScrollLeft(0);
     if (!externalReviewedHunks) setInternalReviewedHunks(new Set());
     let initial;
-    if (startAtHunk != null) {
-      initial = startAtHunk;
+    if (startAtRow != null) {
+      initial = rowToHunk.get(startAtRow) ?? 0;
     } else if (startAtEnd && hunkRanges.length > 0) {
       initial = hunkRanges.length - 1;
     } else {
-      // NV-4: land on the first non-reviewed, non-rejected hunk; fall back
-      // to the first hunk if every hunk has already been actioned.
+      // NV-4: land on the first unreviewed hunk; fall back to the first hunk.
       initial = 0;
       for (let i = 0; i < hunkRanges.length; i++) {
-        if (!reviewedHunks.has(i) && !rejectedHunks.has(i)) {
-          initial = i;
-          break;
-        }
+        if (!reviewedHunks.has(i)) { initial = i; break; }
       }
     }
     setCurrentHunk(initial);
+    setComposing(null);
   }, [leftContent, rightContent]);
 
   useEffect(() => {
@@ -579,11 +668,11 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // NV-18: while the help overlay is open the shell owns the keyboard.
+      // NV-18: while the help overlay / comments panel is open the shell owns keys.
       if (paused) return;
 
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
-      if (rejectingHunk != null) return;
+      if (composing) return;
 
       switch (e.key) {
         case 'j': {
@@ -600,9 +689,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           e.preventDefault();
           setReviewedHunks(prev => {
             const next = new Set(prev);
-            for (let i = 0; i < hunkRanges.length; i++) {
-              if (!rejectedHunks.has(i)) next.add(i);
-            }
+            for (let i = 0; i < hunkRanges.length; i++) next.add(i);
             return next;
           });
           if (onNavigateNext) onNavigateNext();
@@ -657,16 +744,18 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           });
           break;
         }
-        case 'r': {
+        case ' ':
+        case 'Enter': {
+          // NV-07: comment on the current hunk's line range.
           e.preventDefault();
-          beginReject(currentHunk);
+          const range = hunkRanges[currentHunk];
+          if (range) openComposerForRows(range.start, range.end);
           break;
         }
         case 'i': {
           e.preventDefault();
           if (window.moor?.openInEditor && rightPath && hunkRanges[currentHunk]) {
-            const row = rows[hunkRanges[currentHunk].start];
-            const line = row?.rightNum || row?.leftNum || 1;
+            const line = lineForRow(hunkRanges[currentHunk].start);
             handleOpenInEditor(line);
           }
           break;
@@ -684,7 +773,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hunkRanges, currentHunk, reviewedHunks, rejectedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, beginReject, setRejectionReasons, rejectingHunk, paused]);
+  }, [hunkRanges, currentHunk, reviewedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, composing, paused, openComposerForRows, lineForRow, handleOpenInEditor, setReviewedHunks, rightPath]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -706,8 +795,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     const el = scrollContainerRef.current;
     if (!el) return;
     const onWheel = (e) => {
-      // Trackpads emit small deltaX during predominantly-vertical scrolls and
-      // strand the user mid-line. Only honor horizontal intent.
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && e.deltaX !== 0) {
         e.preventDefault();
         setScrollLeft(prev => Math.max(0, Math.min(maxScroll, prev + e.deltaX)));
@@ -756,6 +843,8 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const leftWidth = Math.round(availableWidth * splitPercent / 100);
   const rightWidth = availableWidth - leftWidth;
 
+  const fileFixNowCount = fileComments.filter(c => isBlocking(c.action) && (c.body || '').trim()).length;
+
   const headerCellStyle = (color, width) => ({
     width: width + 'px',
     padding: '5px 16px',
@@ -791,17 +880,8 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       </div>
     )}
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-      {/* Main column: scroll container (with sticky header) + hscrollbar */}
-      {/* position:relative confines the absolutely-positioned measurement
-          container below; without it, that container's containing block is the
-          viewport and its wide hidden lines make the document horizontally
-          scrollable. overflow:clip (not hidden) clips without creating a scroll
-          container, so a text-selection drag can't auto-scroll the app offscreen. */}
       <div ref={contentAreaRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'clip', minWidth: 0, position: 'relative' }}>
 
-        {/* Hidden measurement container for the longest lines. Lives inside the
-            React tree so font CSS resolves identically to the rendered rows;
-            ResizeObserver on the spans catches the JBM font swap. */}
         <div
           ref={measureContainerRef}
           aria-hidden
@@ -814,7 +894,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           ))}
         </div>
 
-        {/* Full-screen overlay during resizer drag to capture mouse everywhere */}
         {draggingResizer && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize' }} />
         )}
@@ -858,25 +937,42 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           </>
         ) : (
           <>
-            {/* Scroll container with sticky header inside — guarantees header and rows share same width */}
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
               style={{ flex: 1, overflowY: 'auto', overflowX: 'clip', background: 'var(--bg-deep)' }}
             >
-              {/* Sticky file path header */}
               <div ref={headerRef} style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--bg-panel)' }}>
-                <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', alignItems: 'stretch' }}>
                   <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0 }} />
                   <div style={headerCellStyle(leftPath === rightPath ? 'transparent' : 'var(--color-left)', leftWidth)}>
                     {leftPath === rightPath ? '' : (leftPath || '(empty)')}
                   </div>
                   <div onMouseDown={handleResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
-                  <div style={headerCellStyle('var(--color-right)', rightWidth)}>{rightPath || '(empty)'}</div>
+                  <div style={{ ...headerCellStyle('var(--color-right)', rightWidth), display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rightPath || '(empty)'}</span>
+                    {onAddFileComment && (
+                      <button
+                        type="button"
+                        onClick={() => onAddFileComment(fileKey)}
+                        title="Comment on this file"
+                        style={{
+                          flexShrink: 0,
+                          background: 'transparent',
+                          border: '1px solid var(--color-accent-border)',
+                          color: 'var(--color-accent)',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '10px',
+                          padding: '1px 6px',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                        }}
+                      >+ comment</button>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Virtual scroll content */}
               <div style={{ height: (totalHeight + bottomPad) + 'px', position: 'relative' }}>
                 {hunkRanges[currentHunk] && (
                   <div style={{
@@ -885,130 +981,57 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                     left: 0,
                     right: 0,
                     height: (hunkRanges[currentHunk].end - hunkRanges[currentHunk].start + 1) * ROW_HEIGHT + 'px',
-                    border: `1px solid var(${rejectedHunks.has(currentHunk) || rejectingHunk === currentHunk ? '--color-conflict' : '--color-accent'})`,
+                    border: '1px solid var(--color-accent)',
                     borderRadius: '3px',
                     pointerEvents: 'none',
                     zIndex: 2,
                   }} />
                 )}
-                {hunkRanges.map((range, hIdx) => {
-                  const isEditing = rejectingHunk === hIdx;
-                  const reason = rejectionReasons.get(hIdx);
-                  const isRejected = rejectedHunks.has(hIdx);
-                  if (!isEditing && !(isRejected && reason)) return null;
-                  return (
-                    <div key={`note-${hIdx}`} style={{
+                {/* CO-07: banding outlines over each comment's line range. */}
+                {commentBands.map((b) => (
+                  <div
+                    key={b.key}
+                    style={{
                       position: 'absolute',
-                      top: (range.end + 1) * ROW_HEIGHT + 'px',
+                      top: b.startRow * ROW_HEIGHT + 'px',
                       left: 0,
                       right: 0,
-                      zIndex: 10,
-                      pointerEvents: 'auto',
-                    }}>
-                      {isEditing ? (
-                        <div style={{
-                          background: 'var(--bg-panel)',
-                          border: '1px solid var(--color-conflict)',
-                          borderRadius: '3px',
-                        }}>
-                          <textarea
-                            ref={rejectInputRef}
-                            key={`edit-${hIdx}`}
-                            defaultValue={rejectInitialValue}
-                            rows={2}
-                            onInput={resizeRejectInput}
-                            placeholder="Rejection reason (optional)"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                completeRejection(rejectingHunk, e.target.value.trim() || null);
-                              } else if (e.key === 'Escape') {
-                                e.preventDefault();
-                                completeRejection(rejectingHunk, null);
-                              }
-                              e.stopPropagation();
-                            }}
-                            onBlur={() => {
-                              completeRejection(rejectingHunk, rejectInputRef.current?.value.trim() || null);
-                            }}
-                            style={{
-                              display: 'block',
-                              width: '100%',
-                              boxSizing: 'border-box',
-                              padding: '4px 8px',
-                              fontSize: '13px',
-                              fontFamily: 'var(--font-ui)',
-                              background: 'transparent',
-                              color: 'var(--text-primary)',
-                              border: 'none',
-                              outline: 'none',
-                              resize: 'none',
-                              overflow: 'auto',
-                            }}
-                          />
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            padding: '3px 8px',
-                            borderTop: '1px solid var(--border)',
-                          }}>
-                            {onAddNote && (
-                              <button
-                                type="button"
-                                // onMouseDown + preventDefault keeps the textarea
-                                // focused so its blur doesn't reject the hunk
-                                // before we convert it to a note.
-                                onMouseDown={(e) => { e.preventDefault(); convertEditingToNote(rejectingHunk, rejectInputRef.current?.value || ''); }}
-                                style={{
-                                  background: 'transparent',
-                                  border: '1px solid var(--color-accent-border)',
-                                  color: 'var(--color-accent)',
-                                  fontFamily: 'var(--font-mono)',
-                                  fontSize: '10px',
-                                  fontWeight: 600,
-                                  textTransform: 'uppercase',
-                                  letterSpacing: '0.08em',
-                                  padding: '2px 8px',
-                                  borderRadius: '3px',
-                                  cursor: 'pointer',
-                                }}
-                              >Convert to note</button>
-                            )}
-                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
-                              Enter confirms · Shift+Enter newline · Esc skips
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div
-                          onClick={() => beginReject(hIdx)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            padding: '3px 8px',
-                            fontSize: '12px',
-                            fontFamily: 'var(--font-ui)',
-                            background: 'var(--bg-panel)',
-                            color: 'var(--color-conflict)',
-                            borderLeft: '3px solid var(--color-conflict)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <span style={{ flex: 1, whiteSpace: 'pre-wrap' }}>{reason}</span>
-                          <span
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!window.confirm('Remove this note? The change stays rejected.')) return;
-                              setRejectionReasons(prev => { const next = new Map(prev); next.delete(hIdx); return next; });
-                            }}
-                            style={{ opacity: 0.5, cursor: 'pointer', fontSize: '11px' }}
-                            title="Remove note"
-                          >✕</span>
-                        </div>
-                      )}
-                    </div>
+                      height: (b.endRow - b.startRow + 1) * ROW_HEIGHT + 'px',
+                      border: `1.5px solid ${actionColor(b.action)}`,
+                      borderRadius: '3px',
+                      pointerEvents: 'none',
+                      zIndex: 3,
+                    }}
+                  />
+                ))}
+                {/* Persistent comment bars (CO-07) + the inline composer (CO-06). */}
+                {composing && (
+                  <CommentComposer
+                    key={`composer-${composing.commentId ?? 'new'}-${composing.target.endRow}`}
+                    composing={composing}
+                    composerRef={composerRef}
+                    top={(composing.target.endRow + 1) * ROW_HEIGHT}
+                    onResize={resizeComposer}
+                    onSetAction={(action) => setComposing(c => ({ ...c, action }))}
+                    onClose={closeComposer}
+                  />
+                )}
+                {fileComments.map((c) => {
+                  if (composing && composing.commentId === c.id) return null;
+                  const t = c.target || {};
+                  if (t.endRow == null) return null;
+                  return (
+                    <CommentBar
+                      key={`comment-${c.id}`}
+                      comment={c}
+                      top={(t.endRow + 1) * ROW_HEIGHT}
+                      onEdit={() => editComment(c)}
+                      onCycleAction={() => onSetCommentAction(c.id, ACTIONS[(ACTIONS.indexOf(c.action) + 1) % ACTIONS.length])}
+                      onDelete={() => {
+                        if ((c.body || '').trim() && !window.confirm('Delete this comment?')) return;
+                        onDeleteComment(c.id);
+                      }}
+                    />
                   );
                 })}
                 <div style={{ position: 'absolute', top: startIdx * ROW_HEIGHT + 'px', left: 0, right: 0 }}>
@@ -1018,15 +1041,19 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                       <DiffRow
                         key={idx}
                         row={row}
+                        idx={idx}
                         active={activeRowSet.has(idx)}
                         reviewed={reviewedRowSet.has(idx)}
-                        rejected={rejectedRowSet.has(idx)}
+                        commentAction={rowActionMap.get(idx)}
+                        selected={selectionRowSet ? selectionRowSet.has(idx) : false}
                         scrollLeft={scrollLeft}
                         leftWidth={leftWidth}
                         rightWidth={rightWidth}
                         onResizerMouseDown={handleResizerMouseDown}
-                        onClick={() => handleRowClick(idx)}
+                        onClick={(e) => handleRowClick(e, idx)}
                         onContextMenu={(e) => handleRowContextMenu(e, idx)}
+                        onGutterMouseDown={beginGutterGesture}
+                        onRowEnter={handleRowEnter}
                       />
                     );
                   })}
@@ -1034,7 +1061,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
               </div>
             </div>
 
-            {/* Horizontal scrollbar */}
             {maxScroll > 0 && (
               <div
                 ref={hScrollRef}
@@ -1048,7 +1074,6 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
         )}
       </div>
 
-      {/* Minimap — sibling of the main column, not inside it */}
       {!isBinary && (
         <Minimap
           rows={rows}
@@ -1057,7 +1082,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           scrollTop={scrollTop}
           onScrollTo={handleMinimapScroll}
           reviewedRows={reviewedRowSet}
-          rejectedRows={rejectedRowSet}
+          commentRowColors={commentRowColors}
         />
       )}
       {contextMenu && (
@@ -1108,7 +1133,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
         color: 'var(--text-primary)',
         gap: '12px',
       }}>
-        {rejectedHunks.size > 0 && (
+        {fileFixNowCount > 0 && (
           <span style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -1119,7 +1144,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
             fontSize: '10px',
             fontWeight: 600,
           }}>
-            {rejectedHunks.size} rejected
+            {fileFixNowCount} fix-now
           </span>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1131,23 +1156,131 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
             overflow: 'hidden',
           }}>
             <div style={{
-              width: `${hunkRanges.length > 0 ? (reviewedHunks.size + rejectedHunks.size) / hunkRanges.length * 100 : 0}%`,
+              width: `${hunkRanges.length > 0 ? reviewedHunks.size / hunkRanges.length * 100 : 0}%`,
               height: '100%',
-              background: reviewedHunks.size + rejectedHunks.size >= hunkRanges.length ? 'var(--color-equal)' : 'var(--color-accent)',
+              background: reviewedHunks.size >= hunkRanges.length ? 'var(--color-equal)' : 'var(--color-accent)',
               borderRadius: '2px',
               transition: 'width 0.2s',
             }} />
           </div>
           <span>
-            {reviewedHunks.size + rejectedHunks.size >= hunkRanges.length ? (
+            {reviewedHunks.size >= hunkRanges.length ? (
               <span style={{ color: 'var(--color-equal)' }}>All changes viewed · q to close</span>
             ) : (
-              <>{reviewedHunks.size + rejectedHunks.size} of {hunkRanges.length} changes viewed</>
+              <>{reviewedHunks.size} of {hunkRanges.length} changes viewed</>
             )}
           </span>
         </div>
       </div>
     )}
+    </div>
+  );
+}
+
+// CO-06: the inline composer — an auto-growing text area plus the action
+// control. Enter confirms; Shift+Enter inserts a newline; Escape confirms a
+// non-empty comment or discards an empty one (closeComposer decides).
+function CommentComposer({ composing, composerRef, top, onResize, onSetAction, onClose }) {
+  return (
+    <div style={{ position: 'absolute', top: top + 'px', left: 0, right: 0, zIndex: 10, pointerEvents: 'auto' }}>
+      <div style={{ background: 'var(--bg-panel)', border: `1px solid ${actionColor(composing.action)}`, borderRadius: '3px' }}>
+        <textarea
+          ref={composerRef}
+          defaultValue={composing.body}
+          rows={2}
+          onInput={onResize}
+          placeholder="Comment for the author…"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              onClose();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              onClose();
+            }
+            e.stopPropagation();
+          }}
+          onBlur={onClose}
+          style={{
+            display: 'block',
+            width: '100%',
+            boxSizing: 'border-box',
+            padding: '4px 8px',
+            fontSize: '13px',
+            fontFamily: 'var(--font-ui)',
+            background: 'transparent',
+            color: 'var(--text-primary)',
+            border: 'none',
+            outline: 'none',
+            resize: 'none',
+            overflow: 'auto',
+          }}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 8px', borderTop: '1px solid var(--border)' }}>
+          {ACTIONS.map((a) => {
+            const selected = composing.action === a;
+            return (
+              <button
+                key={a}
+                type="button"
+                // onMouseDown + preventDefault keeps the textarea focused so its
+                // blur doesn't close the composer before the action is set.
+                onMouseDown={(e) => { e.preventDefault(); onSetAction(a); }}
+                style={{
+                  background: selected ? actionBg(a) : 'transparent',
+                  border: `1px solid ${selected ? actionColor(a) : 'var(--border)'}`,
+                  color: selected ? actionColor(a) : 'var(--text-muted)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  padding: '2px 8px',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                }}
+              >{actionLabel(a)}</button>
+            );
+          })}
+          <span style={{ flex: 1 }} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
+            Enter saves · Shift+Enter newline · Esc
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// CO-07: a persistent bar at a comment's anchor showing its body and action.
+// Click the body to edit; click the action chip to cycle; ✕ deletes (confirms).
+function CommentBar({ comment, top, onEdit, onCycleAction, onDelete }) {
+  const color = actionColor(comment.action);
+  return (
+    <div style={{ position: 'absolute', top: top + 'px', left: 0, right: 0, zIndex: 9, pointerEvents: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 8px', fontSize: '12px', fontFamily: 'var(--font-ui)', background: 'var(--bg-panel)', borderLeft: `3px solid ${color}` }}>
+        <button
+          type="button"
+          onClick={onCycleAction}
+          title="Cycle action: consider → fix later → fix now"
+          style={{
+            flexShrink: 0,
+            background: actionBg(comment.action),
+            border: `1px solid ${color}`,
+            color,
+            fontFamily: 'var(--font-mono)',
+            fontSize: '10px',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            padding: '1px 6px',
+            borderRadius: '3px',
+            cursor: 'pointer',
+          }}
+        >{actionLabel(comment.action)}</button>
+        <span onClick={onEdit} style={{ flex: 1, whiteSpace: 'pre-wrap', color: 'var(--text-primary)', cursor: 'text' }}>{comment.body}</span>
+        <span onClick={onDelete} style={{ opacity: 0.5, cursor: 'pointer', fontSize: '11px' }} title="Delete comment">✕</span>
+      </div>
     </div>
   );
 }

@@ -14,9 +14,11 @@ const GROUPS = [
     ],
   },
   {
-    title: 'Reject',
+    title: 'Comment',
     rows: [
-      [['r'], 'Reject current change (optional reason)'],
+      [['Space', '⏎'], 'Comment on current change'],
+      [['drag'], 'Drag the line gutter to comment on a range'],
+      [['n'], 'Open comments panel (edit / set action / delete)'],
     ],
   },
   {
@@ -24,12 +26,6 @@ const GROUPS = [
     rows: [
       [['↑', '↓'], 'Scroll vertically'],
       [['←', '→'], 'Scroll horizontally'],
-    ],
-  },
-  {
-    title: 'Notes',
-    rows: [
-      [['n'], 'Open notes panel (add / edit / delete)'],
     ],
   },
   {

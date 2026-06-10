@@ -1,15 +1,15 @@
 # Keyboard shortcuts
 
-moor is keyboard-first and vim-flavored: you walk the diff with `j`/`k`, accept
-or reject each change with a keystroke, and close when you're done. The mouse is
-always available as a fallback, but you never need to reach for it.
+moor is keyboard-first and vim-flavored: you walk the diff with `j`/`k`, comment
+on a change with a keystroke, and close when you're done. The mouse is always
+available as a fallback, but you never need to reach for it.
 
 ## Reviewing changes
 
 | Key | Action |
 |-----|--------|
 | `j` / `k` | Next / previous change. Moving off a change marks it reviewed — press `u` to undo. |
-| `Shift+J` | Mark every unreviewed change in this file reviewed and jump to the next file. Rejected changes stay rejected. |
+| `Shift+J` | Mark every unreviewed change in this file reviewed and jump to the next file. |
 | `Shift+K` | Jump to the previous file, leaving review state untouched. |
 | `u` | Mark the current change unreviewed. |
 | `i` | Open the current change in your editor at its line. |
@@ -17,21 +17,32 @@ always available as a fallback, but you never need to reach for it.
 At the last change of a file, `j` rolls onto the next file; at the first change, `k`
 rolls back to the previous one — so a long review is just `j` held down.
 
-## Rejecting a change
+## Commenting
 
 | Key | Action |
 |-----|--------|
-| `r` | Reject the current change and open an inline box for an optional reason. |
+| `Space` / `Enter` | Comment on the current change — opens an inline composer anchored to its lines. |
 
-The reason box grows as you type. `Enter` confirms, `Shift+Enter` inserts a
-newline, `Escape` confirms without a reason. The box also has a **Convert to
-note** button that moves the text into the [notes](#notes) — keeping the
-change's location — instead of rejecting.
+The composer grows as you type. `Enter` confirms, `Shift+Enter` inserts a
+newline, `Escape` confirms a non-empty comment or discards an empty one. Each
+comment carries an **action** — pick one in the composer:
 
-To remove a rejection, right-click the change and choose **Delete** (it confirms
-before discarding a typed reason — there's no one-key delete, to avoid losing it
-by accident). Rejections travel back to the caller through the
-[feedback channel](/#review-feedback-channel).
+| Action | Meaning |
+|--------|---------|
+| **consider** | Advisory (the default). Doesn't block shipping. |
+| **fix later** | Should be addressed, but needn't block this ship. |
+| **fix now** | Must be fixed before shipping — gates the exit code and turns the change red. |
+
+To comment on an arbitrary span, **drag the new (right) side's line-number
+gutter** across the lines you want, then release. Comments anchor to the new
+file, so the gutter affordance lives on the right side only. You can comment on
+**any** right-side line — including unchanged context lines, so you can flag a
+bug you spot in neighboring code: click an unchanged line's number (or
+long-press / right-click any line). Each
+comment **bands** the lines it covers with an outline in its action color, so
+it's clear at a glance what the comment applies to. To remove a comment, click
+the ✕ on its bar (it confirms before discarding a typed body). Comments travel
+back to the caller through the [feedback channel](/#review-feedback-channel).
 
 ## Scrolling
 
@@ -43,21 +54,20 @@ by accident). Rejections travel back to the caller through the
 Lines are never wrapped, so horizontal scroll is how you reach the tail of a
 long line.
 
-## Notes
+## Comments panel
 
 | Key | Action |
 |-----|--------|
-| `n` | Open the notes panel (also the `+ note` control in the status strip). |
+| `n` | Open the comments panel (also the `comments` control in the status strip). |
 
-Notes are guidance for the agent reading the result — minor tweaks that aren't
-worth rejecting a change over. The panel lets you add ambient notes and edit or
-delete any note inline (deleting confirms first, since a note is hard to
-recreate). You can also right-click a rejected change and **Convert to note** to
-move its reason into the notes, keeping the change's location.
+The panel lists every comment — on the whole changeset, a file, or a line range
+— and lets you edit the body inline, cycle its action, or delete it (deleting
+confirms first, since a typed comment is hard to recreate). It's also where you
+add a comment on the whole changeset.
 
-Notes ride along in the result context as a `notes` array of
-`{ note, file?, line? }`, separate from per-change rejections, and don't affect
-whether the review counts as complete.
+Comments ride along in the result context as a `comments` array of
+`{ body, action, file?, startLine?, endLine? }`. Only `fix-now` comments affect
+the exit code; `fix-later` and `consider` are advisory.
 
 ## View
 
@@ -77,8 +87,8 @@ on their own.
 |-----|--------|
 | `q` / `Escape` | Close moor. |
 
-With unreviewed or rejected changes still outstanding, closing first raises a quit
-dialog that summarizes what's left. Inside that dialog:
+With fix-now comments or unreviewed changes still outstanding, closing first
+raises a quit dialog that summarizes what's left. Inside that dialog:
 
 | Key | Action |
 |-----|--------|
@@ -87,8 +97,8 @@ dialog that summarizes what's left. Inside that dialog:
 | `Enter` | Activate the focused button. |
 | `Escape` | Cancel and return to the review. |
 
-The exit code reflects the outcome (clean, rejections, unreviewed, or early
-close) so the caller knows how the review ended.
+The exit code reflects the outcome (clean, fix-now comments, unreviewed, or
+early close) so the caller knows how the review ended.
 
 ## Mouse equivalents
 
@@ -96,7 +106,10 @@ Everything reviewable by keyboard is reachable by mouse too:
 
 | Gesture | Action |
 |---------|--------|
-| Click a change | Mark it reviewed. |
-| Right-click a change | Open the context menu (reviewed, unreviewed, reject, delete, convert to note, open in editor). |
+| Click a changed line | Mark it reviewed. |
+| Click an unchanged line's number (right side) | Comment on that line. |
+| Drag the right-side line-number gutter | Select a line range (changed or context) and open a comment composer. |
+| Long-press the right-side line-number gutter | Comment on that single line. |
+| Right-click a change | Open the context menu (reviewed, unreviewed, comment, open in editor). |
 | Drag the sidebar's right edge | Resize the file navigator. |
 | Sidebar collapse / show buttons | Hide or reveal the file navigator. |

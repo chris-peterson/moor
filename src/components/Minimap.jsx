@@ -10,7 +10,7 @@ const typeToColor = {
   equal: 'transparent',
 };
 
-export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, onScrollTo, reviewedRows, rejectedRows }) {
+export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, onScrollTo, reviewedRows, commentRowColors }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const [containerHeight, setContainerHeight] = useState(0);
@@ -30,10 +30,12 @@ export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, onScroll
 
   const colorMap = useMemo(() => {
     return rows.map((row, i) => {
-      if (rejectedRows && rejectedRows.has(i)) return 'var(--color-conflict)';
+      // A comment marker (colored by its action) takes precedence over the
+      // row's own change color.
+      if (commentRowColors && commentRowColors.has(i)) return commentRowColors.get(i);
       return typeToColor[row.type] || 'transparent';
     });
-  }, [rows, rejectedRows]);
+  }, [rows, commentRowColors]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

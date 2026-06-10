@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Features
+- **Comments replace rejections and notes.** Per-hunk rejections and free-text
+  review notes are unified into one **comment** concept: a body, a target (the
+  whole changeset, a file, or a line range), and an **action** — `fix-now`
+  (must fix before shipping — gates the exit code), `fix-later` (must fix, but
+  not before this ship), or `consider` (advisory, the default). Comment a line
+  range by dragging the new side's line-number gutter, a single line with a long-press,
+  the current change with `Space` / `Enter`, or right-click → **Comment**;
+  changeset and file comments come from the header controls and the comments
+  panel (`n`). Comments can anchor to **any** line, including unchanged context
+  lines, so you can flag a bug in neighboring code; each comment bands the lines
+  it covers with an action-colored outline. Hunk review state is now binary
+  (reviewed / unreviewed).
+
+### Breaking
+- **Sidecar `output` schema.** The `rejections` and `notes` arrays are replaced
+  by a single `comments` array of `{body, action, file?, startLine?, endLine?}`.
+  Callers that read `output.rejections` / `output.notes` must switch to
+  `output.comments` (exit code `1` now means one or more `fix-now` comments).
+
 ## 0.7.0
 
 ### Features

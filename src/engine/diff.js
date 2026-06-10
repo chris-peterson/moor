@@ -203,32 +203,6 @@ export function buildDisplayRows(leftLines, rightLines, hunks) {
   return rows;
 }
 
-// Return [{ line }, ...] indexed by display hunk index, where `line` is the
-// 1-based line number of the hunk's first row (rightNum preferred, leftNum
-// for pure-deletions). Used by the EC-5 sidecar to populate `line` for every
-// rejected hunk without having to plumb FileDiffView state up to ReviewShell.
-export function computeHunkStartLines(leftContent, rightContent) {
-  if (leftContent === BINARY_SENTINEL || rightContent === BINARY_SENTINEL) {
-    return [{ line: 1 }];
-  }
-  const leftLines = leftContent ? leftContent.split('\n') : [];
-  const rightLines = rightContent ? rightContent.split('\n') : [];
-  const hunks = computeLineChanges(leftLines, rightLines);
-  const rows = buildDisplayRows(leftLines, rightLines, hunks);
-
-  const starts = [];
-  let inHunk = false;
-  for (const row of rows) {
-    if (row.type === 'equal') {
-      inHunk = false;
-    } else if (!inHunk) {
-      inHunk = true;
-      starts.push({ line: row.rightNum || row.leftNum || 1 });
-    }
-  }
-  return starts;
-}
-
 // Count added / removed lines between two file versions, matching git's
 // +/- stat semantics: a changed line is one removal plus one addition. Binary
 // files report zero (the line model doesn't apply).

@@ -36,16 +36,16 @@ export function hasExpandableDetails(context) {
 export function ContextHeader({
   context,
   channelConfigured,
-  rejectionBadges = [],
+  fixNowBadges = [],
   viewedChanges = 0,
   totalChanges = 0,
   allViewed = false,
-  onNavigateToRejection,
+  onNavigateToFixNow,
   detailsExpanded = false,
   onToggleDetails,
   lineStats = null,
-  noteCount = 0,
-  onOpenNotes,
+  commentCount = 0,
+  onOpenComments,
 }) {
   if (!channelConfigured) {
     return (
@@ -157,11 +157,11 @@ export function ContextHeader({
         <span style={styles.channelLabel('right')}>status</span>
 
         <div style={styles.badges}>
-          {rejectionBadges.map(({ fileIndex, count, name }) => (
+          {fixNowBadges.map(({ fileIndex, count, name }) => (
             <button
               key={fileIndex}
               type="button"
-              onClick={() => onNavigateToRejection?.(fileIndex)}
+              onClick={() => onNavigateToFixNow?.(fileIndex)}
               style={styles.badge}
               title={`Jump to ${name}`}
             >
@@ -172,17 +172,17 @@ export function ContextHeader({
           ))}
           <button
             type="button"
-            onClick={() => onOpenNotes?.()}
+            onClick={() => onOpenComments?.()}
             style={styles.noteChip}
-            title={noteCount ? `${noteCount} review note${noteCount === 1 ? '' : 's'} — click to manage` : 'Add a review note'}
+            title={commentCount ? `${commentCount} comment${commentCount === 1 ? '' : 's'} — click to manage` : 'Add a comment'}
           >
-            {noteCount > 0 ? (
+            {commentCount > 0 ? (
               <>
-                <span style={styles.noteChipLabel}>notes</span>
-                <span style={styles.noteChipCount}>{noteCount}</span>
+                <span style={styles.noteChipLabel}>comments</span>
+                <span style={styles.noteChipCount}>{commentCount}</span>
               </>
             ) : (
-              <span style={styles.noteChipLabel}>+ note</span>
+              <span style={styles.noteChipLabel}>+ comment</span>
             )}
           </button>
         </div>
@@ -480,9 +480,9 @@ const styles = {
     color: 'var(--text-primary)',
   },
 
-  // The review-notes control (NV-19) reads as a status chip in the accent
-  // color — distinct from the red rejection badges since notes are non-blocking.
-  // Doubles as the "+ note" CTA when there are none yet.
+  // The comments control (NV-19) reads as a status chip in the accent color —
+  // distinct from the red fix-now badges. Doubles as the "+ comment" CTA when
+  // there are none yet.
   noteChip: {
     display: 'inline-flex',
     alignItems: 'baseline',

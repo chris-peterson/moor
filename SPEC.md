@@ -32,6 +32,9 @@ moor opens a sidebar listing changed files. User navigates between files, review
 | **hunk** | A contiguous group of changed lines in a diff — the atomic unit of review. A single-word edit is still a one-line hunk. |
 | **file pair** | The left (old) and right (new) versions of a single file |
 | **change** | Informal shorthand for hunk; used in user-facing messaging (e.g. "3 changes remaining") |
+| **changeset** | The whole diff under review — the target of a changeset-level comment, distinct from a single **change**/hunk |
+| **comment** | Review feedback anchored to the changeset, a file, or a line range. Carries a free-text body and an action. Reconciles the former rejections and notes. |
+| **action** | A comment's disposition: `fix-now` (must be addressed before shipping — gates the exit code), `fix-later` (must be addressed, but need not block this ship), or `consider` (advisory) |
 
 ---
 
@@ -56,26 +59,26 @@ Vim-style, keyboard-first:
 - **[NV-01]** When the user presses `j` / `k`, the viewer shall navigate to the next / previous diff hunk
 - **[NV-02]** When the user presses `q` or `Escape`, the viewer shall close (exit with code 0)
 - **[NV-03]** The viewer shall support scroll wheel and trackpad navigation
-- **[NV-04]** When a file is opened, the viewer shall position to the first non-reviewed, non-rejected hunk; if every hunk has been reviewed or rejected, the viewer shall fall back to the first hunk
+- **[NV-04]** When a file is opened, the viewer shall position to the first unreviewed hunk; if every hunk has been reviewed, the viewer shall fall back to the first hunk
 - **[NV-05]** When the user presses `u`, the viewer shall mark the current hunk as unreviewed
 - **[NV-06]** When the user clicks a hunk, the viewer shall mark it reviewed (equivalent to advancing past it with `j`)
-- **[NV-07]** When the user presses `r`, the viewer shall reject the current hunk (visually distinct from reviewed; excluded from "unreviewed" counts)
+- **[NV-07]** When the user presses Space or Enter, the viewer shall open a comment composer anchored to the current hunk's line range (CO-06). The hunk's review state is unchanged — commenting is orthogonal to review.
 - **[NV-08]** When the user presses `i`, the viewer shall open the current hunk's file in the configured editor at the hunk's line number
 - **[NV-09]** When the user clicks the currently-selected hunk, the viewer shall mark it as reviewed
 - ~~**[NV-10]**~~ Removed — the keyboard rejection-delete (`Shift+R`) dropped; a single keystroke too easily discarded a typed rejection reason. Deleting a rejection is now mouse-only via the context menu (CM-06), which confirms first.
-- **[NV-11]** When the user presses `r`, the viewer shall display an inline text area for an optional rejection reason that grows to fit its content; Enter confirms, Shift+Enter inserts a newline, Escape confirms without a reason. The editor shall also offer a "Convert to note" action that moves the typed text into the review notes (NV-19, CM-07) without rejecting the hunk.
-- **[NV-12]** While a rejected hunk has a rejection reason, the viewer shall display the reason as a persistent note below the hunk; clicking the note shall open it for editing, and clicking the ✕ shall remove the note after a confirmation (the hunk remains rejected)
+- ~~**[NV-11]**~~ Superseded by CO-06 — the comment composer replaces the reject-reason editor (one composer for all actions; severity/action chosen via the action control, not a separate flow)
+- ~~**[NV-12]**~~ Superseded by CO-07 — the persistent comment bar replaces the rejection-reason note
 - **[NV-13]** The viewer shall position the viewport when navigating between hunks, per the lettered sub-requirements below.
   - **[NV-13a]** When navigating to a hunk that is already fully visible in the viewport, the viewer shall not scroll.
   - **[NV-13b]** Otherwise the viewer shall scroll so that one line of context above the hunk is visible at the top of the viewport, with the hunk's first line on the second visible row.
   - **[NV-13c]** If the hunk begins at the first line of the file, the viewer shall align the hunk's first line flush with the top of the viewport. If the hunk would fit in the viewport flush to the top but not with the context-above row, the viewer shall align the hunk flush so the bottom is in view. The viewer shall not push the hunk's first line below the second visible row, even when the hunk is taller than the viewport.
   - **[NV-13d]** In-file hunk navigation shall animate the scroll; navigation to a new file shall scroll instantly.
-- **[NV-14]** When the user presses `Shift+J`, the viewer shall mark all unreviewed hunks in the current file as reviewed and navigate to the first hunk of the next file. Rejected hunks remain rejected.
-- **[NV-15]** When the user presses `Shift+K`, the viewer shall navigate to the first hunk of the previous file. Review and rejection state of hunks in the current file shall remain unchanged.
+- **[NV-14]** When the user presses `Shift+J`, the viewer shall mark all unreviewed hunks in the current file as reviewed and navigate to the first hunk of the next file. Comments are unaffected.
+- **[NV-15]** When the user presses `Shift+K`, the viewer shall navigate to the first hunk of the previous file. The review state of hunks in the current file shall remain unchanged.
 - **[NV-16]** When the user invokes "open in editor" (NV-08 or CM-05) and the editor lookup returns no result (file not in any open or recent workspace, or editor CLI not found), the viewer shall display a transient error toast with the failure reason for 3 seconds.
 - **[NV-17]** When the user presses `d` (either case), the viewer shall toggle the input details panel (IM.IN-01) — the keyboard companion to IM.IN-01's hover / click-to-expand.
 - **[NV-18]** When the user presses `?`, the viewer shall toggle an overlay listing the keyboard shortcuts; `Escape` or a second `?` shall dismiss it.
-- **[NV-19]** When the user presses `n` (either case) or activates the "+ note" control, the viewer shall open a panel for managing a list of free-text review notes. Each note may be edited inline; deleting a note shall require an explicit control that confirms first, since a typed note is hard to recreate. Notes are reviewer guidance for minor tweaks, distinct from per-hunk rejections (NV-07), and shall not affect review completion or the exit code.
+- **[NV-19]** When the user presses `n` (either case) or activates the comments control, the viewer shall open the comments panel (CO-08).
 - **[NV-20]** When the user presses `=` / `+` or `-`, the viewer shall zoom the interface in or out; `0` shall reset the zoom. No modifier key shall be required.
 
 ### Directory Diff (DD)
@@ -93,8 +96,8 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[DD-09]** While in directory diff mode, the viewer shall display the full file path in the lower-left of the view
 - **[DD-10]** While in directory diff mode, the viewer shall allow the user to resize the sidebar width by dragging its right edge
 - **[DD-11]** While in directory diff mode, the viewer shall provide a way to hide and show the sidebar
-- **[DD-12]** When the user attempts to close with one or more rejected hunks, the viewer shall display a quit confirmation dialog summarizing the rejections (per-file count and reasons), with the primary CTA labeled "Send review feedback" that confirms the close. Exit code follows EC-02.
-- **[DD-13]** When the user attempts to close with one or more unreviewed hunks and no rejected hunks, the viewer shall display a quit confirmation dialog with the existing OK / Cancel actions plus an "Approve anyway" button. "Approve anyway" shall close the viewer with exit code 0 (clean approve) regardless of the unreviewed count.
+- **[DD-12]** When the user attempts to close with one or more `fix-now` comments, the viewer shall display a quit confirmation dialog summarizing them (per-file count and bodies), with the primary CTA labeled "Send review feedback" that confirms the close. Exit code follows EC-02.
+- **[DD-13]** When the user attempts to close with one or more unreviewed hunks and no `fix-now` comments, the viewer shall display a quit confirmation dialog with the existing OK / Cancel actions plus an "Approve anyway" button. "Approve anyway" shall close the viewer with exit code 0 (clean approve) regardless of the unreviewed count.
 - **[DD-14]** While a quit confirmation dialog (DD-12, DD-13) is open, the viewer shall support keyboard navigation between dialog buttons via Tab / Shift+Tab and Left / Right arrow keys; Enter shall activate the focused button and Escape shall cancel.
 - **[DD-15]** While in directory diff mode, when a left-only file and a right-only file are determined to be a rename or move of the same content (e.g., via `git mv`), the viewer shall display the pair as a single entry showing the old → new path, instead of as separate L and R entries. The entry shall contribute one item to the sidebar and hunk counts (DD-06), and its diff view shall show content changes between the two versions (zero-hunk when the rename is content-identical).
 - **[DD-16]** When the user presses `f` (either case), the viewer shall toggle the file sidebar — the keyboard companion to DD-11's collapse / show controls.
@@ -102,13 +105,13 @@ When launched with two directories (`git difftool --dir-diff`):
 ### Search Mode (SM)
 
 Search mode was removed — low value and limited in capability. The `n` / `N`
-keys it used are repurposed for review notes (NV-19).
+keys it used are repurposed for the comments panel (NV-19).
 
 - ~~**[SM-01]**~~ Removed — in-diff search dropped
 - ~~**[SM-02]**~~ Removed
 - ~~**[SM-03]**~~ Removed
 - ~~**[SM-04]**~~ Removed
-- ~~**[SM-05]**~~ Removed — `n` / `N` repurposed for review notes (NV-19)
+- ~~**[SM-05]**~~ Removed — `n` / `N` repurposed for the comments panel (NV-19)
 - ~~**[SM-06]**~~ Removed
 
 ### Context Menu (CM)
@@ -116,17 +119,30 @@ keys it used are repurposed for review notes (NV-19).
 - **[CM-01]** When the user right-clicks a hunk, the viewer shall display a context menu
 - **[CM-02]** The context menu shall include "Mark as reviewed" (see NV-06)
 - **[CM-03]** The context menu shall include "Mark as unreviewed" (see NV-05)
-- **[CM-04]** The context menu shall include "Reject" (see NV-07)
+- **[CM-04]** The context menu shall include "Comment" (compose a comment on the clicked line — see CO-06)
 - **[CM-05]** The context menu shall include "Open in editor" (see NV-08)
-- **[CM-06]** When the selected hunk is rejected, the context menu shall include "Delete" (removing the rejection); when the hunk has a typed rejection reason, selecting it shall confirm before discarding the reason
-- **[CM-07]** When the selected hunk is rejected with a typed reason, the context menu shall include "Convert to note", which moves the reason into the review notes (NV-19) — carrying the hunk's file and line — and deletes the rejection
+- **[CM-06]** When the selected hunk has one or more comments, the context menu shall include "Delete comment" (removing the hunk's comment); when a comment has a typed body, selecting it shall confirm before discarding
+- ~~**[CM-07]**~~ Retired — "Convert to note" is replaced by the CO-03 action control; lowering a comment's action to `consider` is the successor
+
+### Comments (CO)
+
+A **comment** is review feedback the reviewer leaves for the change's author. Comments reconcile what were two separate concepts — per-hunk rejections and free-text notes — into one, distinguished by **action** rather than by kind.
+
+- **[CO-01]** The viewer shall represent review feedback as **comments**. A comment consists of a free-text `body`, an `action`, and a target. Comments reconcile the former per-hunk rejections (now `fix-now` comments) and free-text notes (now `consider` comments).
+- **[CO-02]** A comment's target shall be one of: the overall **changeset** (unanchored), a **file**, or a **line range** within a file. The range may cover changed or unchanged (context) lines, so the reviewer can flag an issue in neighboring code, not only in the diff's hunks.
+- **[CO-03]** When a comment is created, the viewer shall default its action to `consider`, and shall let the user set any comment's action to `consider`, `fix-later`, or `fix-now`. `fix-now` denotes feedback that must be addressed before shipping and gates the exit code (EC-02); `fix-later` denotes feedback that must be addressed but need not block this ship; `consider` is advisory. Neither `fix-later` nor `consider` shall affect review completion or the exit code.
+- **[CO-04]** When the user presses on the **new (right) side's** line-number gutter, the gesture shall resolve on release: a quick press-and-release on a **changed** line marks it reviewed (NV-06, NV-09), while on an **unchanged (context)** line it opens a single-line comment (a context line has no review state); a press that drags across lines selects the spanned range; and a press held in place past a long-press threshold selects the single line. A range or single-line selection shall open a comment composer (CO-06) anchored to it. The old (left) side's gutter is not a comment affordance — review feedback references the new file. Right-clicking any line offers the same single-line comment via the context menu (CM-04).
+- **[CO-05]** The viewer shall provide a control to comment on the overall **changeset** (from the header) and a control to comment on a **file** (from its sidebar entry or file header).
+- **[CO-06]** When the user opens a comment composer (Space / Enter on the current hunk per NV-07, a range selection per CO-04, or a changeset / file control per CO-05), the viewer shall present an auto-growing text area with an action control; Enter shall confirm, Shift+Enter shall insert a newline, and Escape shall confirm a non-empty comment or discard an empty one.
+- **[CO-07]** While a line-range comment exists (or is being composed), the viewer shall **band** the covered lines — a colored outline spanning the range in the comment's action color — and display a persistent bar at the range's lower edge showing the body and action. Clicking the body shall reopen it for editing, and a delete control shall remove it after a confirmation.
+- **[CO-08]** When the user opens the comments panel (the header comments control or the `n` key, either case), the viewer shall list every comment with its target, body, and action; each shall be editable inline, action-changeable, and deletable after a confirmation.
 
 ### Review Feedback (RV)
 
 - **[RV-01]** When all hunks have been reviewed, the viewer shall display a transient "Review Complete!" notification
 - ~~**[RV-02]**~~ Superseded by IM.OUT-04 (progress now lives in the header's output region)
-- ~~**[RV-03]**~~ Superseded by IM.OUT-03 (rejection badges now live in the header's output region)
-- **[RV-04]** While a file has one or more rejected hunks, the viewer shall display that file's sidebar entry in red
+- ~~**[RV-03]**~~ Superseded by IM.OUT-03 (fix-now badges now live in the header's output region)
+- **[RV-04]** While a file has one or more `fix-now` comments, the viewer shall display that file's sidebar entry in red
 
 ### Binary Formats (BF)
 
@@ -159,9 +175,9 @@ keys it used are repurposed for review notes (NV-19).
 
 ### Exit Codes (EC)
 
-- **[EC-01]** When closed with all hunks reviewed and none rejected, the application shall exit with code 0
-- **[EC-02]** When closed with one or more rejected hunks, the application shall exit with code 1
-- **[EC-03]** When closed with one or more unreviewed hunks, the application shall exit with code 2
+- **[EC-01]** When closed with all hunks reviewed and no `fix-now` comments, the application shall exit with code 0
+- **[EC-02]** When closed with one or more `fix-now` comments, the application shall exit with code 1
+- **[EC-03]** When closed with one or more unreviewed hunks and no `fix-now` comments, the application shall exit with code 2
 - **[EC-04]** When closed before hunk counting completes or before any review interaction, the application shall exit with code 3
 - ~~**[EC-05]**~~ Superseded by IM-01 / IM.OUT-01 / IM.OUT-02 (sidecar contract moves to MOOR_CONTEXT)
 
@@ -179,13 +195,13 @@ moor exposes a bidirectional contract with its caller via a JSON file. The calle
 
 #### Outputs (viewer → caller)
 
-- **[IM.OUT-01]** The viewer shall write review state to the context file's `output` section continuously, flushing after every hunk state change (review, unreview, reject, delete a rejection, rejection-reason edit) and after a review-note edit (NV-19). On exit, the file shall reflect the final state.
-- **[IM.OUT-02a]** The output section shall always include `reviewer` (string, from `git config user.name`) and `rejections` (array of `{file, hunk, line, reason}`).
-- **[IM.OUT-02b]** The output section shall include `exitCode` (number) only after the viewer exits; its presence signals that the review has been finalized, while its absence signals an in-progress review whose rejections may still change.
-- **[IM.OUT-03]** While rejected hunks exist, the viewer shall display one badge per rejected file in the header's output region, each showing the file's rejection count; when the user clicks a badge, the viewer shall navigate to that file's first rejected hunk.
+- **[IM.OUT-01]** The viewer shall write review state to the context file's `output` section continuously, flushing after every hunk review-state change (review, unreview) and every comment change (add, edit, action change, delete). On exit, the file shall reflect the final state.
+- **[IM.OUT-02a]** The output section shall always include `reviewer` (string, from `git config user.name`) and `comments` (array). Each comment is `{ body, action, file?, startLine?, endLine? }`: a changeset comment omits `file`; a file comment includes `file`; a line-range comment includes `file`, `startLine`, and `endLine`. `action` is one of `fix-now`, `fix-later`, `consider`. The calling agent interprets the comments.
+- **[IM.OUT-02b]** The output section shall include `exitCode` (number) only after the viewer exits; its presence signals that the review has been finalized, while its absence signals an in-progress review whose comments may still change.
+- **[IM.OUT-03]** While `fix-now` comments exist, the viewer shall display one badge per affected file in the header's output region, each showing the file's `fix-now` count; when the user clicks a badge, the viewer shall navigate to that file's first `fix-now` comment.
 - **[IM.OUT-04]** The viewer shall display review progress ("X of Y changes viewed") in the header's output region.
-- **[IM.OUT-05]** While in single-file mode (no directory sidebar), the viewer shall display an equivalent review-progress footer at the bottom of the view: a progress bar with "X of Y changes viewed" (collapsing to "All changes viewed · q to close" when complete) and a rejection count when rejected hunks exist.
-- **[IM.OUT-06]** Where the reviewer has entered one or more review notes (NV-19), the output section shall include `notes` — an array of `{ note, file?, line? }`. `file` / `line` identify the source change for a note converted from a rejection (CM-07) and are absent for an ambient note. The notes are free-text guidance for the calling agent, distinct from `rejections`; the agent interprets them.
+- **[IM.OUT-05]** While in single-file mode (no directory sidebar), the viewer shall display an equivalent review-progress footer at the bottom of the view: a progress bar with "X of Y changes viewed" (collapsing to "All changes viewed · q to close" when complete) and a `fix-now` count when such comments exist.
+- ~~**[IM.OUT-06]**~~ Superseded by IM.OUT-02a — `comments[]` subsumes the former `notes[]` (a note is now a `consider` comment).
 
 ### User Preferences (UP)
 
@@ -243,6 +259,6 @@ git difftool branch       # compare against a branch
 
 - **[FUT-01]** (→ BF) Where a file has both a text and a visual representation (e.g., SVG, Markdown), the diff viewer shall provide a toggle between source diff and rendered preview
 - **[FUT-02]** (→ IM) The input section may include an optional `prev` reference describing a previous diff, using the same shape as the primary input (`left` / `right` paths plus optional `title` / `details`, nestable). Speculative — no caller emits `prev` yet; revisit once anchor's wrapper supplies it.
-- **[FUT-03]** (→ RO) `[prev]` read-only preview of the previous diff: render the link when `prev` is present, open the referenced diff read-only (reject / delete / rejection-reason / open-in-editor disabled, no output writes), and return to the live review on `Escape` or a back affordance. Speculative companion to FUT-02; not yet implemented.
+- **[FUT-03]** (→ RO) `[prev]` read-only preview of the previous diff: render the link when `prev` is present, open the referenced diff read-only (commenting / open-in-editor disabled, no output writes), and return to the live review on `Escape` or a back affordance. Speculative companion to FUT-02; not yet implemented.
 - **Syntax highlighting** — language-aware coloring in diff panels
 - **Configurable preferences** — font, colors, ignored patterns

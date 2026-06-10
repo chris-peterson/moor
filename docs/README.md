@@ -10,11 +10,11 @@ elsewhere (VS Code `--merge`).
 
 When an agent proposes a change, it hands moor the *why* along with the diff:
 the commit message, the range under review, who authored it. You read the
-intent up top, walk each change below, and accept or reject with a keystroke —
-and your verdict travels back to the agent through the [feedback
-channel](#review-feedback-channel).
+intent up top, walk each change below, and comment where it matters — a
+keystroke anchors a comment to the current change, and your feedback travels
+back to the agent through the [feedback channel](#review-feedback-channel).
 
-![moor reviewing a commit: the agent's rationale fills the INPUTS panel while the two-file diff waits for per-change accept/reject in OUTPUTS](screenshot.png)
+![moor reviewing a commit: the agent's rationale fills the INPUTS panel while the two-file diff waits for review in OUTPUTS](screenshot.png)
 
 ## Install
 
@@ -69,10 +69,10 @@ Or review a working tree through git:
 git difftool --dir-diff
 ```
 
-moor opens a sidebar of changed files. Walk each diff, mark changes reviewed or
-rejected, and close when done. The process exit code reflects the outcome
-(clean approve `0`, rejection `1`, unreviewed `2`, early close `3`), so a
-calling agent or script can branch on the result.
+moor opens a sidebar of changed files. Walk each diff, mark changes reviewed,
+leave comments where they matter, and close when done. The process exit code
+reflects the outcome (clean `0`, a `fix-now` comment `1`, unreviewed `2`, early
+close `3`), so a calling agent or script can branch on the result.
 
 ## Keyboard reference
 
@@ -81,13 +81,13 @@ Navigation is vim-style and keyboard-first. The essentials:
 | Key | Action |
 |-----|--------|
 | `j` / `k` | Next / previous change |
-| `r` | Reject current change (prompts for an optional reason) |
+| `Space` / `Enter` | Comment on the current change |
 | `i` | Open current change in your editor at its line |
-| `n` | Open the review-notes panel |
+| `n` | Open the comments panel |
 | `q` / `Escape` | Close |
 
 See [Keyboard shortcuts](/keyboard) for the full reference — file navigation,
-scrolling, the reason box, review notes, and the quit dialog.
+scrolling, the comment composer, the comments panel, and the quit dialog.
 
 ## Review feedback channel
 
@@ -100,11 +100,10 @@ moor --context ./review.json old-dir/ new-dir/
 ```
 
 The caller writes `input` (a `title` and `details` rendered in moor's header);
-moor streams `output` back — `exitCode`, `reviewer`, a `rejections` array of
-`{file, hunk, line, reason}`, and an optional `notes` array of
-`{note, file?, line?}` (free-text guidance for minor tweaks) — flushing on every
-state change. When no channel is configured, moor shows a banner and still works
-as a plain viewer.
+moor streams `output` back — `exitCode`, `reviewer`, and a `comments` array of
+`{body, action, file?, startLine?, endLine?}` where `action` is `fix-now`,
+`fix-later`, or `consider` — flushing on every state change. When no channel is
+configured, moor shows a banner and still works as a plain viewer.
 
 ## Reference
 

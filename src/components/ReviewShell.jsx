@@ -4,10 +4,10 @@ import FileDiffView from './FileDiffView.jsx';
 import FileNavbar from './FileNavbar.jsx';
 import ContextHeader, { hasExpandableDetails } from './ContextHeader.jsx';
 import KeyboardHelp from './KeyboardHelp.jsx';
-import { computeLineChanges, countDisplayHunks, computeHunkStartLines, computeContentLineStats, BINARY_SENTINEL } from '../engine/diff.js';
+import { computeLineChanges, countDisplayHunks, computeContentLineStats, BINARY_SENTINEL } from '../engine/diff.js';
+import { DEFAULT_ACTION, isBlocking, commentToOutput, actionColor, actionLabel, actionBg, cycleAction } from '../engine/comments.js';
 
 const emptySet = new Set();
-const emptyMap = new Map();
 
 function useIndexedSetter(setState, currentIndex, empty) {
   return useCallback((updater) => {
@@ -54,13 +54,11 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   const [rightContent, setRightContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [navigatedBackward, setNavigatedBackward] = useState(false);
-  const [targetHunk, setTargetHunk] = useState(null);
+  const [targetRow, setTargetRow] = useState(null);
   const [showToast, setShowToast] = useState(false);
   const [hunkCounts, setHunkCounts] = useState({});
   const [lineStats, setLineStats] = useState({});
   const [perFileReviewedHunks, setPerFileReviewedHunks] = useState({});
-  const [perFileRejectedHunks, setPerFileRejectedHunks] = useState({});
-  const [perFileRejectionReasons, setPerFileRejectionReasons] = useState({});
   const shellRef = useRef(null);
   const [sidebarWidth, setSidebarWidth] = useState(220);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -69,12 +67,13 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   const [quitDialog, setQuitDialog] = useState(null);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  // NV-19: a list of review notes. Each is { id, note, file, line } — file/line
-  // are null for an ambient note (the "+ note" CTA) and carry the source change
-  // for a note converted from a rejection (CM-07).
-  const [notes, setNotes] = useState([]);
-  const [notesPanelOpen, setNotesPanelOpen] = useState(false);
-  const noteIdRef = useRef(0);
+  // CO-01: one list of comments, each { id, body, action, target }. target is
+  // { type:'changeset' } | { type:'file', file } | { type:'range', file,
+  // startLine, endLine, startRow, endRow }. The row fields anchor the inline
+  // bar; the line fields are what reaches the sidecar (commentToOutput).
+  const [comments, setComments] = useState([]);
+  const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
+  const commentIdRef = useRef(0);
 
   const totalLineStats = useMemo(() => {
     let added = 0;
@@ -87,8 +86,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   }, [lineStats]);
 
   // Gate the d/D keys on the same predicate ContextHeader uses for its expand
-  // affordance, so the keyboard toggle and the on-screen button agree. The
-  // header expands for either context details or a non-empty line-change stat.
+  // affordance, so the keyboard toggle and the on-screen button agree.
   const hasDetails = useMemo(
     () => hasExpandableDetails(inputContext) || totalLineStats.added > 0 || totalLineStats.removed > 0,
     [inputContext, totalLineStats],
@@ -96,48 +94,54 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
 
   const toggleDetails = useCallback(() => setDetailsExpanded(v => !v), []);
 
-  // Append a note. `partial` is { note?, file?, line? } — convert-to-note
-  // (CM-07) passes the reason text plus the source file/line; the "+ note" CTA
-  // and the `n` key pass nothing and open the panel on a fresh ambient note.
-  const addNote = useCallback((partial = {}) => {
-    const id = ++noteIdRef.current;
-    setNotes(prev => [...prev, {
+  // CO-06: create a comment. `partial` carries body / action / target overrides;
+  // a bare call seeds a `consider` changeset comment to type into.
+  const addComment = useCallback((partial = {}) => {
+    const id = ++commentIdRef.current;
+    setComments(prev => [...prev, {
       id,
-      note: partial.note ?? '',
-      file: partial.file ?? null,
-      line: partial.line ?? null,
+      body: partial.body ?? '',
+      action: partial.action ?? DEFAULT_ACTION,
+      target: partial.target ?? { type: 'changeset' },
     }]);
     return id;
   }, []);
 
-  const updateNote = useCallback((id, text) => {
-    setNotes(prev => prev.map(n => (n.id === id ? { ...n, note: text } : n)));
+  const updateComment = useCallback((id, patch) => {
+    setComments(prev => prev.map(c => (c.id === id ? { ...c, ...patch } : c)));
   }, []);
 
-  const deleteNote = useCallback((id) => {
-    setNotes(prev => prev.filter(n => n.id !== id));
+  const setCommentAction = useCallback((id, action) => {
+    setComments(prev => prev.map(c => (c.id === id ? { ...c, action } : c)));
   }, []);
 
-  // The `n` key / "+ note" CTA: open the panel, seeding an empty ambient note
-  // to type into when there are none yet. Empty notes are pruned on close.
-  const openNotes = useCallback(() => {
-    setNotes(prev => (prev.length === 0 ? [{ id: ++noteIdRef.current, note: '', file: null, line: null }] : prev));
-    setNotesPanelOpen(true);
+  const deleteComment = useCallback((id) => {
+    setComments(prev => prev.filter(c => c.id !== id));
   }, []);
 
-  // Drop empty notes when the panel closes so a seeded-but-unused note vanishes.
-  const closeNotes = useCallback(() => {
-    setNotes(prev => prev.filter(n => n.note.trim()));
-    setNotesPanelOpen(false);
+  const openComments = useCallback(() => setCommentsPanelOpen(true), []);
+
+  // Prune empty-body comments when the panel closes so a seeded-but-unused
+  // changeset / file comment vanishes (CO-08 delete is otherwise explicit).
+  const closeComments = useCallback(() => {
+    setComments(prev => prev.filter(c => (c.body || '').trim()));
+    setCommentsPanelOpen(false);
   }, []);
 
-  // The cleaned, output-ready shape: trimmed text, location only when present,
-  // no internal id.
-  const outNotes = useMemo(() => notes
-    .map(n => ({ note: (n.note || '').trim(), file: n.file, line: n.line }))
-    .filter(n => n.note)
-    .map(n => ({ note: n.note, ...(n.file ? { file: n.file } : {}), ...(n.line != null ? { line: n.line } : {}) })),
-    [notes]);
+  // CO-05: add a comment on the current file, then open the panel to type it
+  // (a file comment has no line anchor, so it is edited in the panel).
+  const addFileComment = useCallback((fileKey) => {
+    if (!fileKey) return;
+    addComment({ target: { type: 'file', file: fileKey } });
+    setCommentsPanelOpen(true);
+  }, [addComment]);
+
+  // The output-ready projection (IM.OUT-02a): drop ids / anchor rows and empty
+  // bodies. Always written, even when empty.
+  const outComments = useMemo(
+    () => comments.map(commentToOutput).filter(c => c.body),
+    [comments],
+  );
 
   const handleSidebarResizerMouseDown = useCallback((e) => {
     e.preventDefault();
@@ -182,6 +186,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   }, [api, files]);
 
   const currentFile = files[currentIndex] || null;
+  const currentFileKey = currentFile ? (currentFile.rightPath || currentFile.leftPath) : null;
 
   // Prefer the prefetched content; fall back to a direct read if a file is
   // selected before the startup prefetch has populated this index.
@@ -224,17 +229,20 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
 
   const navigateTo = useCallback((index) => {
     if (index < 0 || index >= files.length) return;
-    setTargetHunk(null);
+    setTargetRow(null);
     setCurrentIndex(index);
   }, [files.length]);
 
-  const navigateToRejection = useCallback((fileIndex) => {
+  // IM.OUT-03: jump to a file's first fix-now comment (its anchor row).
+  const navigateToFixNow = useCallback((fileIndex) => {
     if (fileIndex < 0 || fileIndex >= files.length) return;
-    const rejected = perFileRejectedHunks[fileIndex];
-    const firstRejected = rejected ? Math.min(...rejected) : null;
-    setTargetHunk(firstRejected);
+    const key = files[fileIndex].rightPath || files[fileIndex].leftPath;
+    const rows = comments
+      .filter(c => isBlocking(c.action) && c.target?.type === 'range' && c.target.file === key)
+      .map(c => c.target.startRow ?? 0);
+    setTargetRow(rows.length ? Math.min(...rows) : null);
     setCurrentIndex(fileIndex);
-  }, [files.length, perFileRejectedHunks]);
+  }, [files, comments]);
 
   const navigateNext = useCallback(() => {
     setNavigatedBackward(false);
@@ -260,21 +268,25 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   const currentReviewedHunks = perFileReviewedHunks[currentIndex] || emptySet;
   const handleReviewedHunksChange = useIndexedSetter(setPerFileReviewedHunks, currentIndex, emptySet);
 
-  const currentRejectedHunks = perFileRejectedHunks[currentIndex] || emptySet;
-  const handleRejectedHunksChange = useIndexedSetter(setPerFileRejectedHunks, currentIndex, emptySet);
+  // The range comments anchored in the current file — FileDiffView renders these
+  // as inline bars and owns their editing.
+  const currentFileComments = useMemo(
+    () => comments.filter(c => c.target?.type === 'range' && c.target.file === currentFileKey),
+    [comments, currentFileKey],
+  );
 
-  const currentRejectionReasons = perFileRejectionReasons[currentIndex] || emptyMap;
-  const handleRejectionReasonsChange = useIndexedSetter(setPerFileRejectionReasons, currentIndex, emptyMap);
+  const fixNowComments = useMemo(() => comments.filter(c => isBlocking(c.action) && (c.body || '').trim()), [comments]);
+  const totalFixNow = fixNowComments.length;
 
-  const totalRejected = Object.values(perFileRejectedHunks).reduce((n, s) => n + s.size, 0);
-
-  const rejectedFiles = useMemo(() => {
+  // RV-04: files carrying a fix-now comment go red in the sidebar.
+  const fixNowFiles = useMemo(() => {
+    const paths = new Set(fixNowComments.map(c => c.target?.file).filter(Boolean));
     const set = new Set();
-    for (const [idx, hunks] of Object.entries(perFileRejectedHunks)) {
-      if (hunks && hunks.size > 0) set.add(Number(idx));
-    }
+    files.forEach((file, i) => {
+      if (paths.has(file.rightPath || file.leftPath)) set.add(i);
+    });
     return set;
-  }, [perFileRejectedHunks]);
+  }, [fixNowComments, files]);
 
   const totalChanges = Object.values(hunkCounts).reduce((a, b) => a + b, 0);
   const reviewedChanges = Object.values(perFileReviewedHunks).reduce((n, s) => n + s.size, 0);
@@ -292,83 +304,66 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
 
   const hunkCountingDone = Object.keys(hunkCounts).length >= files.length;
 
-  const liveRejections = useMemo(() => {
-    if (!hunkCountingDone) return [];
-    const rejections = [];
-    for (const [fileIdxStr, rejected] of Object.entries(perFileRejectedHunks)) {
-      const fileIdx = Number(fileIdxStr);
-      const file = files[fileIdx];
-      if (!file || !rejected || rejected.size === 0) continue;
-      const filePath = file.rightPath || file.leftPath;
-      const content = fileContents[fileIdx];
-      const starts = content ? computeHunkStartLines(content.left, content.right) : [];
-      const reasons = perFileRejectionReasons[fileIdx];
-      for (const hunkIdx of rejected) {
-        const line = starts[hunkIdx]?.line ?? 1;
-        const reason = reasons?.get(hunkIdx) ?? null;
-        rejections.push({ file: filePath, hunk: hunkIdx, line, reason });
-      }
+  // IM.OUT-03: one badge per file with fix-now comments, in the header.
+  const fixNowBadges = useMemo(() => {
+    const counts = new Map();
+    for (const c of fixNowComments) {
+      const f = c.target?.file;
+      if (f) counts.set(f, (counts.get(f) || 0) + 1);
     }
-    return rejections;
-  }, [hunkCountingDone, files, perFileRejectedHunks, perFileRejectionReasons, fileContents]);
-
-  const rejectionBadges = useMemo(() => {
     const badges = [];
-    for (let i = 0; i < files.length; i++) {
-      const rejected = perFileRejectedHunks[i];
-      if (rejected && rejected.size > 0) {
-        const file = files[i];
-        const name = (file.rightPath || file.leftPath || '').split('/').pop();
-        badges.push({ fileIndex: i, count: rejected.size, name });
+    files.forEach((file, i) => {
+      const key = file.rightPath || file.leftPath;
+      if (counts.has(key)) {
+        badges.push({ fileIndex: i, count: counts.get(key), name: (key || '').split('/').pop() });
       }
-    }
+    });
     return badges;
-  }, [files, perFileRejectedHunks]);
+  }, [fixNowComments, files]);
 
   useEffect(() => {
     if (!hunkCountingDone && files.length > 0) {
-      window.__moorQuitState = { noInteraction: true, rejected: 0, unreviewed: files.length, rejections: [] };
+      window.__moorQuitState = { noInteraction: true, fixNow: 0, unreviewed: files.length, comments: [] };
       return () => { window.__moorQuitState = null; };
     }
-    const unreviewed = totalChanges - reviewedChanges - totalRejected;
+    const unreviewed = Math.max(0, totalChanges - reviewedChanges);
     window.__moorQuitState = {
-      rejected: totalRejected,
-      unreviewed: Math.max(0, unreviewed),
-      rejections: liveRejections,
-      notes: outNotes.length ? outNotes : undefined,
+      fixNow: totalFixNow,
+      unreviewed,
+      comments: outComments,
     };
     return () => { window.__moorQuitState = null; };
-  }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalRejected, liveRejections, outNotes]);
+  }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalFixNow, outComments]);
 
   useEffect(() => {
     if (!api?.writeOutput) return;
-    // Coalesce rapid state changes (typing a rejection reason fires per-keystroke
+    // Coalesce rapid state changes (typing a comment body fires per-keystroke
     // effects) into one IPC write per frame.
     const handle = requestAnimationFrame(() => {
-      api.writeOutput({ rejections: liveRejections, ...(outNotes.length ? { notes: outNotes } : {}) });
+      api.writeOutput({ comments: outComments });
     });
     return () => cancelAnimationFrame(handle);
-  }, [api, liveRejections, outNotes]);
+  }, [api, outComments]);
 
   const closeWithExitCode = useCallback((exitCode) => {
     if (window.moor?.forceClose) {
-      window.moor.forceClose({ exitCode, rejections: liveRejections, ...(outNotes.length ? { notes: outNotes } : {}) });
+      window.moor.forceClose({ exitCode, comments: outComments });
     } else {
       onClose();
     }
-  }, [liveRejections, outNotes, onClose]);
+  }, [outComments, onClose]);
 
-  const unreviewedCount = Math.max(0, totalChanges - reviewedChanges - totalRejected);
+  const unreviewedCount = Math.max(0, totalChanges - reviewedChanges);
 
   const requestClose = useCallback(() => {
-    if (totalRejected > 0) {
-      setQuitDialog({ mode: 'rejected' });
+    if (totalFixNow > 0) {
+      setQuitDialog({ mode: 'fixNow' });
     } else if (unreviewedCount > 0) {
       setQuitDialog({ mode: 'unreviewed' });
     } else {
       closeWithExitCode(0);
     }
-  }, [totalRejected, unreviewedCount, closeWithExitCode]);
+  }, [totalFixNow, unreviewedCount, closeWithExitCode]);
 
   useEffect(() => {
     window.__moorConfirmClose = requestClose;
@@ -379,31 +374,28 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     };
   }, [requestClose]);
 
-  const rejectionSummary = useMemo(() => {
-    const summary = [];
-    for (const [fileIdxStr, hunks] of Object.entries(perFileRejectedHunks)) {
-      if (!hunks || hunks.size === 0) continue;
-      const fileIdx = Number(fileIdxStr);
-      const file = files[fileIdx];
-      if (!file) continue;
-      const reasons = perFileRejectionReasons[fileIdx];
-      const filePath = relativePath(file.rightPath || file.leftPath, rightPath || leftPath);
-      const items = [...hunks].sort((a, b) => a - b).map(hunkIdx => ({
-        hunk: hunkIdx,
-        reason: reasons?.get(hunkIdx) || null,
-      }));
-      summary.push({ fileIdx, filePath, count: hunks.size, items });
+  // DD-12: the quit dialog summarizes the blockers — fix-now comments grouped by
+  // file, with the changeset-level ones in their own bucket.
+  const fixNowSummary = useMemo(() => {
+    const groups = new Map();
+    for (const c of fixNowComments) {
+      const t = c.target || {};
+      const key = t.file || '__changeset__';
+      const label = t.file
+        ? relativePath(t.file, rightPath || leftPath)
+        : 'whole changeset';
+      if (!groups.has(key)) groups.set(key, { key, label, items: [] });
+      groups.get(key).items.push({ id: c.id, body: c.body.trim() });
     }
-    return summary;
-  }, [files, perFileRejectedHunks, perFileRejectionReasons, leftPath, rightPath]);
+    return [...groups.values()].map(g => ({ ...g, count: g.items.length }));
+  }, [fixNowComments, leftPath, rightPath]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
 
       // Ignore keys chorded with a modifier — Cmd+F, Cmd+D, Cmd+=, etc. belong
-      // to the OS / app menu. Without this, e.g. Cmd+F would also fire the bare
-      // `f` sidebar toggle.
+      // to the OS / app menu.
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       // NV-18: the help overlay takes precedence; ? or Escape dismisses it.
@@ -413,8 +405,8 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
       }
       if (e.key === '?') { e.preventDefault(); setHelpOpen(true); return; }
 
-      if (notesPanelOpen) {
-        if (e.key === 'Escape') { e.preventDefault(); closeNotes(); }
+      if (commentsPanelOpen) {
+        if (e.key === 'Escape') { e.preventDefault(); closeComments(); }
         return;
       }
 
@@ -450,10 +442,10 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
           e.preventDefault();
           api?.zoomReset?.();
           break;
-        case 'n': // NV-19: open the notes panel (seeds an ambient note if empty)
+        case 'n': // NV-19: open the comments panel
         case 'N':
           e.preventDefault();
-          openNotes();
+          openComments();
           break;
         case 'q':
         case 'Escape':
@@ -465,7 +457,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [requestClose, quitDialog, helpOpen, hasDetails, toggleDetails, api, notesPanelOpen, openNotes, closeNotes]);
+  }, [requestClose, quitDialog, helpOpen, hasDetails, toggleDetails, api, commentsPanelOpen, openComments, closeComments]);
 
   useEffect(() => {
     if (shellRef.current) shellRef.current.focus();
@@ -504,16 +496,16 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
       <ContextHeader
         context={inputContext}
         channelConfigured={channelConfigured}
-        rejectionBadges={rejectionBadges}
+        fixNowBadges={fixNowBadges}
         viewedChanges={reviewedChanges}
         totalChanges={totalChanges}
         allViewed={allReviewed}
-        onNavigateToRejection={navigateToRejection}
+        onNavigateToFixNow={navigateToFixNow}
         detailsExpanded={detailsExpanded}
         onToggleDetails={toggleDetails}
         lineStats={totalLineStats}
-        noteCount={outNotes.length}
-        onOpenNotes={openNotes}
+        commentCount={outComments.length}
+        onOpenComments={openComments}
       />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {draggingSidebar && (
@@ -547,7 +539,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
               files={files}
               currentIndex={currentIndex}
               viewed={viewed}
-              rejectedFiles={rejectedFiles}
+              fixNowFiles={fixNowFiles}
               onSelect={navigateTo}
               width={sidebarWidth}
               onCollapse={() => setSidebarCollapsed(true)}
@@ -581,15 +573,16 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
               onNavigatePrev={navigatePrev}
               onNavigatePrevFile={navigatePrevFile}
               startAtEnd={navigatedBackward}
-              startAtHunk={targetHunk}
+              startAtRow={targetRow}
               reviewedHunks={currentReviewedHunks}
               onReviewedHunksChange={handleReviewedHunksChange}
-              rejectedHunks={currentRejectedHunks}
-              onRejectedHunksChange={handleRejectedHunksChange}
-              rejectionReasons={currentRejectionReasons}
-              onRejectionReasonsChange={handleRejectionReasonsChange}
-              onAddNote={addNote}
-              paused={helpOpen}
+              fileComments={currentFileComments}
+              onAddComment={addComment}
+              onUpdateComment={updateComment}
+              onSetCommentAction={setCommentAction}
+              onDeleteComment={deleteComment}
+              onAddFileComment={addFileComment}
+              paused={helpOpen || commentsPanelOpen}
             />
           ) : (
             <div style={contentMessageStyle('var(--text-secondary)')}>No differences found</div>
@@ -602,23 +595,27 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
       {quitDialog && (
         <QuitDialog
           mode={quitDialog.mode}
-          rejectedCount={totalRejected}
+          fixNowCount={totalFixNow}
           unreviewedCount={unreviewedCount}
-          rejectionSummary={rejectionSummary}
+          fixNowSummary={fixNowSummary}
           onCancel={() => setQuitDialog(null)}
           onSendReviewFeedback={() => closeWithExitCode(1)}
           onQuitAnyway={() => closeWithExitCode(2)}
           onApproveAnyway={() => closeWithExitCode(0)}
         />
       )}
-      {notesPanelOpen && (
-        <NotesPanel
-          notes={notes}
+      {commentsPanelOpen && (
+        <CommentsPanel
+          comments={comments}
           basePath={rightPath || leftPath}
-          onAdd={() => addNote()}
-          onUpdate={updateNote}
-          onDelete={deleteNote}
-          onClose={closeNotes}
+          currentFileKey={currentFileKey}
+          currentFilePath={currentFile ? relativePath(currentFileKey, rightPath || leftPath) : null}
+          onAddChangeset={() => addComment({ target: { type: 'changeset' } })}
+          onAddFile={() => currentFileKey && addComment({ target: { type: 'file', file: currentFileKey } })}
+          onUpdate={updateComment}
+          onSetAction={setCommentAction}
+          onDelete={deleteComment}
+          onClose={closeComments}
         />
       )}
       {helpOpen && <KeyboardHelp onClose={() => setHelpOpen(false)} />}
@@ -635,7 +632,7 @@ const contentMessageStyle = (color) => ({
   fontFamily: 'var(--font-ui)',
 });
 
-function QuitDialog({ mode, rejectedCount, unreviewedCount, rejectionSummary, onCancel, onSendReviewFeedback, onQuitAnyway, onApproveAnyway }) {
+function QuitDialog({ mode, fixNowCount, unreviewedCount, fixNowSummary, onCancel, onSendReviewFeedback, onQuitAnyway, onApproveAnyway }) {
   const dialogRef = useRef(null);
 
   const handleDialogKeyDown = (e) => {
@@ -695,25 +692,23 @@ function QuitDialog({ mode, rejectedCount, unreviewedCount, rejectionSummary, on
   };
   const primaryBtn = { ...baseBtn, background: 'var(--color-accent)', borderColor: 'var(--color-accent)', color: 'var(--bg-deep)', fontWeight: 600 };
 
-  if (mode === 'rejected') {
+  if (mode === 'fixNow') {
     return (
       <div style={overlay} onClick={onCancel}>
         <div ref={dialogRef} style={dialog} onClick={(e) => e.stopPropagation()} onKeyDown={handleDialogKeyDown} role="dialog" aria-modal="true">
           <h2 style={heading}>Review feedback</h2>
           <div style={body}>
-            {rejectedCount} rejected change{rejectedCount === 1 ? '' : 's'} across {rejectionSummary.length} file{rejectionSummary.length === 1 ? '' : 's'}.
+            {fixNowCount} fix-now comment{fixNowCount === 1 ? '' : 's'} across {fixNowSummary.length} location{fixNowSummary.length === 1 ? '' : 's'}.
           </div>
           <div style={{ maxHeight: '320px', overflow: 'auto', border: '1px solid var(--border)', borderRadius: '4px', padding: '10px 12px', background: 'var(--bg-deep)' }}>
-            {rejectionSummary.map(({ fileIdx, filePath, count, items }) => (
-              <div key={fileIdx} style={{ marginBottom: '10px' }}>
+            {fixNowSummary.map(({ key, label, count, items }) => (
+              <div key={key} style={{ marginBottom: '10px' }}>
                 <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {filePath} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({count})</span>
+                  {label} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({count})</span>
                 </div>
                 <ul style={{ margin: '4px 0 0 0', paddingLeft: '18px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {items.map(({ hunk, reason }) => (
-                    <li key={hunk}>
-                      change {hunk + 1}{reason ? `: ${reason}` : ' (no reason)'}
-                    </li>
+                  {items.map(({ id, body }) => (
+                    <li key={id}>{body || '(no description)'}</li>
                   ))}
                 </ul>
               </div>
@@ -745,22 +740,30 @@ function QuitDialog({ mode, rejectedCount, unreviewedCount, rejectionSummary, on
   );
 }
 
-// NV-19: the review-notes panel — a list of free-text notes for the agent.
-// Ambient notes (the "+ note" CTA / `n` key) carry no location; notes converted
-// from a rejection (CM-07) carry the source file and line. Editing is inline;
-// deleting a note confirms first, since a typed note is hard to recreate.
-function NotesPanel({ notes, basePath, onAdd, onUpdate, onDelete, onClose }) {
+function targetLabel(comment, basePath) {
+  const t = comment.target || {};
+  if (t.type === 'range') {
+    const loc = t.startLine === t.endLine ? `:${t.startLine}` : `:${t.startLine}-${t.endLine}`;
+    return `${relativePath(t.file, basePath)}${loc}`;
+  }
+  if (t.type === 'file') return relativePath(t.file, basePath);
+  return 'changeset';
+}
+
+// CO-08: the comments panel — every comment (changeset / file / range) with its
+// target, body, and action. Editing is inline; the action chip cycles
+// consider → fix-later → fix-now; deleting confirms first.
+function CommentsPanel({ comments, basePath, currentFileKey, currentFilePath, onAddChangeset, onAddFile, onUpdate, onSetAction, onDelete, onClose }) {
   const [confirmingId, setConfirmingId] = useState(null);
   const lastRef = useRef(null);
 
-  // Focus the newest note's textarea when the panel opens or a note is added.
   useEffect(() => {
     if (lastRef.current) {
       lastRef.current.focus();
       const len = lastRef.current.value.length;
       lastRef.current.setSelectionRange(len, len);
     }
-  }, [notes.length]);
+  }, [comments.length]);
 
   const overlay = {
     position: 'fixed',
@@ -786,9 +789,8 @@ function NotesPanel({ notes, basePath, onAdd, onUpdate, onDelete, onClose }) {
   const sub = { fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' };
   const list = { display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '50vh', overflow: 'auto', margin: '12px 0' };
   const card = { border: '1px solid var(--border)', borderRadius: '4px', padding: '8px 10px', background: 'var(--bg-deep)' };
-  const cardTop = { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px', minHeight: '16px' };
+  const cardTop = { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px', minHeight: '18px' };
   const locStyle = { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--color-right)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
-  const ambientStyle = { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' };
   const footer = { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '14px' };
   const baseBtn = {
     fontFamily: 'var(--font-ui)',
@@ -820,6 +822,20 @@ function NotesPanel({ notes, basePath, onAdd, onUpdate, onDelete, onClose }) {
     resize: 'vertical',
   };
 
+  const actionChip = (action) => ({
+    fontFamily: 'var(--font-mono)',
+    fontSize: '10px',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    padding: '2px 8px',
+    borderRadius: '3px',
+    cursor: 'pointer',
+    background: actionBg(action),
+    color: actionColor(action),
+    border: `1px solid ${actionColor(action)}`,
+  });
+
   return (
     <div style={overlay} onClick={onClose}>
       <div
@@ -829,41 +845,48 @@ function NotesPanel({ notes, basePath, onAdd, onUpdate, onDelete, onClose }) {
         role="dialog"
         aria-modal="true"
       >
-        <h2 style={heading}>Review notes</h2>
-        <div style={sub}>Free-text guidance for the agent — minor tweaks, separate from rejections.</div>
+        <h2 style={heading}>Comments</h2>
+        <div style={sub}>Feedback for the author. Set an action — only <strong>fix now</strong> blocks shipping.</div>
         <div style={list}>
-          {notes.length === 0 && (
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px 0' }}>No notes yet.</div>
+          {comments.length === 0 && (
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px 0' }}>No comments yet.</div>
           )}
-          {notes.map((n, i) => (
-            <div key={n.id} style={card}>
+          {comments.map((c, i) => (
+            <div key={c.id} style={card}>
               <div style={cardTop}>
-                {n.file
-                  ? <span style={locStyle}>{relativePath(n.file, basePath)}{n.line != null ? `:${n.line}` : ''}</span>
-                  : <span style={ambientStyle}>note</span>}
+                <span style={locStyle}>{targetLabel(c, basePath)}</span>
                 <div style={{ flex: 1 }} />
-                {confirmingId === n.id ? (
+                <button
+                  type="button"
+                  style={actionChip(c.action)}
+                  title="Cycle action: consider → fix later → fix now"
+                  onClick={() => onSetAction(c.id, cycleAction(c.action))}
+                >{actionLabel(c.action)}</button>
+                {confirmingId === c.id ? (
                   <>
-                    <button type="button" style={confirmBtn} onClick={() => onDelete(n.id)}>Delete</button>
+                    <button type="button" style={confirmBtn} onClick={() => onDelete(c.id)}>Delete</button>
                     <button type="button" style={keepBtn} onClick={() => setConfirmingId(null)}>Keep</button>
                   </>
                 ) : (
-                  <button type="button" style={xBtn} title="Delete note" onClick={() => setConfirmingId(n.id)}>✕</button>
+                  <button type="button" style={xBtn} title="Delete comment" onClick={() => setConfirmingId(c.id)}>✕</button>
                 )}
               </div>
               <textarea
-                ref={i === notes.length - 1 ? lastRef : null}
-                value={n.note}
-                onChange={(e) => onUpdate(n.id, e.target.value)}
+                ref={i === comments.length - 1 ? lastRef : null}
+                value={c.body}
+                onChange={(e) => onUpdate(c.id, { body: e.target.value })}
                 rows={2}
-                placeholder="Note for the agent…"
+                placeholder="Comment for the author…"
                 style={textareaStyle}
               />
             </div>
           ))}
         </div>
         <div style={footer}>
-          <button type="button" style={linkBtn} onClick={onAdd}>+ Add note</button>
+          <button type="button" style={linkBtn} onClick={onAddChangeset}>+ changeset</button>
+          {currentFileKey && (
+            <button type="button" style={linkBtn} onClick={onAddFile} title={currentFilePath || ''}>+ this file</button>
+          )}
           <div style={{ flex: 1 }} />
           <button type="button" style={primaryBtn} onClick={onClose}>Done</button>
         </div>

@@ -1,10 +1,12 @@
 # Launch moor with the sidecar, never via raw `git difftool`
 
-When you launch moor to review changes, the outcome — accepted, rejected
-hunks with reasons, unreviewed, closed early — comes back through the
-`MOOR_CONTEXT` sidecar file and moor's exit code (`0`/`1`/`2`/`3`), not
-through the terminal. Raw `git difftool` swallows the exit code and
-configures no sidecar, so the review outcome is silently lost.
+When you launch moor to review changes, the outcome — the reviewer's
+comments (each with an action: `fix-now` / `fix-later` / `consider`),
+whether changes are unreviewed, closed early — comes back through the
+`MOOR_CONTEXT` sidecar file and moor's exit code (`0`/`1`/`2`/`3`, where `1`
+means one or more `fix-now` comments), not through the terminal. Raw
+`git difftool` swallows the exit code and configures no sidecar, so the
+review outcome is silently lost.
 
 - **Reviewing a git range** (working tree, a commit, a branch) — launch
   through a wrapper that sets `MOOR_CONTEXT`, then read the verdict back

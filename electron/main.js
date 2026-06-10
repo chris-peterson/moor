@@ -227,7 +227,7 @@ app.whenReady().then(async () => {
       closePayload = payload;
     } else {
       exitCode = payload ?? 0;
-      closePayload = { exitCode, rejections: [] };
+      closePayload = { exitCode, comments: [] };
     }
     mainWindow.close();
   });
@@ -246,7 +246,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  const data = closePayload || { exitCode, rejections: [] };
+  const data = closePayload || { exitCode, comments: [] };
   writeContextOutput(data);
   process.exit(exitCode);
 });
