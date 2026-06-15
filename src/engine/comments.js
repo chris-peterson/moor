@@ -62,6 +62,26 @@ export function actionBorder(action) {
   return action === 'consider' ? 'var(--color-accent-border)' : actionColor(action);
 }
 
+// The action badge shared across the composer, the comment bars, the comments
+// panel, and the send-feedback dialog: base typography plus the action's color
+// triad (background / text / border). Callers spread `overrides` for per-site
+// size, padding, cursor, or state (e.g. the composer's unselected look).
+export function actionChipStyle(action, overrides = {}) {
+  return {
+    fontFamily: 'var(--font-mono)',
+    fontSize: '10px',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    padding: '2px 8px',
+    borderRadius: '3px',
+    background: actionBg(action),
+    color: actionColor(action),
+    border: `1px solid ${actionColor(action)}`,
+    ...overrides,
+  };
+}
+
 // The output-ready projection (IM.OUT-02a): a changeset comment omits `file`; a
 // file comment includes `file`; a range comment adds `startLine` / `endLine`.
 // Internal-only fields (id, the render-anchor rows) are dropped.

@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useCallback, useState, useEffect, useLayoutEffect } from 'react';
 import { computeLineChanges, diffChars, buildDisplayRows, BINARY_SENTINEL } from '../engine/diff.js';
-import { DEFAULT_ACTION, ACTIONS, ACTIONS_BY_SEVERITY, isBlocking, commentToOutput, actionColor, actionBg, actionLabel, cycleAction, cycleActionDown } from '../engine/comments.js';
+import { DEFAULT_ACTION, ACTIONS, ACTIONS_BY_SEVERITY, isBlocking, commentToOutput, actionColor, actionBg, actionLabel, actionChipStyle, cycleAction, cycleActionDown } from '../engine/comments.js';
 import Minimap from './Minimap.jsx';
 
 const TAB_SPACES = '    ';
@@ -1231,19 +1231,9 @@ function CommentComposer({ composing, composerRef, top, onResize, onSetAction, o
                 // onMouseDown + preventDefault keeps the textarea focused so its
                 // blur doesn't close the composer before the action is set.
                 onMouseDown={(e) => { e.preventDefault(); onSetAction(a); }}
-                style={{
-                  background: selected ? actionBg(a) : 'transparent',
-                  border: `1px solid ${selected ? actionColor(a) : 'var(--border)'}`,
-                  color: selected ? actionColor(a) : 'var(--text-muted)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '10px',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  padding: '2px 8px',
-                  borderRadius: '3px',
-                  cursor: 'pointer',
-                }}
+                style={actionChipStyle(a, selected
+                  ? { cursor: 'pointer' }
+                  : { cursor: 'pointer', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-muted)' })}
               >{actionLabel(a)}</button>
             );
           })}
@@ -1268,20 +1258,7 @@ function CommentBar({ comment, top, onEdit, onCycleAction, onDelete }) {
           type="button"
           onClick={onCycleAction}
           title="Cycle action: consider → fix later → fix now"
-          style={{
-            flexShrink: 0,
-            background: actionBg(comment.action),
-            border: `1px solid ${color}`,
-            color,
-            fontFamily: 'var(--font-mono)',
-            fontSize: '10px',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            padding: '1px 6px',
-            borderRadius: '3px',
-            cursor: 'pointer',
-          }}
+          style={actionChipStyle(comment.action, { flexShrink: 0, padding: '1px 6px', cursor: 'pointer' })}
         >{actionLabel(comment.action)}</button>
         <span onClick={onEdit} style={{ flex: 1, whiteSpace: 'pre-wrap', color: 'var(--text-primary)', cursor: 'text' }}>{comment.body}</span>
         <span onClick={onDelete} style={{ opacity: 0.5, cursor: 'pointer', fontSize: '11px' }} title="Delete comment">✕</span>

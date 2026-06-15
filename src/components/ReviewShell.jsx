@@ -5,7 +5,7 @@ import FileNavbar from './FileNavbar.jsx';
 import ContextHeader, { hasExpandableDetails } from './ContextHeader.jsx';
 import KeyboardHelp from './KeyboardHelp.jsx';
 import { computeLineChanges, countDisplayHunks, computeContentLineStats, BINARY_SENTINEL } from '../engine/diff.js';
-import { DEFAULT_ACTION, isBlocking, commentToOutput, actionColor, actionLabel, actionBg, cycleAction } from '../engine/comments.js';
+import { DEFAULT_ACTION, isBlocking, commentToOutput, actionLabel, actionChipStyle, cycleAction } from '../engine/comments.js';
 
 const emptySet = new Set();
 
@@ -720,19 +720,7 @@ function QuitDialog({ mode, fixNowCount, unreviewedCount, feedbackSummary, onCan
                 <ul style={{ margin: '4px 0 0 0', paddingLeft: '18px', fontSize: '12px', color: 'var(--text-secondary)', listStyle: 'none' }}>
                   {items.map(({ id, body, action }) => (
                     <li key={id} style={{ display: 'flex', gap: '6px', alignItems: 'baseline', marginBottom: '3px' }}>
-                      <span style={{
-                        flexShrink: 0,
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '9px',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.06em',
-                        padding: '1px 5px',
-                        borderRadius: '3px',
-                        background: actionBg(action),
-                        color: actionColor(action),
-                        border: `1px solid ${actionColor(action)}`,
-                      }}>{actionLabel(action)}</span>
+                      <span style={actionChipStyle(action, { flexShrink: 0, fontSize: '9px', letterSpacing: '0.06em', padding: '1px 5px' })}>{actionLabel(action)}</span>
                       <span>{body || '(no description)'}</span>
                     </li>
                   ))}
@@ -851,19 +839,7 @@ function CommentsPanel({ comments, basePath, currentFileKey, currentFilePath, on
     resize: 'vertical',
   };
 
-  const actionChip = (action) => ({
-    fontFamily: 'var(--font-mono)',
-    fontSize: '10px',
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-    padding: '2px 8px',
-    borderRadius: '3px',
-    cursor: 'pointer',
-    background: actionBg(action),
-    color: actionColor(action),
-    border: `1px solid ${actionColor(action)}`,
-  });
+  const actionChip = (action) => actionChipStyle(action, { cursor: 'pointer' });
 
   return (
     <div style={overlay} onClick={onClose}>
