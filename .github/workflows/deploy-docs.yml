@@ -7,6 +7,7 @@ on:
       - 'docs/**'
       - 'SPEC.md'
       - 'rules/**'
+      - 'plugin.yml'
   workflow_dispatch:
 
 permissions:
@@ -26,10 +27,16 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: actions/configure-pages@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: pip install pyyaml
       - name: Copy SPEC.md into docs
         run: cp SPEC.md docs/SPEC.md
       - name: Copy ambient rules into docs
         run: mkdir -p docs/rules && cp rules/*.md docs/rules/
+      - name: Render suite.json for the session preview
+        run: python3 scripts/gen-suite-json.py
       - uses: actions/upload-pages-artifact@v4
         with:
           path: docs

@@ -16,6 +16,13 @@ back to the agent through the [feedback channel](#review-feedback-channel).
 
 ![moor reviewing a commit: the agent's rationale fills the INPUTS panel while the two-file diff waits for review in OUTPUTS](screenshot.png)
 
+## In action
+
+Reading the AI's change starts with the intent, then walks each hunk — and a
+rejection isn't a dead end, it's a fix routed straight back to the agent:
+
+<div class="cw-session" data-cw-session="session"></div>
+
 ## Install
 
 moor is distributed through the [chris-peterson Claude Code
@@ -88,6 +95,11 @@ Navigation is vim-style and keyboard-first. The essentials:
 
 See [Keyboard shortcuts](/keyboard) for the full reference — file navigation,
 scrolling, the comment composer, the comments panel, and the quit dialog.
+
+The two interactions you reach for most — opening a review and rejecting a
+change back to the agent — in motion:
+
+<div class="cw-session" data-cw-session="examples"></div>
 
 ## Review feedback channel
 
