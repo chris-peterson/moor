@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
 
 ### Changed
 - **New comments default to `fix-now`.** A freshly composed comment starts at
@@ -11,6 +11,10 @@
   reveals every comment with its action and defaults to "Send review feedback"
   rather than "Quit anyway". The plain quit prompt is reserved for closing with
   unreviewed changes and no comments.
+
+### Other
+- The action badge styling is centralized in a shared `actionChipStyle` helper
+  (no visual change).
 
 ## 0.8.0
 
