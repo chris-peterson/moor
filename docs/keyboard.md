@@ -25,13 +25,14 @@ rolls back to the previous one — so a long review is just `j` held down.
 
 The composer grows as you type. `Enter` confirms, `Shift+Enter` inserts a
 newline, `Escape` confirms a non-empty comment or discards an empty one. Each
-comment carries an **action** — pick one in the composer:
+comment carries an **action** — `Tab` cycles it down from the default through
+the tiers (`Shift+Tab` walks back up), or click one in the composer:
 
 | Action | Meaning |
 |--------|---------|
-| **consider** | Advisory (the default). Doesn't block shipping. |
+| **fix now** | The default. Must be fixed before shipping — gates the exit code and turns the change red. |
 | **fix later** | Should be addressed, but needn't block this ship. |
-| **fix now** | Must be fixed before shipping — gates the exit code and turns the change red. |
+| **consider** | Advisory. Doesn't block shipping. |
 
 To comment on an arbitrary span, **drag the new (right) side's line-number
 gutter** across the lines you want, then release. Comments anchor to the new
@@ -87,8 +88,10 @@ on their own.
 |-----|--------|
 | `q` / `Escape` | Close moor. |
 
-With fix-now comments or unreviewed changes still outstanding, closing first
-raises a quit dialog that summarizes what's left. Inside that dialog:
+With any comments written, closing first raises a send-feedback dialog that
+reveals every comment (with its action) and defaults to sending it. With no
+comments but unreviewed changes outstanding, closing raises a quit dialog
+instead. Inside either dialog:
 
 | Key | Action |
 |-----|--------|

@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useCallback, useState, useEffect, useLayoutEffect } from 'react';
 import { computeLineChanges, diffChars, buildDisplayRows, BINARY_SENTINEL } from '../engine/diff.js';
-import { DEFAULT_ACTION, ACTIONS, isBlocking, commentToOutput, actionColor, actionBg, actionLabel } from '../engine/comments.js';
+import { DEFAULT_ACTION, ACTIONS, ACTIONS_BY_SEVERITY, isBlocking, commentToOutput, actionColor, actionBg, actionLabel, cycleAction, cycleActionDown } from '../engine/comments.js';
 import Minimap from './Minimap.jsx';
 
 const TAB_SPACES = '    ';
@@ -1179,7 +1179,9 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
 // CO-06: the inline composer — an auto-growing text area plus the action
 // control. Enter confirms; Shift+Enter inserts a newline; Escape confirms a
-// non-empty comment or discards an empty one (closeComposer decides).
+// non-empty comment or discards an empty one (closeComposer decides). Tab
+// down-classifies the action (fix-now → fix-later → consider → fix-now);
+// Shift+Tab walks back up.
 function CommentComposer({ composing, composerRef, top, onResize, onSetAction, onClose }) {
   return (
     <div style={{ position: 'absolute', top: top + 'px', left: 0, right: 0, zIndex: 10, pointerEvents: 'auto' }}>
@@ -1197,6 +1199,9 @@ function CommentComposer({ composing, composerRef, top, onResize, onSetAction, o
             } else if (e.key === 'Escape') {
               e.preventDefault();
               onClose();
+            } else if (e.key === 'Tab') {
+              e.preventDefault();
+              onSetAction(e.shiftKey ? cycleAction(composing.action) : cycleActionDown(composing.action));
             }
             e.stopPropagation();
           }}
@@ -1217,7 +1222,7 @@ function CommentComposer({ composing, composerRef, top, onResize, onSetAction, o
           }}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 8px', borderTop: '1px solid var(--border)' }}>
-          {ACTIONS.map((a) => {
+          {ACTIONS_BY_SEVERITY.map((a) => {
             const selected = composing.action === a;
             return (
               <button
@@ -1244,7 +1249,7 @@ function CommentComposer({ composing, composerRef, top, onResize, onSetAction, o
           })}
           <span style={{ flex: 1 }} />
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
-            Enter saves · Shift+Enter newline · Esc
+            Enter saves · Shift+Enter newline · Tab cycles action · Esc
           </span>
         </div>
       </div>

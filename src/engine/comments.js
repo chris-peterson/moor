@@ -5,7 +5,12 @@
 // color/label mapping, and the output projection.
 
 export const ACTIONS = ['consider', 'fix-later', 'fix-now'];
-export const DEFAULT_ACTION = 'consider';
+// Severity order, most-actionable first — the left-to-right order the composer
+// renders the action buttons in (fix now → fix later → consider).
+export const ACTIONS_BY_SEVERITY = ['fix-now', 'fix-later', 'consider'];
+// New comments start at the most actionable tier; the reviewer down-classifies
+// (Tab in the composer) toward advisory as warranted.
+export const DEFAULT_ACTION = 'fix-now';
 
 // `fix-now` is the only action that gates the exit code (EC-01/02) and earns
 // the red treatment / header badges. `fix-later` and `consider` are advisory.
@@ -18,6 +23,13 @@ export function isBlocking(action) {
 export function cycleAction(action) {
   const i = ACTIONS.indexOf(action);
   return ACTIONS[(i + 1) % ACTIONS.length];
+}
+
+// The reverse walk — down-classification toward advisory:
+// fix-now → fix-later → consider → fix-now.
+export function cycleActionDown(action) {
+  const i = ACTIONS.indexOf(action);
+  return ACTIONS[(i - 1 + ACTIONS.length) % ACTIONS.length];
 }
 
 export function actionLabel(action) {

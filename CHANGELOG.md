@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **New comments default to `fix-now`.** A freshly composed comment starts at
+  the most actionable tier; `Tab` in the composer down-classifies it
+  (`fix-now` → `fix-later` → `consider`), and `Shift+Tab` walks back up.
+- **The quit dialog is a send-feedback dialog whenever feedback exists.** Any
+  comment — `fix-now` or advisory — routes the close through a dialog that
+  reveals every comment with its action and defaults to "Send review feedback"
+  rather than "Quit anyway". The plain quit prompt is reserved for closing with
+  unreviewed changes and no comments.
+
 ## 0.8.0
 
 ### Breaking
