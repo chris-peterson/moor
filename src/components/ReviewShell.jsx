@@ -880,6 +880,14 @@ function CommentsPanel({ comments, basePath, currentFileKey, currentFilePath, on
                 ref={i === comments.length - 1 ? lastRef : null}
                 value={c.body}
                 onChange={(e) => onUpdate(c.id, { body: e.target.value })}
+                // TE-01: Enter activates the panel's primary action (Done);
+                // Shift+Enter inserts a newline. Escape is handled by the dialog.
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    onClose();
+                  }
+                }}
                 rows={2}
                 placeholder="Comment for the author…"
                 style={textareaStyle}
@@ -893,6 +901,9 @@ function CommentsPanel({ comments, basePath, currentFileKey, currentFilePath, on
             <button type="button" style={linkBtn} onClick={onAddFile} title={currentFilePath || ''}>+ this file</button>
           )}
           <div style={{ flex: 1 }} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
+            Enter to finish · Shift+Enter newline
+          </span>
           <button type="button" style={primaryBtn} onClick={onClose}>Done</button>
         </div>
       </div>

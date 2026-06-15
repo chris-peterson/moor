@@ -40,7 +40,7 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [NV-04] | Land on first unreviewed hunk (fallback: first hunk) | Done |
 | [NV-05] | u mark current hunk unreviewed | Done |
 | [NV-06] | Click hunk toggles reviewed | Done |
-| [NV-07] | Space / Enter comment on current hunk | Done |
+| [NV-07] | Space / Enter comment on current hunk; edits the hunk's existing comment instead of stacking a new one | Done |
 | [NV-08] | i open in editor | Done |
 | [NV-13] | Hunk-navigation viewport positioning (umbrella) | Done |
 | [NV-13a] | Don't scroll if hunk already fully visible | Done |
@@ -88,6 +88,14 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [CO-06] | Inline composer: auto-grow textarea + action control; Enter / Shift+Enter / Esc; Tab / Shift+Tab cycle action | Done |
 | [CO-07] | Banded line range (action-colored outline) + persistent comment bar; click to edit, confirmed delete | Done |
 | [CO-08] | Comments panel lists all; inline edit, action cycle, confirmed delete | Done |
+
+### Text Entry (TE) — 3/3
+
+| Req | Description | Status |
+|-----|-------------|--------|
+| [TE-01] | Enter activates the input's paired primary action, Shift+Enter inserts a newline; governs the composer ([CO-06]) and comments panel ([CO-08]) | Done |
+| [TE-02] | Escape dismisses a text input — composer keeps non-empty / discards empty ([CO-06]); panel / dialog closes ([CO-08], [DD-14]) | Done |
+| [TE-03] | Tab advances a paired cycling control (the composer's action selector), Shift+Tab reverses ([CO-06]) | Done |
 
 ### Context Menu (CM) — 6/6
 

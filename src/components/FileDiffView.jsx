@@ -746,10 +746,17 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
         }
         case ' ':
         case 'Enter': {
-          // NV-07: comment on the current hunk's line range.
+          // NV-07: comment on the current hunk's line range. If the hunk
+          // already carries a comment, edit it rather than stacking a new one.
           e.preventDefault();
           const range = hunkRanges[currentHunk];
-          if (range) openComposerForRows(range.start, range.end);
+          if (!range) break;
+          const existing = fileComments.find((c) => {
+            const t = c.target || {};
+            return t.startRow != null && t.endRow != null && t.startRow <= range.end && t.endRow >= range.start;
+          });
+          if (existing) editComment(existing);
+          else openComposerForRows(range.start, range.end);
           break;
         }
         case 'i': {
@@ -773,7 +780,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hunkRanges, currentHunk, reviewedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, composing, paused, openComposerForRows, lineForRow, handleOpenInEditor, setReviewedHunks, rightPath]);
+  }, [hunkRanges, currentHunk, reviewedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, composing, paused, openComposerForRows, editComment, fileComments, lineForRow, handleOpenInEditor, setReviewedHunks, rightPath]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
