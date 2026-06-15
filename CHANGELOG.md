@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0
+
+### Changed
+- In the comments panel, Enter now confirms and closes the panel (the "Done"
+  action) and Shift+Enter inserts a newline — matching the inline composer, so
+  the keyboard contract is the same wherever you type a comment.
+- Pressing Space/Enter on a hunk that already has a comment now opens that
+  comment for editing instead of stacking a second one.
+
 ## 0.9.0
 
 ### Changed

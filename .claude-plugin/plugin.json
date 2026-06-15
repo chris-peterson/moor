@@ -1,7 +1,18 @@
 {
   "name": "moor",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "A fast, keyboard-driven diff viewer for reviewing AI-generated code.",
-  "keywords": ["diff", "difftool", "git", "code-review", "electron"],
-  "license": "MIT"
+  "author": {
+    "name": "chris-peterson"
+  },
+  "repository": "https://github.com/chris-peterson/moor",
+  "icon": "docs/favicon.svg",
+  "license": "MIT",
+  "keywords": [
+    "diff",
+    "difftool",
+    "git",
+    "code-review",
+    "electron"
+  ]
 }
