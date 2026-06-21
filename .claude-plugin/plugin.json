@@ -1,6 +1,6 @@
 {
   "name": "moor",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "A fast, keyboard-driven diff viewer for reviewing AI-generated code.",
   "author": {
     "name": "chris-peterson"

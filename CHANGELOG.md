@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.1
+
+### Changed
+- Aligned moor's voice and marketplace metadata with the bridge.ai suite: "the AI" → "Claude" across the pitch, description, and docs, and migrated the suite block to the current schema (group slug, declared `activations`, dropped the derived accent and spoke flag).
+
 ## 0.10.0
 
 ### Changed
