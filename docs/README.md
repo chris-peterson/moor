@@ -18,7 +18,7 @@ back to the agent through the [feedback channel](#review-feedback-channel).
 
 ## In action
 
-Reading the AI's change starts with the intent, then walks each hunk — and a
+Reading Claude's change starts with the intent, then walks each hunk — and a
 rejection isn't a dead end, it's a fix routed straight back to the agent:
 
 <div class="cw-session" data-cw-session="session"></div>

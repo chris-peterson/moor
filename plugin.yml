@@ -18,16 +18,15 @@ marketplace:
 
 # → marketplace SPA; keys mirror the SPA's PLUGINS object.
 suite:
-  ac: "--ship"
   cli: true
-  group: create checkpoints
-  # moor's docs site renders the live session preview, so the hub hands its
-  # drill-in off to the spoke rather than showing the in-hub detail view.
-  spoke: true
+  group: waypoints
+  # Activated by the user (the diff skill) and by the launch-with-sidecar
+  # ambient rule injected at session start.
+  activations: [user, session]
   gloss: To moor is to tie up alongside and look the hull over.
-  pitch: "A tighter review loop — step through the AI's changes and send each rejection straight back to Claude."
+  pitch: "A tighter review loop — step through Claude's changes and send each rejection straight back."
   with: "anchor"
-  what: "A fast diff viewer for reading code the AI wrote — step through it one change at a time, accept or reject each with a note. anchor opens whatever diff viewer git is set to use; moor is a quick one built for this, and it feeds your notes back to Claude in context."
+  what: "A fast diff viewer for reading code Claude wrote — step through it one change at a time, accept or reject each with a note. anchor opens whatever diff viewer git is set to use; moor is a quick one built for this, and it feeds your notes back to Claude in context."
   cmds:
     - ["/moor:moor", "Open a diff for review"]
   setup:
