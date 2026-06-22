@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.11.0
+
+### Features
+- Press `p` to preview the current file in the application your OS has registered for that file type (images, PDFs, etc.). Right-click a change and choose "Preview" for the same action.
+
+### Breaking Changes
+- The `i` shortcut (open the current change in your editor) has been removed. It relied on guessing which editor workspace held the file, which was unreliable, and opening a file to edit it cut against letting the agent drive edits. Use `p` to view the file instead.
+
+### Other
+- Dropped the `better-sqlite3` native dependency (and the electron-rebuild postinstall step) that the old editor-lookup required — `npm install` no longer compiles a native module.
+
 ## 0.10.1
 
 ### Changed
