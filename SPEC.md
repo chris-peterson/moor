@@ -63,7 +63,7 @@ Vim-style, keyboard-first:
 - **[NV-05]** When the user presses `u`, the viewer shall mark the current hunk as unreviewed
 - **[NV-06]** When the user clicks a hunk — including the currently-focused one — the viewer shall toggle its reviewed state and focus it: clicking an unreviewed hunk marks it reviewed (equivalent to advancing past it with `j`), and clicking a reviewed hunk marks it unreviewed
 - **[NV-07]** When the user presses Space or Enter, the viewer shall open a comment composer anchored to the current hunk's line range (CO-06); if the hunk already carries a comment, the composer shall edit that comment rather than create a second one. The hunk's review state is unchanged — commenting is orthogonal to review.
-- **[NV-08]** When the user presses `i`, the viewer shall open the current hunk's file in the configured editor at the hunk's line number
+- **[NV-08]** When the user presses `p`, the viewer shall open the current file in the operating system's registered application for that file type
 - **[NV-13]** The viewer shall position the viewport when navigating between hunks, per the lettered sub-requirements below.
   - **[NV-13a]** When navigating to a hunk that is already fully visible in the viewport, the viewer shall not scroll.
   - **[NV-13b]** Otherwise the viewer shall scroll so that one line of context above the hunk is visible at the top of the viewport, with the hunk's first line on the second visible row.
@@ -71,7 +71,7 @@ Vim-style, keyboard-first:
   - **[NV-13d]** In-file hunk navigation shall animate the scroll; navigation to a new file shall scroll instantly.
 - **[NV-14]** When the user presses `Shift+J`, the viewer shall mark all unreviewed hunks in the current file as reviewed and navigate to the first hunk of the next file. Comments are unaffected.
 - **[NV-15]** When the user presses `Shift+K`, the viewer shall navigate to the first hunk of the previous file. The review state of hunks in the current file shall remain unchanged.
-- **[NV-16]** When the user invokes "open in editor" (NV-08 or CM-05) and the editor lookup returns no result (file not in any open or recent workspace, or editor CLI not found), the viewer shall display a transient error toast with the failure reason for 3 seconds.
+- **[NV-16]** When the user invokes "preview" (NV-08 or CM-05) and the file cannot be opened (no registered application for the file type, or the path does not exist), the viewer shall display a transient error toast with the failure reason for 3 seconds.
 - **[NV-17]** When the user presses `d` (either case), the viewer shall toggle the input details panel (IM.IN-01) — the keyboard companion to IM.IN-01's hover / click-to-expand.
 - **[NV-18]** When the user presses `?`, the viewer shall toggle an overlay listing the keyboard shortcuts; `Escape` or a second `?` shall dismiss it.
 - **[NV-19]** When the user presses `n` (either case) or activates the comments control, the viewer shall open the comments panel (CO-08).
@@ -104,7 +104,7 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[CM-02]** The context menu shall include "Mark as reviewed" (see NV-06)
 - **[CM-03]** The context menu shall include "Mark as unreviewed" (see NV-05)
 - **[CM-04]** The context menu shall include "Comment" (compose a comment on the clicked line — see CO-06)
-- **[CM-05]** The context menu shall include "Open in editor" (see NV-08)
+- **[CM-05]** The context menu shall include "Preview" (see NV-08)
 - **[CM-06]** When the selected hunk has one or more comments, the context menu shall include "Delete comment" (removing the hunk's comment); when a comment has a typed body, selecting it shall confirm before discarding
 
 ### Comments (CO)
@@ -245,6 +245,6 @@ git difftool branch       # compare against a branch
 
 - **[FUT-01]** (→ BF) Where a file has both a text and a visual representation (e.g., SVG, Markdown), the diff viewer shall provide a toggle between source diff and rendered preview
 - **[FUT-02]** (→ IM) The input section may include an optional `prev` reference describing a previous diff, using the same shape as the primary input (`left` / `right` paths plus optional `title` / `details`, nestable). Speculative — no caller emits `prev` yet; revisit once anchor's wrapper supplies it.
-- **[FUT-03]** (→ RO) `[prev]` read-only preview of the previous diff: render the link when `prev` is present, open the referenced diff read-only (commenting / open-in-editor disabled, no output writes), and return to the live review on `Escape` or a back affordance. Speculative companion to FUT-02; not yet implemented.
+- **[FUT-03]** (→ RO) `[prev]` read-only preview of the previous diff: render the link when `prev` is present, open the referenced diff read-only (commenting / preview disabled, no output writes), and return to the live review on `Escape` or a back affordance. Speculative companion to FUT-02; not yet implemented.
 - **Syntax highlighting** — language-aware coloring in diff panels
 - **Configurable preferences** — font, colors, ignored patterns

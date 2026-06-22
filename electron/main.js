@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import os from 'os';
@@ -139,9 +139,6 @@ app.whenReady().then(async () => {
     contextInput = readContextInput(contextPath);
   }
 
-  const { VSCodeNavigator } = await import('./vscode-navigator.js');
-  const navigator = new VSCodeNavigator();
-
   ipcMain.handle('read-file', async (_event, { filePath }) => {
     const buf = await fs.readFile(filePath);
     if (buf.includes(0)) return '\x00BINARY';
@@ -164,19 +161,14 @@ app.whenReady().then(async () => {
     return compareDirectories(leftPath, rightPath);
   });
 
-  ipcMain.handle('open-in-editor', async (_event, { filePath, line, column }) => {
-    try {
-      const result = path.isAbsolute(filePath)
-        ? await navigator.openAbsolutePath(filePath, line, column)
-        : await navigator.openAtLine(filePath, line, column);
-      if (!result.found) {
-        console.error('[open-in-editor]', result.error);
-      }
-      return result;
-    } catch (err) {
-      console.error('[open-in-editor]', err.message);
-      return { found: false, error: err.message };
+  ipcMain.handle('open-in-default-app', async (_event, { filePath }) => {
+    // shell.openPath returns '' on success, or an error message string.
+    const error = await shell.openPath(filePath);
+    if (error) {
+      console.error('[open-in-default-app]', error);
+      return { ok: false, error };
     }
+    return { ok: true };
   });
 
   ipcMain.handle('get-initial-context', () => ({

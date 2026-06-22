@@ -12,7 +12,7 @@ available as a fallback, but you never need to reach for it.
 | `Shift+J` | Mark every unreviewed change in this file reviewed and jump to the next file. |
 | `Shift+K` | Jump to the previous file, leaving review state untouched. |
 | `u` | Mark the current change unreviewed. |
-| `i` | Open the current change in your editor at its line. |
+| `p` | Preview the current file — opens it in the operating system's registered application for that file type. |
 
 At the last change of a file, `j` rolls onto the next file; at the first change, `k`
 rolls back to the previous one — so a long review is just `j` held down.
@@ -113,6 +113,6 @@ Everything reviewable by keyboard is reachable by mouse too:
 | Click an unchanged line's number (right side) | Comment on that line. |
 | Drag the right-side line-number gutter | Select a line range (changed or context) and open a comment composer. |
 | Long-press the right-side line-number gutter | Comment on that single line. |
-| Right-click a change | Open the context menu (reviewed, unreviewed, comment, open in editor). |
+| Right-click a change | Open the context menu (reviewed, unreviewed, comment, preview). |
 | Drag the sidebar's right edge | Resize the file navigator. |
 | Sidebar collapse / show buttons | Hide or reveal the file navigator. |

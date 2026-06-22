@@ -89,7 +89,7 @@ Navigation is vim-style and keyboard-first. The essentials:
 |-----|--------|
 | `j` / `k` | Next / previous change |
 | `Space` / `Enter` | Comment on the current change |
-| `i` | Open current change in your editor at its line |
+| `p` | Preview current file in its registered application |
 | `n` | Open the comments panel |
 | `q` / `Escape` | Close |
 

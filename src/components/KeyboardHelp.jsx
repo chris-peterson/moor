@@ -10,7 +10,7 @@ const GROUPS = [
       [['⇧J'], 'Mark file reviewed, next file'],
       [['⇧K'], 'Previous file'],
       [['u'], 'Mark current change unreviewed'],
-      [['i'], 'Open current change in editor'],
+      [['p'], 'Preview current file in its registered app'],
     ],
   },
   {

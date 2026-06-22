@@ -213,12 +213,13 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     errorToastTimerRef.current = setTimeout(() => setErrorToast(null), 3000);
   }, []);
 
-  const handleOpenInEditor = useCallback((line) => {
-    if (!window.moor?.openInEditor || !rightPath) return;
-    window.moor.openInEditor(rightPath, line, 1).then(r => {
-      if (r && !r.found) showErrorToast(r.error || 'Could not open in editor');
+  const handlePreview = useCallback(() => {
+    const target = rightFullPath || leftFullPath;
+    if (!window.moor?.openInDefaultApp || !target) return;
+    window.moor.openInDefaultApp(target).then(r => {
+      if (r && !r.ok) showErrorToast(r.error || 'Could not open file');
     });
-  }, [rightPath, showErrorToast]);
+  }, [rightFullPath, leftFullPath, showErrorToast]);
   const contextMenuRef = useRef(null);
   const totalHeight = rows.length * ROW_HEIGHT;
   // NV-13 bottom pad: lets a hunk near end-of-file scroll into the
@@ -618,12 +619,11 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     }
     // CM-04: comment on the clicked line (changed or context).
     actions.push({ label: 'Comment', action: () => openComposerForRows(row, row) });
-    if (window.moor?.openInEditor && rightPath) {
-      const line = lineForRow(row);
-      actions.push({ label: 'Open in editor', action: () => handleOpenInEditor(line) });
+    if (window.moor?.openInDefaultApp && (rightFullPath || leftFullPath)) {
+      actions.push({ label: 'Preview', action: () => handlePreview() });
     }
     return actions;
-  }, [contextMenu, reviewedHunks, rightPath, lineForRow, setReviewedHunks, openComposerForRows, handleOpenInEditor]);
+  }, [contextMenu, reviewedHunks, rightFullPath, leftFullPath, lineForRow, setReviewedHunks, openComposerForRows, handlePreview]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -759,12 +759,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           else openComposerForRows(range.start, range.end);
           break;
         }
-        case 'i': {
+        case 'p': {
+          // handlePreview no-ops when preview is unavailable or no path exists.
           e.preventDefault();
-          if (window.moor?.openInEditor && rightPath && hunkRanges[currentHunk]) {
-            const line = lineForRow(hunkRanges[currentHunk].start);
-            handleOpenInEditor(line);
-          }
+          handlePreview();
           break;
         }
         case 'q':
@@ -780,7 +778,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hunkRanges, currentHunk, reviewedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, composing, paused, openComposerForRows, editComment, fileComments, lineForRow, handleOpenInEditor, setReviewedHunks, rightPath]);
+  }, [hunkRanges, currentHunk, reviewedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, composing, paused, openComposerForRows, editComment, fileComments, lineForRow, handlePreview, setReviewedHunks]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;

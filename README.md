@@ -10,7 +10,6 @@ keybindings, and the review-feedback contract, see the docs site above.
 
 - **Electron** — desktop shell, production build loaded from `dist/`
 - **React + Vite** — UI, built ahead of time (no dev server at runtime)
-- **better-sqlite3** — native module, rebuilt for Electron on install
 
 ## Layout
 
@@ -30,7 +29,7 @@ keybindings, and the review-feedback contract, see the docs site above.
 ## Develop
 
 ```bash
-just install        # npm install (rebuilds native modules for Electron)
+just install        # npm install
 just build          # vite build → dist/
 just test           # node --test src/engine/*.test.js
 just diff           # build sample data and open a two-file diff

@@ -1,6 +1,6 @@
 # Status
 
-**Spec:** v0.2 | **Audited:** 2026-06-15 | **Coverage:** all non-deferred requirements have implementing code
+**Spec:** v0.2 | **Audited:** 2026-06-22 | **Coverage:** all non-deferred requirements have implementing code
 
 The 2026-06-09 comments redesign reconciled the former per-hunk rejections and free-text notes into one **comment** concept (new category [CO-01]..[CO-08], `src/engine/comments.js`). A comment carries a `body`, an `action` (`fix-now` / `fix-later` / `consider`, defaulting to `fix-now`), and a target — the changeset, a file, or a line range. Only `fix-now` gates the exit code (EC-01/02), earns the red sidebar/badge treatment, and gates the quit dialog; `fix-later` (amber) and `consider` (accent) are advisory. Hunk review state is now binary (reviewed / unreviewed) — "blocking" is a comment property, not a third hunk state. Range comments are created from the new (right) side's line-number gutter (drag = range, long-press = single line; a plain click toggles a changed line's reviewed state but comments an unchanged context line, so neighboring code can be flagged — [CO-04]; the old/left gutter is inert, since feedback references the new file), by Space / Enter on the current hunk ([NV-07]), or by the context-menu "Comment" ([CM-04]); changeset and file comments come from the header / file-header controls ([CO-05]) and the comments panel ([CO-08], `n` key). Each range comment bands its covered lines with an action-colored outline ([CO-07]). The sidecar `output` now carries a single `comments[]` array ([IM.OUT-02a]) — `rejections[]` and `notes[]` are gone. Retired: [NV-11], [NV-12] (→ [CO-06]/[CO-07]), [CM-07] (→ the action control), [IM.OUT-06] (→ `comments[]`). The work landed in `comments.js` (action vocabulary + output projection), `ReviewShell.jsx` (comment state, CommentsPanel, fix-now badges/summary), `FileDiffView.jsx` (gutter gesture, composer, comment bars), `ContextHeader.jsx`, `Sidebar.jsx`, `Minimap.jsx`, `KeyboardHelp.jsx`, `App.jsx` (exit code), and `electron/main.js` (close-payload default).
 
@@ -41,7 +41,7 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [NV-05] | u mark current hunk unreviewed | Done |
 | [NV-06] | Click hunk toggles reviewed | Done |
 | [NV-07] | Space / Enter comment on current hunk; edits the hunk's existing comment instead of stacking a new one | Done |
-| [NV-08] | i open in editor | Done |
+| [NV-08] | p preview in registered application | Done |
 | [NV-13] | Hunk-navigation viewport positioning (umbrella) | Done |
 | [NV-13a] | Don't scroll if hunk already fully visible | Done |
 | [NV-13b] | One line of context above, hunk first line on second row | Done |
@@ -49,7 +49,7 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [NV-13d] | Animate in-file scroll; jump instantly cross-file | Done |
 | [NV-14] | Shift+J marks file reviewed and advances to next file | Done |
 | [NV-15] | Shift+K navigates to previous file | Done |
-| [NV-16] | Transient error toast when open-in-editor fails | Done |
+| [NV-16] | Transient error toast when preview fails | Done |
 | [NV-17] | d toggles input details panel (either case) | Done |
 | [NV-18] | `?` toggles keyboard-shortcuts overlay | Done |
 | [NV-19] | n / comments control opens the comments panel ([CO-08]) | Done |
@@ -105,7 +105,7 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [CM-02] | Mark as reviewed | Done |
 | [CM-03] | Mark as unreviewed | Done |
 | [CM-04] | Comment (compose on the clicked line) | Done |
-| [CM-05] | Open in editor | Done |
+| [CM-05] | Preview | Done |
 | [CM-06] | Delete comment (when hunk has comments); confirms before discarding a typed body | Done |
 
 ### Review Feedback (RV) — 2/2
