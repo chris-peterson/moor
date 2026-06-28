@@ -157,6 +157,11 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     ? previewKindFor(rightPath || leftPath)
     : null;
 
+  // An SVG is most useful rendered — the source is markup you'd otherwise have
+  // to picture — so it opens in the preview; toggle to source to read the
+  // markup. Markdown opens to its source diff (the default for everything else).
+  const defaultViewMode = previewKind === 'svg' ? 'rendered' : 'source';
+
   const fileKey = rightFullPath || leftFullPath || rightPath || leftPath || '';
 
   const [leftDataUrl, setLeftDataUrl] = useState(null);
@@ -220,7 +225,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const [selection, setSelection] = useState(null);
   const pressRef = useRef(null);
   const [splitPercent, setSplitPercent] = useState(50);
-  const [viewMode, setViewMode] = useState('source');
+  const [viewMode, setViewMode] = useState(defaultViewMode);
   const [draggingResizer, setDraggingResizer] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [errorToast, setErrorToast] = useState(null);
@@ -681,7 +686,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     }
     setCurrentHunk(initial);
     setComposing(null);
-    setViewMode('source');
+    setViewMode(defaultViewMode);
   }, [leftContent, rightContent]);
 
   useEffect(() => {
@@ -944,7 +949,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
               <div onMouseDown={handleResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
               <div style={{ ...headerCellStyle('var(--color-right)', rightWidth), display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rightPath || '(empty)'}</span>
-                <PreviewToggle viewMode={viewMode} onToggle={toggleViewMode} />
+                <HeaderActions previewKind={previewKind} viewMode={viewMode} onToggle={toggleViewMode} onAddFileComment={onAddFileComment} fileKey={fileKey} />
               </div>
             </div>
             <div style={{ flex: 1, display: 'flex', background: 'var(--bg-deep)', overflow: 'hidden' }}>
@@ -1006,27 +1011,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                   <div onMouseDown={handleResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
                   <div style={{ ...headerCellStyle('var(--color-right)', rightWidth), display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rightPath || '(empty)'}</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                      {previewKind && <PreviewToggle viewMode={viewMode} onToggle={toggleViewMode} />}
-                      {onAddFileComment && (
-                        <button
-                          type="button"
-                          onClick={() => onAddFileComment(fileKey)}
-                          title="Comment on this file"
-                          style={{
-                            flexShrink: 0,
-                            background: 'transparent',
-                            border: '1px solid var(--color-accent-border)',
-                            color: 'var(--color-accent)',
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: '10px',
-                            padding: '1px 6px',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                          }}
-                        >+ comment</button>
-                      )}
-                    </span>
+                    <HeaderActions previewKind={previewKind} viewMode={viewMode} onToggle={toggleViewMode} onAddFileComment={onAddFileComment} fileKey={fileKey} />
                   </div>
                 </div>
               </div>
@@ -1322,6 +1307,35 @@ function CommentBar({ comment, top, onEdit, onCycleAction, onDelete }) {
         <span onClick={onDelete} style={{ opacity: 0.5, cursor: 'pointer', fontSize: '11px' }} title="Delete comment">✕</span>
       </div>
     </div>
+  );
+}
+
+// The right-side header controls: the source ↔ rendered toggle (when the file
+// has a rendered representation) and the file-comment button. Rendered in both
+// the source and rendered headers so a file comment can be added in either view.
+function HeaderActions({ previewKind, viewMode, onToggle, onAddFileComment, fileKey }) {
+  return (
+    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+      {previewKind && <PreviewToggle viewMode={viewMode} onToggle={onToggle} />}
+      {onAddFileComment && (
+        <button
+          type="button"
+          onClick={() => onAddFileComment(fileKey)}
+          title="Comment on this file"
+          style={{
+            flexShrink: 0,
+            background: 'transparent',
+            border: '1px solid var(--color-accent-border)',
+            color: 'var(--color-accent)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '10px',
+            padding: '1px 6px',
+            borderRadius: '3px',
+            cursor: 'pointer',
+          }}
+        >+ comment</button>
+      )}
+    </span>
   );
 }
 

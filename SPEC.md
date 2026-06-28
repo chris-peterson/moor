@@ -137,7 +137,7 @@ Conventions for any field the reviewer types into. The keyboard contract — Ent
 ### Binary Formats (BF)
 
 - **[BF-01]** When a recognized image file is opened, the diff viewer shall display the images side-by-side
-- **[BF-02]** When a file has both a text and a rendered representation (Markdown, SVG), the diff viewer shall offer a toggle between the source diff and a side-by-side rendered preview, in the file header and via the `r` key (NV-21). The rendered preview shall display each side's content with embedded scripts disabled and remote subresource loads blocked.
+- **[BF-02]** When a file has both a text and a rendered representation (Markdown, SVG), the diff viewer shall offer a toggle between the source diff and a side-by-side rendered preview, in the file header and via the `r` key (NV-21). An SVG file shall open in the rendered preview by default; all other files shall open in the source diff. The rendered preview shall display each side's content with embedded scripts disabled and remote subresource loads blocked, and shall offer the same file-comment affordance as the source diff.
 
 ### Diff Algorithm (DA)
 
