@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.0
+
+### Features
+- Markdown and SVG diffs now have a source ↔ rendered preview toggle (a header button, or the `r` key): review a docs change or an icon edit as the rendered result, side by side, instead of reading raw markup. Each side renders inside a sandboxed, CSP-locked iframe, so viewing an attacker-authored file can neither run scripts nor load remote subresources.
+
 ## 0.11.0
 
 ### Features
