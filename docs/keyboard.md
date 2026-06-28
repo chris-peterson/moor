@@ -76,6 +76,7 @@ the exit code; `fix-later` and `consider` are advisory.
 |-----|--------|
 | `d` | Toggle the details panel (when the review context carries expandable details). |
 | `f` | Toggle the file sidebar. |
+| `r` | Toggle source / rendered preview for a file that has one (Markdown, SVG). Each side renders with scripts disabled. |
 | `=` / `-` | Zoom in / out. `0` resets. |
 | `?` | Toggle the keyboard help overlay. |
 

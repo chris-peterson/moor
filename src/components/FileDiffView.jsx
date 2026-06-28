@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useCallback, useState, useEffect, useLayoutEffect } from 'react';
 import { computeLineChanges, diffChars, buildDisplayRows, BINARY_SENTINEL } from '../engine/diff.js';
 import { DEFAULT_ACTION, ACTIONS, ACTIONS_BY_SEVERITY, isBlocking, commentToOutput, actionColor, actionBg, actionLabel, actionChipStyle, cycleAction, cycleActionDown } from '../engine/comments.js';
+import { previewKindFor, renderMarkdown } from '../engine/preview.js';
 import Minimap from './Minimap.jsx';
 
 const TAB_SPACES = '    ';
@@ -149,6 +150,13 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const isBinary = leftBinary || rightBinary;
   const isImage = isBinary && (IMAGE_EXTENSIONS.test(leftPath || '') || IMAGE_EXTENSIONS.test(rightPath || ''));
 
+  // FUT-01 / BF-02: a file with a rendered representation can toggle between the
+  // source diff and a side-by-side preview. The kind comes from whichever side
+  // has a path (the new side wins, falling back to the old for a deletion).
+  const previewKind = !isBinary
+    ? previewKindFor(rightPath || leftPath)
+    : null;
+
   const fileKey = rightFullPath || leftFullPath || rightPath || leftPath || '';
 
   const [leftDataUrl, setLeftDataUrl] = useState(null);
@@ -171,6 +179,16 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
   const leftLines = useMemo(() => isBinary || !leftContent ? [] : leftContent.split('\n'), [leftContent, isBinary]);
   const rightLines = useMemo(() => isBinary || !rightContent ? [] : rightContent.split('\n'), [rightContent, isBinary]);
+
+  // FUT-01: the rendered body for each side. Markdown is converted to HTML;
+  // SVG is its own markup. Both are dropped into a scripts-disabled sandbox
+  // iframe (renderedDoc), so embedded scripts never run.
+  const leftRendered = useMemo(
+    () => previewKind === 'markdown' ? renderMarkdown(leftContent) : (leftContent || ''),
+    [previewKind, leftContent]);
+  const rightRendered = useMemo(
+    () => previewKind === 'markdown' ? renderMarkdown(rightContent) : (rightContent || ''),
+    [previewKind, rightContent]);
 
   const hunks = useMemo(() => isBinary ? [] : computeLineChanges(leftLines, rightLines), [leftLines, rightLines, isBinary]);
   const rows = useMemo(() => isBinary ? [] : buildDisplayRows(leftLines, rightLines, hunks), [leftLines, rightLines, hunks, isBinary]);
@@ -202,6 +220,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const [selection, setSelection] = useState(null);
   const pressRef = useRef(null);
   const [splitPercent, setSplitPercent] = useState(50);
+  const [viewMode, setViewMode] = useState('source');
   const [draggingResizer, setDraggingResizer] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [errorToast, setErrorToast] = useState(null);
@@ -220,6 +239,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       if (r && !r.ok) showErrorToast(r.error || 'Could not open file');
     });
   }, [rightFullPath, leftFullPath, showErrorToast]);
+  const toggleViewMode = useCallback(() => {
+    if (!previewKind) return;
+    setViewMode(m => (m === 'source' ? 'rendered' : 'source'));
+  }, [previewKind]);
   const contextMenuRef = useRef(null);
   const totalHeight = rows.length * ROW_HEIGHT;
   // NV-13 bottom pad: lets a hunk near end-of-file scroll into the
@@ -658,6 +681,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     }
     setCurrentHunk(initial);
     setComposing(null);
+    setViewMode('source');
   }, [leftContent, rightContent]);
 
   useEffect(() => {
@@ -765,6 +789,13 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           handlePreview();
           break;
         }
+        case 'r':
+        case 'R': {
+          // toggleViewMode no-ops when the file has no rendered representation.
+          e.preventDefault();
+          toggleViewMode();
+          break;
+        }
         case 'q':
         case 'Escape': {
           if (!onNavigateNext) {
@@ -778,7 +809,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hunkRanges, currentHunk, reviewedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, composing, paused, openComposerForRows, editComment, fileComments, lineForRow, handlePreview, setReviewedHunks]);
+  }, [hunkRanges, currentHunk, reviewedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, composing, paused, openComposerForRows, editComment, fileComments, lineForRow, handlePreview, toggleViewMode, setReviewedHunks]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -903,7 +934,26 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           <div style={{ position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize' }} />
         )}
 
-        {isBinary ? (
+        {previewKind && viewMode === 'rendered' ? (
+          <>
+            <div ref={headerRef} style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+              <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0 }} />
+              <div style={headerCellStyle(leftPath === rightPath ? 'transparent' : 'var(--color-left)', leftWidth)}>
+                {leftPath === rightPath ? '' : (leftPath || '(empty)')}
+              </div>
+              <div onMouseDown={handleResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
+              <div style={{ ...headerCellStyle('var(--color-right)', rightWidth), display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rightPath || '(empty)'}</span>
+                <PreviewToggle viewMode={viewMode} onToggle={toggleViewMode} />
+              </div>
+            </div>
+            <div style={{ flex: 1, display: 'flex', background: 'var(--bg-deep)', overflow: 'hidden' }}>
+              <RenderedPane kind={previewKind} html={leftRendered} hasContent={Boolean(leftContent)} width={leftWidth} />
+              <div onMouseDown={handleResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
+              <RenderedPane kind={previewKind} html={rightRendered} hasContent={Boolean(rightContent)} width={rightWidth} />
+            </div>
+          </>
+        ) : isBinary ? (
           <>
             <div ref={headerRef} style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
               <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0 }} />
@@ -956,24 +1006,27 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                   <div onMouseDown={handleResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
                   <div style={{ ...headerCellStyle('var(--color-right)', rightWidth), display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rightPath || '(empty)'}</span>
-                    {onAddFileComment && (
-                      <button
-                        type="button"
-                        onClick={() => onAddFileComment(fileKey)}
-                        title="Comment on this file"
-                        style={{
-                          flexShrink: 0,
-                          background: 'transparent',
-                          border: '1px solid var(--color-accent-border)',
-                          color: 'var(--color-accent)',
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: '10px',
-                          padding: '1px 6px',
-                          borderRadius: '3px',
-                          cursor: 'pointer',
-                        }}
-                      >+ comment</button>
-                    )}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                      {previewKind && <PreviewToggle viewMode={viewMode} onToggle={toggleViewMode} />}
+                      {onAddFileComment && (
+                        <button
+                          type="button"
+                          onClick={() => onAddFileComment(fileKey)}
+                          title="Comment on this file"
+                          style={{
+                            flexShrink: 0,
+                            background: 'transparent',
+                            border: '1px solid var(--color-accent-border)',
+                            color: 'var(--color-accent)',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '10px',
+                            padding: '1px 6px',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                          }}
+                        >+ comment</button>
+                      )}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1268,6 +1321,100 @@ function CommentBar({ comment, top, onEdit, onCycleAction, onDelete }) {
         <span onClick={onEdit} style={{ flex: 1, whiteSpace: 'pre-wrap', color: 'var(--text-primary)', cursor: 'text' }}>{comment.body}</span>
         <span onClick={onDelete} style={{ opacity: 0.5, cursor: 'pointer', fontSize: '11px' }} title="Delete comment">✕</span>
       </div>
+    </div>
+  );
+}
+
+// FUT-01: the source ↔ rendered toggle in the file header. Visible only when
+// the file has a rendered representation (previewKind set).
+function PreviewToggle({ viewMode, onToggle }) {
+  const rendered = viewMode === 'rendered';
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title="Toggle source / rendered (r)"
+      style={{
+        flexShrink: 0,
+        background: rendered ? 'var(--color-accent-bg)' : 'transparent',
+        border: '1px solid var(--color-accent-border)',
+        color: 'var(--color-accent)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: '10px',
+        padding: '1px 6px',
+        borderRadius: '3px',
+        cursor: 'pointer',
+      }}
+    >{rendered ? 'source' : 'rendered'}</button>
+  );
+}
+
+// Reads the theme tokens from the host document so the sandboxed iframe (a
+// separate document that can't see the parent's CSS variables) can style its
+// body to match, keeping global.css the single source for the palette.
+function themeTokens() {
+  const cs = getComputedStyle(document.documentElement);
+  const tok = (name) => cs.getPropertyValue(name).trim();
+  return {
+    bg: tok('--bg-deep'),
+    panel: tok('--bg-panel'),
+    text: tok('--text-primary'),
+    muted: tok('--text-muted'),
+    border: tok('--border'),
+    accent: tok('--color-accent'),
+    fontUi: tok('--font-ui'),
+    fontMono: tok('--font-mono'),
+  };
+}
+
+// FUT-01: one rendered side. Markdown HTML and SVG markup both render inside a
+// sandbox iframe with no allow-scripts, so any embedded script or event handler
+// is inert. SVG is centered like the image preview; Markdown scrolls.
+function RenderedPane({ kind, html, hasContent, width }) {
+  const srcDoc = useMemo(() => {
+    if (!hasContent) return null;
+    const t = themeTokens();
+    const isSvg = kind === 'svg';
+    const body = isSvg
+      ? `<div class="svg-wrap">${html}</div>`
+      : html;
+    const layout = isSvg
+      ? `body{display:flex;align-items:flex-start;justify-content:center;padding:20px;}
+         .svg-wrap{max-width:100%;}
+         .svg-wrap svg{max-width:100%;height:auto;}`
+      : `body{padding:16px 24px;line-height:1.55;}
+         pre{background:${t.panel};padding:12px;border-radius:4px;overflow:auto;}
+         code{font-family:${t.fontMono};font-size:0.9em;}
+         pre code{background:transparent;}
+         :not(pre)>code{background:${t.panel};padding:1px 4px;border-radius:3px;}
+         blockquote{margin:0 0 0 4px;padding-left:12px;border-left:3px solid ${t.border};color:${t.muted};}
+         a{color:${t.accent};}
+         h1,h2,h3,h4,h5,h6{font-family:${t.fontUi};}
+         hr{border:none;border-top:1px solid ${t.border};}`;
+    // A CSP that allows only inline styles blocks every subresource fetch, so
+    // a remote image or beacon embedded in an SVG / Markdown image can't phone
+    // home, and scripts stay disabled even if the iframe sandbox is loosened.
+    const csp = `default-src 'none'; style-src 'unsafe-inline'; img-src data:`;
+    return `<!doctype html><html><head><meta charset="utf-8">
+      <meta http-equiv="Content-Security-Policy" content="${csp}"><style>
+      html,body{margin:0;}
+      body{background:${t.bg};color:${t.text};font-family:${t.fontUi};font-size:14px;}
+      ${layout}
+    </style></head><body>${body}</body></html>`;
+  }, [kind, html, hasContent]);
+
+  return (
+    <div style={{ width: width + 'px', display: 'flex', flexShrink: 0, overflow: 'hidden' }}>
+      {srcDoc ? (
+        <iframe
+          sandbox=""
+          srcDoc={srcDoc}
+          title="Rendered preview"
+          style={{ flex: 1, border: 'none', background: 'var(--bg-deep)' }}
+        />
+      ) : (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-ui)', fontSize: '12px' }}>(empty)</div>
+      )}
     </div>
   );
 }

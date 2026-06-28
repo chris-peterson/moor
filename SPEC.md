@@ -76,6 +76,7 @@ Vim-style, keyboard-first:
 - **[NV-18]** When the user presses `?`, the viewer shall toggle an overlay listing the keyboard shortcuts; `Escape` or a second `?` shall dismiss it.
 - **[NV-19]** When the user presses `n` (either case) or activates the comments control, the viewer shall open the comments panel (CO-08).
 - **[NV-20]** When the user presses `=` / `+` or `-`, the viewer shall zoom the interface in or out; `0` shall reset the zoom. No modifier key shall be required.
+- **[NV-21]** When the user presses `r` (either case) on a file that has a rendered representation (BF-02), the viewer shall toggle between the source diff and the rendered preview. On a file without a rendered representation, the key shall have no effect.
 
 ### Directory Diff (DD)
 
@@ -136,6 +137,7 @@ Conventions for any field the reviewer types into. The keyboard contract — Ent
 ### Binary Formats (BF)
 
 - **[BF-01]** When a recognized image file is opened, the diff viewer shall display the images side-by-side
+- **[BF-02]** When a file has both a text and a rendered representation (Markdown, SVG), the diff viewer shall offer a toggle between the source diff and a side-by-side rendered preview, in the file header and via the `r` key (NV-21). The rendered preview shall display each side's content with embedded scripts disabled and remote subresource loads blocked.
 
 ### Diff Algorithm (DA)
 
@@ -243,7 +245,6 @@ git difftool branch       # compare against a branch
 
 ## Deferred (Future Versions)
 
-- **[FUT-01]** (→ BF) Where a file has both a text and a visual representation (e.g., SVG, Markdown), the diff viewer shall provide a toggle between source diff and rendered preview
 - **[FUT-02]** (→ IM) The input section may include an optional `prev` reference describing a previous diff, using the same shape as the primary input (`left` / `right` paths plus optional `title` / `details`, nestable). Speculative — no caller emits `prev` yet; revisit once anchor's wrapper supplies it.
 - **[FUT-03]** (→ RO) `[prev]` read-only preview of the previous diff: render the link when `prev` is present, open the referenced diff read-only (commenting / preview disabled, no output writes), and return to the live review on `Escape` or a back affordance. Speculative companion to FUT-02; not yet implemented.
 - **Syntax highlighting** — language-aware coloring in diff panels

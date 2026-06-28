@@ -34,6 +34,7 @@ const GROUPS = [
     rows: [
       [['d'], 'Toggle details'],
       [['f'], 'Toggle file sidebar'],
+      [['r'], 'Toggle source / rendered (Markdown, SVG)'],
       [['=', '-'], 'Zoom in / out (0 resets)'],
       [['?'], 'Toggle this help'],
     ],

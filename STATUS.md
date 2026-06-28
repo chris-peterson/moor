@@ -30,7 +30,7 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [FD-08] | Binary file detection | Done |
 | [FD-09] | Dim reviewed hunks | Done |
 
-### Navigation (NV) — 20/20
+### Navigation (NV) — 21/21
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -54,6 +54,7 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [NV-18] | `?` toggles keyboard-shortcuts overlay | Done |
 | [NV-19] | n / comments control opens the comments panel ([CO-08]) | Done |
 | [NV-20] | =/-/0 zoom in/out/reset, no modifier | Done |
+| [NV-21] | r toggles source / rendered preview (either case) | Done |
 
 ### Directory Diff (DD) — 16/16
 
@@ -115,11 +116,12 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [RV-01] | "Review Complete!" toast notification | Done |
 | [RV-04] | Sidebar entry red when file has fix-now comments | Done |
 
-### Binary Formats (BF) — 1/1
+### Binary Formats (BF) — 2/2
 
 | Req | Description | Status |
 |-----|-------------|--------|
 | [BF-01] | Side-by-side image diff | Done |
+| [BF-02] | Source / rendered preview toggle (Markdown, SVG) | Done |
 
 ### Diff Algorithm (DA) — 4/4
 
@@ -223,6 +225,5 @@ Both behaviors that traced to no requirement are now captured in the spec:
 
 | Req | Description |
 |-----|-------------|
-| [FUT-01] | Preview/source toggle for visual text files (ex-BF-02) |
 | [FUT-02] | Optional `prev` input reference (ex-IM.IN-03) — speculative; no caller emits it yet |
 | [FUT-03] | `[prev]` read-only preview of the previous diff (ex-RO-01..04) — speculative; not implemented |
