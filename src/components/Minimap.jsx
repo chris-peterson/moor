@@ -10,7 +10,11 @@ const typeToColor = {
   equal: 'transparent',
 };
 
-export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, onScrollTo, reviewedRows, commentRowColors }) {
+// `topOffset` (the sticky file header's height) is left blank at the top so the
+// change bands line up with the diff rows, which begin below that header. The
+// minimap still stretches to the full column height — the offset is handled in
+// the math, not by shrinking the element (which would collapse its canvas).
+export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, topOffset = 0, onScrollTo, reviewedRows, commentRowColors }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const [containerHeight, setContainerHeight] = useState(0);
@@ -26,7 +30,12 @@ export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, onScroll
     return () => observer.disconnect();
   }, []);
 
-  const scale = containerHeight > 0 && totalHeight > 0 ? containerHeight / totalHeight : 1;
+  // The rows occupy the minimap below the header band. Map document pixels into
+  // that region, capped at 1:1 so a file shorter than the minimap keeps its rows
+  // at real size (mirroring the diff view) instead of ballooning a few changed
+  // lines into a full-height block.
+  const availableHeight = Math.max(0, containerHeight - topOffset);
+  const scale = availableHeight > 0 && totalHeight > 0 ? Math.min(1, availableHeight / totalHeight) : 1;
 
   const colorMap = useMemo(() => {
     return rows.map((row, i) => {
@@ -48,7 +57,9 @@ export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, onScroll
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, MINIMAP_WIDTH, containerHeight);
 
-    const rowHeight = rows.length > 0 ? containerHeight / rows.length : 1;
+    // ROW_HEIGHT (= totalHeight / rows.length) scaled by the fit factor: rows
+    // shrink to fit a long file, but never stretch beyond their real size.
+    const rowHeight = rows.length > 0 ? (totalHeight / rows.length) * scale : 1;
     const style = getComputedStyle(document.documentElement);
     const resolvedColors = new Map();
     const resolve = (cssValue) => {
@@ -66,22 +77,26 @@ export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, onScroll
 
       ctx.globalAlpha = reviewedRows && reviewedRows.has(i) ? 0.5 : 1;
       ctx.fillStyle = color;
-      const y = i * rowHeight;
+      const y = topOffset + i * rowHeight;
       const h = Math.max(1, rowHeight);
       ctx.fillRect(0, y, MINIMAP_WIDTH, h);
     }
     ctx.globalAlpha = 1;
-  }, [colorMap, containerHeight, rows.length, reviewedRows]);
+  }, [colorMap, containerHeight, rows.length, reviewedRows, totalHeight, scale, topOffset]);
 
-  const viewportIndicatorTop = scrollTop * scale;
+  const viewportIndicatorTop = topOffset + scrollTop * scale;
   const viewportIndicatorHeight = Math.max(10, viewportHeight * scale);
 
-  const handleClick = useCallback((e) => {
+  const scrollFromEvent = useCallback((clientY) => {
     const rect = containerRef.current.getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    const targetScroll = (y / containerHeight) * totalHeight - viewportHeight / 2;
-    onScrollTo(Math.max(0, Math.min(totalHeight - viewportHeight, targetScroll)));
-  }, [containerHeight, totalHeight, viewportHeight, onScrollTo]);
+    const y = clientY - rect.top - topOffset;
+    const targetScroll = availableHeight > 0
+      ? (y / availableHeight) * totalHeight - viewportHeight / 2
+      : 0;
+    onScrollTo(Math.max(0, Math.min(Math.max(0, totalHeight - viewportHeight), targetScroll)));
+  }, [availableHeight, topOffset, totalHeight, viewportHeight, onScrollTo]);
+
+  const handleClick = useCallback((e) => scrollFromEvent(e.clientY), [scrollFromEvent]);
 
   const handleMouseDown = useCallback((e) => {
     e.preventDefault();
@@ -89,10 +104,7 @@ export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, onScroll
 
     const handleMouseMove = (e) => {
       if (!dragging.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const y = e.clientY - rect.top;
-      const targetScroll = (y / containerHeight) * totalHeight - viewportHeight / 2;
-      onScrollTo(Math.max(0, Math.min(totalHeight - viewportHeight, targetScroll)));
+      scrollFromEvent(e.clientY);
     };
 
     const handleMouseUp = () => {
@@ -103,7 +115,7 @@ export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, onScroll
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-  }, [containerHeight, totalHeight, viewportHeight, onScrollTo]);
+  }, [scrollFromEvent]);
 
   return (
     <div

@@ -46,6 +46,9 @@ export function ContextHeader({
   lineStats = null,
   commentCount = 0,
   onOpenComments,
+  onApprove,
+  onReject,
+  approveDisabled = false,
 }) {
   if (!channelConfigured) {
     return (
@@ -187,31 +190,103 @@ export function ContextHeader({
           </button>
         </div>
 
-        <div style={styles.progressGroup}>
-          <div style={styles.progressTrack}>
-            <div
-              style={{
-                ...styles.progressFill,
-                width: `${progress * 100}%`,
-                background: allViewed ? 'var(--color-equal)' : 'var(--color-right)',
-              }}
-            />
+        <div style={styles.rightCluster}>
+          <div style={styles.progressGroup}>
+            <div style={styles.progressTrack}>
+              <div
+                style={{
+                  ...styles.progressFill,
+                  width: `${progress * 100}%`,
+                  background: allViewed ? 'var(--color-equal)' : 'var(--color-right)',
+                }}
+              />
+            </div>
+            <span style={styles.progressText}>
+              {allViewed ? (
+                <span style={{ color: 'var(--color-equal)' }}>all changes viewed</span>
+              ) : totalChanges > 0 ? (
+                <>
+                  {viewedChanges}
+                  <span style={styles.progressTextDim}> of {totalChanges} changes</span>
+                </>
+              ) : (
+                <span style={styles.progressTextDim}>no changes</span>
+              )}
+            </span>
           </div>
-          <span style={styles.progressText}>
-            {allViewed ? (
-              <span style={{ color: 'var(--color-equal)' }}>all changes viewed · q to close</span>
-            ) : totalChanges > 0 ? (
-              <>
-                {viewedChanges}
-                <span style={styles.progressTextDim}> of {totalChanges} changes</span>
-              </>
-            ) : (
-              <span style={styles.progressTextDim}>no changes</span>
-            )}
-          </span>
+
+          {(onApprove || onReject) && (
+            <div style={styles.verdictGroup}>
+              <VerdictButton
+                kind="approve"
+                disabled={approveDisabled}
+                onClick={() => onApprove?.()}
+                title={approveDisabled ? 'Resolve fix-now comments before approving' : 'Approve — finalize the review clean'}
+              >✓ Approve</VerdictButton>
+              <VerdictButton
+                kind="reject"
+                onClick={() => onReject?.()}
+                title="Request changes — leave blocking feedback"
+              >✗ Reject</VerdictButton>
+            </div>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+// The top-bar verdict controls. Approve carries the "ship it" green; Reject the
+// conflict red. Both read as large, deliberate actions — the active close, in
+// contrast to quitting the window and letting the exit code be inferred.
+function VerdictButton({ kind, children, onClick, disabled, title }) {
+  const [hover, setHover] = React.useState(false);
+  const color = kind === 'approve' ? 'var(--color-equal)' : 'var(--color-conflict)';
+  const base = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '5px',
+    fontFamily: 'var(--font-ui)',
+    fontSize: '12px',
+    fontWeight: 700,
+    letterSpacing: '0.02em',
+    padding: '5px 16px',
+    borderRadius: '4px',
+    border: `1px solid ${color}`,
+    cursor: disabled ? 'default' : 'pointer',
+    whiteSpace: 'nowrap',
+    transition: 'background 0.12s ease, color 0.12s ease, opacity 0.12s ease',
+    flexShrink: 0,
+  };
+  let style;
+  if (kind === 'approve') {
+    // Filled — the primary, affirmative action.
+    style = {
+      ...base,
+      background: color,
+      color: '#fff',
+      opacity: disabled ? 0.4 : (hover ? 0.9 : 1),
+    };
+  } else {
+    // Outlined — prominent but secondary; fills on hover.
+    style = {
+      ...base,
+      background: hover ? color : 'transparent',
+      color: hover ? '#fff' : color,
+    };
+  }
+  return (
+    <button
+      type="button"
+      style={style}
+      title={title}
+      onClick={disabled ? undefined : onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      aria-disabled={disabled}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -510,6 +585,23 @@ const styles = {
   noteChipCount: {
     color: 'var(--text-primary)',
     fontWeight: 700,
+  },
+
+  // Progress read-out and the verdict buttons share a right-aligned cluster that
+  // spans the remaining columns, so the 1fr gap sits between the badges and it.
+  rightCluster: {
+    gridColumn: '3 / -1',
+    justifySelf: 'end',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+  },
+
+  verdictGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexShrink: 0,
   },
 
   progressGroup: {

@@ -28,6 +28,8 @@ const H_SCROLL_STEP = 40;
 const V_SCROLL_STEP = ROW_HEIGHT * 3;
 const RESIZER_WIDTH = 5;
 const BAR_WIDTH = 3;
+// The width the empty pane collapses to for a new / deleted file.
+const COLLAPSED_PANE_WIDTH = 132;
 // CO-04 gesture thresholds: a press that moves more than DRAG_PX, or onto
 // another row, is a range drag; a press held LONG_PRESS_MS without moving is a
 // single-line comment; a quick release is a plain review click.
@@ -149,6 +151,23 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
   const isImage = isBinary && (IMAGE_EXTENSIONS.test(leftPath || '') || IMAGE_EXTENSIONS.test(rightPath || ''));
+
+  // A wholly-added (new) or wholly-removed (deleted) file has content on one
+  // side only. Detect it by content emptiness, not a missing path: git difftool
+  // (moor's primary caller) feeds an *empty temp file* for the absent side, so
+  // the path is present but empty — a path-only check would miss every new /
+  // deleted file outside directory-compare mode. Collapse the empty pane to a
+  // narrow strip so the content gets nearly the full width, and mark which side
+  // collapsed so the layout and the pointer placeholder agree.
+  const leftHasContent = Boolean(leftContent) && leftContent !== BINARY_SENTINEL;
+  const rightHasContent = Boolean(rightContent) && rightContent !== BINARY_SENTINEL;
+  const isNew = !leftHasContent && rightHasContent;
+  const isDeleted = leftHasContent && !rightHasContent;
+  const collapsedSide = isNew ? 'left' : isDeleted ? 'right' : null;
+  // Binary panes lay their body out with flex, not the measured pane widths, so
+  // collapsing them would desync the header from the body — leave binary at the
+  // even split and apply the collapse only to the source / rendered layouts.
+  const collapseLayout = collapsedSide && !isBinary;
 
   // FUT-01 / BF-02: a file with a rendered representation can toggle between the
   // source diff and a side-by-side preview. The kind comes from whichever side
@@ -408,14 +427,31 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     return set;
   }, [selection]);
 
+  // The single source for the two pane widths. A new/deleted file pins the empty
+  // side to a narrow strip (capped so it never exceeds 40% on a small window);
+  // everything else honours the user's draggable split.
+  const { leftWidth, rightWidth } = useMemo(() => {
+    const availableWidth = Math.max(0, viewportWidth - BAR_WIDTH - RESIZER_WIDTH);
+    if (collapseLayout) {
+      const strip = Math.min(COLLAPSED_PANE_WIDTH, Math.round(availableWidth * 0.4));
+      return collapsedSide === 'left'
+        ? { leftWidth: strip, rightWidth: availableWidth - strip }
+        : { leftWidth: availableWidth - strip, rightWidth: strip };
+    }
+    const lw = Math.round(availableWidth * splitPercent / 100);
+    return { leftWidth: lw, rightWidth: availableWidth - lw };
+  }, [viewportWidth, splitPercent, collapseLayout, collapsedSide]);
+
   const maxScroll = useMemo(() => {
     if (!viewportWidth) return 0;
-    const availableWidth = Math.max(0, viewportWidth - BAR_WIDTH - RESIZER_WIDTH);
-    const leftW = Math.round(availableWidth * splitPercent / 100);
-    const rightW = availableWidth - leftW;
-    const codeAreaWidth = Math.max(0, Math.min(leftW, rightW) - 64);
+    // Horizontal scroll follows the content pane — for a collapsed file that's
+    // the wide side, not the narrow strip.
+    const contentWidth = !collapseLayout ? Math.min(leftWidth, rightWidth)
+      : collapsedSide === 'left' ? rightWidth
+      : leftWidth;
+    const codeAreaWidth = Math.max(0, contentWidth - 64);
     return Math.max(0, maxContentWidth - codeAreaWidth);
-  }, [maxContentWidth, viewportWidth, splitPercent]);
+  }, [maxContentWidth, viewportWidth, collapseLayout, collapsedSide, leftWidth, rightWidth]);
 
   useEffect(() => {
     if (onHunkChange) onHunkChange(currentHunk, hunkRanges.length);
@@ -846,8 +882,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   }, [maxScroll]);
 
   const handleMinimapScroll = useCallback((newScrollTop) => {
-    if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = newScrollTop;
-  }, []);
+    // The minimap works in row-space (headerless); the scroll container's
+    // scrollTop includes the sticky header, so add it back.
+    if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = newScrollTop + headerHeight;
+  }, [headerHeight]);
 
   const handleHScroll = useCallback((e) => {
     setScrollLeft(e.target.scrollLeft);
@@ -880,11 +918,20 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const endIdx = Math.min(rows.length, Math.ceil((rowScrollTop + effectiveViewport) / ROW_HEIGHT) + OVERSCAN);
   const visibleRows = rows.slice(startIdx, endIdx);
 
-  const availableWidth = Math.max(0, viewportWidth - BAR_WIDTH - RESIZER_WIDTH);
-  const leftWidth = Math.round(availableWidth * splitPercent / 100);
-  const rightWidth = availableWidth - leftWidth;
+  // Resizing is meaningless when a pane is pinned collapsed — leave the strip put.
+  const onResizerDown = collapseLayout ? undefined : handleResizerMouseDown;
+  const resizerCursor = collapseLayout ? 'default' : 'col-resize';
 
   const fileFixNowCount = fileComments.filter(c => isBlocking(c.action) && (c.body || '').trim()).length;
+
+  // For a collapsed (new/deleted) file the empty side carries no path label — a
+  // narrow strip would only truncate "(empty)" — and the file-comment / preview
+  // actions move to whichever side actually holds content.
+  const actionsOnLeft = collapsedSide === 'right';
+  const leftHeaderLabel = collapsedSide === 'left'
+    ? ''
+    : (leftPath === rightPath ? '' : (leftPath || '(empty)'));
+  const rightHeaderLabel = collapsedSide === 'right' ? '' : (rightPath || '(empty)');
 
   const headerCellStyle = (color, width) => ({
     width: width + 'px',
@@ -943,18 +990,19 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           <>
             <div ref={headerRef} style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
               <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0 }} />
-              <div style={headerCellStyle(leftPath === rightPath ? 'transparent' : 'var(--color-left)', leftWidth)}>
-                {leftPath === rightPath ? '' : (leftPath || '(empty)')}
+              <div style={{ ...headerCellStyle(leftPath === rightPath ? 'transparent' : 'var(--color-left)', leftWidth), display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{leftHeaderLabel}</span>
+                {actionsOnLeft && <HeaderActions previewKind={previewKind} viewMode={viewMode} onToggle={toggleViewMode} onAddFileComment={onAddFileComment} fileKey={fileKey} />}
               </div>
-              <div onMouseDown={handleResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
+              <div onMouseDown={onResizerDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: resizerCursor }} />
               <div style={{ ...headerCellStyle('var(--color-right)', rightWidth), display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rightPath || '(empty)'}</span>
-                <HeaderActions previewKind={previewKind} viewMode={viewMode} onToggle={toggleViewMode} onAddFileComment={onAddFileComment} fileKey={fileKey} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rightHeaderLabel}</span>
+                {!actionsOnLeft && <HeaderActions previewKind={previewKind} viewMode={viewMode} onToggle={toggleViewMode} onAddFileComment={onAddFileComment} fileKey={fileKey} />}
               </div>
             </div>
             <div style={{ flex: 1, display: 'flex', background: 'var(--bg-deep)', overflow: 'hidden' }}>
               <RenderedPane kind={previewKind} html={leftRendered} hasContent={Boolean(leftContent)} width={leftWidth} />
-              <div onMouseDown={handleResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
+              <div onMouseDown={onResizerDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: resizerCursor }} />
               <RenderedPane kind={previewKind} html={rightRendered} hasContent={Boolean(rightContent)} width={rightWidth} />
             </div>
           </>
@@ -1005,13 +1053,14 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
               <div ref={headerRef} style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--bg-panel)' }}>
                 <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', alignItems: 'stretch' }}>
                   <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0 }} />
-                  <div style={headerCellStyle(leftPath === rightPath ? 'transparent' : 'var(--color-left)', leftWidth)}>
-                    {leftPath === rightPath ? '' : (leftPath || '(empty)')}
+                  <div style={{ ...headerCellStyle(leftPath === rightPath ? 'transparent' : 'var(--color-left)', leftWidth), display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{leftHeaderLabel}</span>
+                    {actionsOnLeft && <HeaderActions previewKind={previewKind} viewMode={viewMode} onToggle={toggleViewMode} onAddFileComment={onAddFileComment} fileKey={fileKey} />}
                   </div>
-                  <div onMouseDown={handleResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
+                  <div onMouseDown={onResizerDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: resizerCursor }} />
                   <div style={{ ...headerCellStyle('var(--color-right)', rightWidth), display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rightPath || '(empty)'}</span>
-                    <HeaderActions previewKind={previewKind} viewMode={viewMode} onToggle={toggleViewMode} onAddFileComment={onAddFileComment} fileKey={fileKey} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rightHeaderLabel}</span>
+                    {!actionsOnLeft && <HeaderActions previewKind={previewKind} viewMode={viewMode} onToggle={toggleViewMode} onAddFileComment={onAddFileComment} fileKey={fileKey} />}
                   </div>
                 </div>
               </div>
@@ -1092,7 +1141,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                         scrollLeft={scrollLeft}
                         leftWidth={leftWidth}
                         rightWidth={rightWidth}
-                        onResizerMouseDown={handleResizerMouseDown}
+                        onResizerMouseDown={onResizerDown}
                         onClick={(e) => handleRowClick(e, idx)}
                         onContextMenu={(e) => handleRowContextMenu(e, idx)}
                         onGutterMouseDown={beginGutterGesture}
@@ -1103,6 +1152,16 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                 </div>
               </div>
             </div>
+
+            {collapseLayout && (
+              <CollapsedPanePlaceholder
+                kind={isNew ? 'new' : 'deleted'}
+                left={collapsedSide === 'left' ? BAR_WIDTH : BAR_WIDTH + leftWidth + RESIZER_WIDTH}
+                width={collapsedSide === 'left' ? leftWidth : rightWidth}
+                top={headerHeight}
+                bottom={maxScroll > 0 ? 12 : 0}
+              />
+            )}
 
             {maxScroll > 0 && (
               <div
@@ -1117,12 +1176,13 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
         )}
       </div>
 
-      {!isBinary && (
+      {!isBinary && !collapseLayout && (
         <Minimap
           rows={rows}
           totalHeight={totalHeight}
-          viewportHeight={viewportHeight}
-          scrollTop={scrollTop}
+          viewportHeight={effectiveViewport}
+          scrollTop={rowScrollTop}
+          topOffset={headerHeight}
           onScrollTo={handleMinimapScroll}
           reviewedRows={reviewedRowSet}
           commentRowColors={commentRowColors}
@@ -1217,6 +1277,32 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       </div>
     )}
     </div>
+  );
+}
+
+// Fills the empty pane of a new / deleted file with a neutral diagonal
+// cross-hatch — it reads as "nothing here" without a label or pointer. `kind`
+// only picks which edge (the one facing the content pane) gets the divider.
+function CollapsedPanePlaceholder({ kind, left, width, top, bottom }) {
+  const contentIsRight = kind === 'new'; // the empty pane is on the left
+  const hatch = 'repeating-linear-gradient(45deg, transparent, transparent 6px, var(--border) 6px, var(--border) 7px), repeating-linear-gradient(-45deg, transparent, transparent 6px, var(--border) 6px, var(--border) 7px)';
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: 'absolute',
+        left: left + 'px',
+        top: top + 'px',
+        width: width + 'px',
+        bottom: bottom + 'px',
+        background: 'var(--bg-surface)',
+        backgroundImage: hatch,
+        borderRight: contentIsRight ? '1px solid var(--border)' : undefined,
+        borderLeft: contentIsRight ? undefined : '1px solid var(--border)',
+        pointerEvents: 'none',
+        zIndex: 6,
+      }}
+    />
   );
 }
 

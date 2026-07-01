@@ -119,7 +119,17 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     setComments(prev => prev.filter(c => c.id !== id));
   }, []);
 
-  const openComments = useCallback(() => setCommentsPanelOpen(true), []);
+  // NV-19 / CO-05: open the comments panel. When it would otherwise open empty,
+  // seed a changeset comment so the reviewer types straight into it — no second
+  // "+ changeset" click (closeComments prunes it if left blank).
+  const openComments = useCallback(() => {
+    setComments(prev => {
+      if (prev.length > 0) return prev;
+      const id = ++commentIdRef.current;
+      return [{ id, body: '', action: DEFAULT_ACTION, target: { type: 'changeset' } }];
+    });
+    setCommentsPanelOpen(true);
+  }, []);
 
   // Prune empty-body comments when the panel closes so a seeded-but-unused
   // changeset / file comment vanishes (CO-08 delete is otherwise explicit).
@@ -368,6 +378,35 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     }
   }, [outComments.length, unreviewedCount, closeWithExitCode]);
 
+  // The top-bar verdict. Approve is the affirmative close: finalize clean (exit
+  // 0), carrying any advisory comments. It is disabled while fix-now comments
+  // block the change — resolving or dropping them is the way forward.
+  const approveDisabled = totalFixNow > 0;
+  const handleApprove = useCallback(() => {
+    if (totalFixNow > 0) return;
+    // Approving without having viewed everything is legitimate but easy to do by
+    // accident — confirm first, showing how much was actually reviewed. A fully
+    // reviewed changeset approves straight through.
+    if (unreviewedCount > 0) {
+      setQuitDialog({ mode: 'approve' });
+    } else {
+      closeWithExitCode(0);
+    }
+  }, [totalFixNow, unreviewedCount, closeWithExitCode]);
+
+  // Reject requests changes, and a rejection needs an actionable reason. With
+  // fix-now feedback already present, confirm and send it (EC-02, exit 1);
+  // otherwise seed a blocking changeset comment and open the panel so the
+  // reviewer states why before the review can finalize.
+  const handleReject = useCallback(() => {
+    if (totalFixNow > 0) {
+      setQuitDialog({ mode: 'feedback' });
+    } else {
+      addComment({ action: 'fix-now', target: { type: 'changeset' } });
+      setCommentsPanelOpen(true);
+    }
+  }, [totalFixNow, addComment]);
+
   useEffect(() => {
     window.__moorConfirmClose = requestClose;
     return () => {
@@ -513,6 +552,9 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
         lineStats={totalLineStats}
         commentCount={outComments.length}
         onOpenComments={openComments}
+        onApprove={handleApprove}
+        onReject={handleReject}
+        approveDisabled={approveDisabled}
       />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {draggingSidebar && (
@@ -604,6 +646,8 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
           mode={quitDialog.mode}
           fixNowCount={totalFixNow}
           unreviewedCount={unreviewedCount}
+          viewedChanges={reviewedChanges}
+          totalChanges={totalChanges}
           feedbackSummary={feedbackSummary}
           onCancel={() => setQuitDialog(null)}
           // Sending feedback keeps the spec's exit-code verdict: fix-now blocks
@@ -641,7 +685,7 @@ const contentMessageStyle = (color) => ({
   fontFamily: 'var(--font-ui)',
 });
 
-function QuitDialog({ mode, fixNowCount, unreviewedCount, feedbackSummary, onCancel, onSendReviewFeedback, onQuitAnyway, onApproveAnyway }) {
+function QuitDialog({ mode, fixNowCount, unreviewedCount, viewedChanges, totalChanges, feedbackSummary, onCancel, onSendReviewFeedback, onQuitAnyway, onApproveAnyway }) {
   const dialogRef = useRef(null);
 
   const handleDialogKeyDown = (e) => {
@@ -700,6 +744,25 @@ function QuitDialog({ mode, fixNowCount, unreviewedCount, feedbackSummary, onCan
     cursor: 'pointer',
   };
   const primaryBtn = { ...baseBtn, background: 'var(--color-accent)', borderColor: 'var(--color-accent)', color: 'var(--bg-deep)', fontWeight: 600 };
+
+  if (mode === 'approve') {
+    const pct = totalChanges > 0 ? Math.round((viewedChanges / totalChanges) * 100) : 0;
+    return (
+      <div style={overlay} onClick={onCancel}>
+        <div ref={dialogRef} style={dialog} onClick={(e) => e.stopPropagation()} onKeyDown={handleDialogKeyDown} role="dialog" aria-modal="true">
+          <h2 style={heading}>Approve without viewing everything?</h2>
+          <div style={body}>
+            You've viewed {viewedChanges} of {totalChanges} change{totalChanges === 1 ? '' : 's'} ({pct}%).
+            Approving now finalizes the review as clean.
+          </div>
+          <div style={buttonRow}>
+            <button style={baseBtn} onClick={onCancel}>Cancel</button>
+            <button style={primaryBtn} onClick={onApproveAnyway} autoFocus>Approve anyway</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (mode === 'feedback') {
     const totalComments = feedbackSummary.reduce((n, g) => n + g.count, 0);
