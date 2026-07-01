@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.0
+
+### Features
+- The review verdict is now an explicit action: large **Approve** and **Reject** buttons sit in the top bar's status row. Approve finalizes the review clean (confirming first if changes remain unreviewed, and disabled while `fix-now` comments block the change); Reject opens the feedback dialog, seeding a blocking changeset comment when none exists so a rejection always carries an actionable reason.
+- Adding a changeset or file comment is a single action — the "+ comment" control (and the `n` key) opens the comments panel with a comment ready to type, instead of requiring a second "add" click. Blank comments are pruned on close.
+
+### Changed
+- New and deleted files now show the content pane at nearly full width, with the empty side reduced to a neutral diagonal cross-hatch rather than an even split against a blank pane. Detection is content-based, so it also applies under `git difftool` (which supplies an empty temp file for the absent side), and the file/preview actions move to whichever side holds content.
+- The minimap is hidden for one-sided (new/deleted) files, where every line is a single color. For regular diffs its change bands are scaled to the real content height and offset past the sticky header, so a short file no longer stretches a few changed lines into a full-height block and the bands line up with their rows.
+
 ## 0.12.0
 
 ### Features
