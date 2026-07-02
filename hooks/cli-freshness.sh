@@ -31,6 +31,6 @@ CLI_VERSION=$(env -u CLAUDE_PLUGIN_ROOT "$NAME" --version 2>/dev/null | awk '{pr
 
 [ "$PLUGIN_VERSION" = "$CLI_VERSION" ] && exit 0
 
-msg="PLEASE TELL THE USER (do not skip): the moor CLI on PATH reports version ${CLI_VERSION}, but the moor plugin is at ${PLUGIN_VERSION}. Refresh the shell wrapper before relying on the CLI — run \`/moor:moor install-cli\` (or \`git pull\` in the local source checkout if the wrapper points there). Until refreshed, CLI invocations may run stale code."
+msg="PLEASE TELL THE USER (do not skip): the moor CLI on PATH reports version ${CLI_VERSION}, but the moor plugin is at ${PLUGIN_VERSION}. Refresh the shell wrapper before relying on the CLI — run \`moor install-cli\` (or \`git pull\` in the local source checkout if the wrapper points there). Until refreshed, CLI invocations may run stale code."
 
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$msg"

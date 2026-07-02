@@ -48,8 +48,7 @@ any directory:
 just install-cli   # copies a wrapper to ~/.local/bin/moor + installs completion
 ```
 
-This is the same operation as the `/moor:moor install-cli` slash command. The
-plugin checks on each session start whether the on-PATH wrapper has drifted
+The plugin checks on each session start whether the on-PATH wrapper has drifted
 from the installed plugin version and reminds you to re-run it after an update.
 
 ## Updating

@@ -194,7 +194,6 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [PD-03] | `install-cli` also installs zsh completion | Done |
 | [PD-04] | `completions zsh [--print]` installs or prints completion | Done |
 | [PD-05] | SessionStart hook warns on wrapper/plugin version drift | Done |
-| [PD-06] | `/moor:moor` slash command forwards args to launcher | Done |
 | [PD-07] | SessionStart hook emits ambient rules (`rules/*.md`) into context | Done |
 | [PD-08] | `--help` / `-h` / `help` prints usage and exits zero; no args prints usage to stderr and exits non-zero | Done |
 

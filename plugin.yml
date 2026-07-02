@@ -20,15 +20,13 @@ marketplace:
 suite:
   cli: true
   group: waypoints
-  # Activated by the user (the diff skill) and by the launch-with-sidecar
-  # ambient rule injected at session start.
+  # Activated by the user — who drives moor through anchor, git difftool, or the
+  # CLI — and by the launch-with-sidecar ambient rule injected at session start.
   activations: [user, session]
   gloss: To moor is to tie up alongside and look the hull over.
   pitch: "A tighter review loop — step through Claude's changes and send each rejection straight back."
   with: "anchor"
   what: "A fast diff viewer for reading code Claude wrote — step through it one change at a time, accept or reject each with a note. anchor opens whatever diff viewer git is set to use; moor is a quick one built for this, and it feeds your notes back to Claude in context."
-  cmds:
-    - ["/moor:moor", "Open a diff for review"]
   setup:
     head: "Use as your git diff tool"
     note: "moor isn't wired in by <code>claude plugin install</code>, and there's no CLI flag for it — it's a one-time git setting. <code>just git-install</code> builds the app and points git at moor: it sets <code>diff.tool</code> to <code>moor</code> and <code>difftool.moor.cmd</code> to moor's launcher. After that, <code>git difftool</code> — and anchor — open moor for review."
