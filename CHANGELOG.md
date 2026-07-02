@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.14.0
+
+### Breaking Changes
+- The `/moor:moor` slash command has been removed. moor is driven through its CLI, `git difftool`, and anchor's `/anchor:preview` / `/anchor:commit` (plus the session ambient rule) — the command was only a passthrough to the same launcher. If you ran `/moor:moor install-cli`, run `moor install-cli` instead.
+
 ## 0.13.0
 
 ### Features
