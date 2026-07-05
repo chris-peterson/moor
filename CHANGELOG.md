@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.14.1
+
+### Changed
+- Reworked the docs landing page around the review loop — a step-by-step
+  "review loop in a Claude session" walkthrough with screenshots (the
+  commit-briefing hero, the comment composer with action tiers, the
+  send-feedback dialog), and the "In action" animation now runs the full loop:
+  the review rejects a change, Claude interprets the fix-now, and a re-review
+  card shows the corrected code.
+
+### Removed
+- Dropped the speculative FUT-02 / FUT-03 requirements (the optional `prev`-diff
+  reference and its read-only preview) from the spec.
+
 ## 0.14.0
 
 ### Breaking Changes
