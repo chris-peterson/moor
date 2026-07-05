@@ -14,12 +14,49 @@ intent up top, walk each change below, and comment where it matters — a
 keystroke anchors a comment to the current change, and your feedback travels
 back to the agent through the [feedback channel](#review-feedback-channel).
 
-![moor reviewing a commit: the agent's rationale fills the INPUTS panel while the two-file diff waits for review in OUTPUTS](screenshot.png)
+![moor reviewing a commit: the commit-briefing header carries the rationale and provenance (author, date, ±lines) above the two-file diff, with Approve / Reject verdict buttons in the status row](screenshot.png)
 
-## In action
+## The review loop in a Claude session
 
-Reading Claude's change starts with the intent, then walks each hunk — and a
-rejection isn't a dead end, it's a fix routed straight back to the agent:
+moor lives in the gap between an agent proposing a change and you accepting it.
+A typical pass:
+
+1. **Claude finishes a change and hands it to moor.** You don't reach for
+   `git difftool` yourself — the [ambient rule](/ambient-rules) the plugin
+   installs routes the launch through a sidecar so the verdict survives. With
+   the anchor plugin, `/anchor:preview` diffs the working tree against `HEAD`
+   and `/anchor:commit` targets a specific commit; either way moor opens with a
+   `MOOR_CONTEXT` file wired up.
+2. **You read the *why* before the *what*.** The briefing header up top carries
+   the change's rationale — the commit message, the range under review, who
+   authored it — so you start from intent, not an unlabelled wall of green and
+   red (the screenshot above).
+3. **You walk each change.** `j` / `k` step hunk to hunk, keeping the current
+   change in view; mark hunks reviewed as you go.
+4. **You comment where it matters.** `Space` anchors a comment to the current
+   change. Each comment carries an action tier — **fix-now** (blocks the
+   change), **fix-later**, or **consider** — so "this is wrong" and "nice
+   someday" don't read the same. `Tab` in the composer cycles the tier.
+5. **You give a verdict and close.** **Approve** finalizes clean; **Reject**
+   opens the feedback dialog, seeding a blocking comment if you haven't left
+   one. `q` closes.
+6. **Your review flows back into the agent's context.** moor streams the
+   verdict through the sidecar as you work and sets its exit code — `0` clean,
+   `1` when any comment is fix-now, `2` unreviewed, `3` closed early. Claude
+   reads your `fix-now` comments as concrete, line-anchored instructions and
+   addresses them.
+
+That last step is the point: there's no copy-pasting review notes back into
+chat. The review stays inside the loop the agent is already running, so the
+close of your review is the start of its fix.
+
+![Anchoring a comment to a change in moor: the inline composer with its fix-now / fix-later / consider action tiers, the targeted change banded to match, and the Approve / Reject verdict buttons in the status row](composer.png)
+
+On close, the send-feedback dialog lists every comment with its action tier
+before it streams back to the agent — a single `fix-now` here, which sets the
+exit code to `1`:
+
+![moor's send-feedback dialog on close: "1 fix-now comment of 1 total across 1 location", the comment shown under right.js with its fix-now badge, and a "Send review feedback" button](feedback-dialog.png)
 
 <div class="cw-session" data-cw-session="session"></div>
 

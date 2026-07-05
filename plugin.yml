@@ -52,3 +52,6 @@ suite:
     - { t: thought, text: "let me actually read it" }
     - { t: cmd, cmd: "/anchor:preview", out: "Opens the change in moor." }
     - { t: moor, del: "return new Date(s)", add: "return parseISO(s)", rej: "reject — non-ISO inputs still reach here → sent back as a fix" }
+    - { t: thought, text: "the fix-now's right — parseISO never applies ISO_DATE" }
+    - { t: claude, text: "You're right — guarding parseISO so a non-ISO string throws instead of silently building a Date:" }
+    - { t: moor, del: "return new Date(s)", add: "if (!ISO_DATE.test(s)) throw new RangeError('not ISO-8601')", rej: "✓ re-review clean — non-ISO now rejected" }
