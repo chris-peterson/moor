@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.15.0
+
+### Features
+- Review the **commit message**, not just the code. Expand the details pane
+  (the `d` key) and comment on the message — a vague subject, a missing ticket
+  reference — with the same `fix-now` / `fix-later` / `consider` actions you use
+  everywhere else (press `m` to jump straight to it). A `fix-now` message comment
+  blocks approval like any other, and the comment rides back to the caller as
+  `{ ..., "target": "commit-message" }` so the agent can rewrite the message.
+
+### Changed
+- **Comment where you are.** Every comment now infers its target from the
+  surface you start it on — a line or range from the diff, a file from its
+  header, the commit message from the details pane (`m`), and the whole
+  changeset from a new control on the header (`c`). Hovering a line's right-side
+  gutter now reveals a **`+`** — click it to comment that line, or drag from it
+  to comment a range — so the most common case has a visible affordance too. The
+  comments panel (`n`) is now purely for **managing** what you've
+  written — edit, re-action, delete — and no longer doubles as a
+  `+ changeset / + commit message / + this file` target picker.
+- The change-briefing header now toggles its details on a click **anywhere** in
+  the panel (not just the small `details` chevron) — `d` still works, and clicks
+  on the add-comment controls or text selections are left alone.
+
 ## 0.14.1
 
 ### Changed
