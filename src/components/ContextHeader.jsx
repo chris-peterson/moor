@@ -1,4 +1,5 @@
 import React from 'react';
+import { actionChipStyle, actionLabel } from '../engine/comments.js';
 
 // IM.IN-02: the change region reads as a changeset header, not a labeled data
 // channel. Collapsed it answers where (the location eyebrow) and what (the
@@ -21,11 +22,14 @@ function pickRow(details, labels) {
   return row ? row.value : null;
 }
 
-// Whether expanding the header would reveal anything — the commit body or any
-// provenance row left after the consumed (location/task/body) and hidden
-// (range) labels are removed. ReviewShell gates the `d`/`D` keys on this so the
-// keyboard toggle and the on-screen expand affordance agree.
+// Whether expanding the header would reveal anything. A present change title is
+// enough on its own: expanding always offers the commit-message annotation
+// control (CO-09). Otherwise it's the commit body or any provenance row left
+// after the consumed (location/task/body) and hidden (range) labels are removed.
+// ReviewShell gates the `d`/`D` keys on this so the keyboard toggle and the
+// on-screen expand affordance agree.
 export function hasExpandableDetails(context) {
+  if (context && context.title) return true;
   const details = (context && Array.isArray(context.details)) ? context.details : [];
   return details.some(d => {
     const l = String(d.label).toLowerCase();
@@ -44,6 +48,9 @@ export function ContextHeader({
   detailsExpanded = false,
   onToggleDetails,
   lineStats = null,
+  messageComments = [],
+  onAddMessageComment,
+  onAddChangesetComment,
   commentCount = 0,
   onOpenComments,
   onApprove,
@@ -91,15 +98,28 @@ export function ContextHeader({
   const hasEyebrow = hasLocation || !!task;
   const hasLineStats = !!(lineStats && (lineStats.added > 0 || lineStats.removed > 0));
   const hasGrid = secondary.length > 0 || hasLineStats;
-  // Expanding reveals the full message (subject headline + body) plus provenance.
-  const hasExpandable = !!body || hasGrid;
+  // Expanding reveals the full message (subject headline + body), provenance, and
+  // the commit-message annotation control (CO-09) — the last is available as long
+  // as there is a message to annotate, so any input makes the header expandable.
+  const hasExpandable = hasInput || !!body || hasGrid;
 
   const progress = totalChanges > 0 ? viewedChanges / totalChanges : 0;
+
+  // A click anywhere in the change region toggles expand/collapse — a large hit
+  // target beyond the small "details" chevron. Skip it when the click lands on an
+  // interactive control (its own handler runs; the details button already
+  // toggles, the add-comment controls open the composer) or while the user is
+  // selecting text.
+  const handleRegionClick = (e) => {
+    if (e.target.closest('button, a, input, textarea')) return;
+    if (window.getSelection && String(window.getSelection())) return;
+    if (hasExpandable) onToggleDetails?.();
+  };
 
   return (
     <div style={styles.shell}>
       {hasInput && (
-        <div style={styles.changeRegion}>
+        <div style={styles.changeRegion} onClick={handleRegionClick}>
           <div style={styles.gutter('left')} />
           <div style={styles.changeMain}>
             {hasEyebrow && (
@@ -115,6 +135,44 @@ export function ContextHeader({
             {detailsExpanded && body && (
               <div style={styles.bodyText}>{body}</div>
             )}
+            {detailsExpanded && messageComments.length > 0 && (
+              <div style={styles.messageComments}>
+                {messageComments.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => onAddMessageComment?.()}
+                    style={styles.messageComment}
+                    title="Manage in the comments panel"
+                  >
+                    <span style={actionChipStyle(c.action, { flexShrink: 0, fontSize: '9px', letterSpacing: '0.06em', padding: '1px 5px' })}>{actionLabel(c.action)}</span>
+                    <span style={styles.messageCommentBody}>{(c.body || '').trim() || 'comment on the commit message…'}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div style={styles.commentActions}>
+              {onAddChangesetComment && (
+                <button
+                  type="button"
+                  onClick={() => onAddChangesetComment?.()}
+                  style={styles.addCommentChip}
+                  title="Comment on the whole changeset (c)"
+                >
+                  + comment on changeset
+                </button>
+              )}
+              {detailsExpanded && onAddMessageComment && (
+                <button
+                  type="button"
+                  onClick={() => onAddMessageComment?.()}
+                  style={styles.addCommentChip}
+                  title="Comment on the commit message (m)"
+                >
+                  + comment on message
+                </button>
+              )}
+            </div>
           </div>
 
           {hasExpandable && (
@@ -173,21 +231,30 @@ export function ContextHeader({
               <span style={styles.badgeName}>{name}</span>
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => onOpenComments?.()}
-            style={styles.noteChip}
-            title={commentCount ? `${commentCount} comment${commentCount === 1 ? '' : 's'} — click to manage` : 'Add a comment'}
-          >
-            {commentCount > 0 ? (
-              <>
-                <span style={styles.noteChipLabel}>comments</span>
-                <span style={styles.noteChipCount}>{commentCount}</span>
-              </>
-            ) : (
+          {/* The chip manages comments (count → open panel). The changeset add
+              affordance lives in the change region above; only when there is no
+              change region (no input context) does the chip fall back to being
+              the changeset add, so a context-less review keeps one entry point. */}
+          {commentCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => onOpenComments?.()}
+              style={styles.noteChip}
+              title={`${commentCount} comment${commentCount === 1 ? '' : 's'} — click to manage`}
+            >
+              <span style={styles.noteChipLabel}>comments</span>
+              <span style={styles.noteChipCount}>{commentCount}</span>
+            </button>
+          ) : !hasInput ? (
+            <button
+              type="button"
+              onClick={() => onAddChangesetComment?.()}
+              style={styles.noteChip}
+              title="Add a changeset comment"
+            >
               <span style={styles.noteChipLabel}>+ comment</span>
-            )}
-          </button>
+            </button>
+          ) : null}
         </div>
 
         <div style={styles.rightCluster}>
@@ -341,6 +408,8 @@ const styles = {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: '16px',
+    // The whole region is a click target for expand/collapse (handleRegionClick).
+    cursor: 'pointer',
   },
 
   changeMain: {
@@ -414,6 +483,65 @@ const styles = {
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
     margin: '1px 0 0 0',
+  },
+
+  // CO-09: commit-message annotations and the control that adds one, stacked
+  // under the message so the feedback reads next to what it's about.
+  messageComments: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: '4px',
+    marginTop: '3px',
+  },
+
+  messageComment: {
+    display: 'inline-flex',
+    alignItems: 'baseline',
+    gap: '6px',
+    maxWidth: '100%',
+    textAlign: 'left',
+    background: 'transparent',
+    border: 'none',
+    padding: 0,
+    cursor: 'pointer',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '12px',
+    lineHeight: 1.45,
+  },
+
+  messageCommentBody: {
+    color: 'var(--text-secondary)',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    minWidth: 0,
+  },
+
+  // The contextual add-comment controls under the message: changeset (always)
+  // and, when expanded, the commit message. Each infers its target from where
+  // it sits, so the comments panel is a manager, not a target picker.
+  commentActions: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: '6px',
+    marginTop: '3px',
+  },
+
+  addCommentChip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    background: 'transparent',
+    border: '1px solid var(--color-accent-border)',
+    color: 'var(--color-accent)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    padding: '2px 8px',
+    borderRadius: '3px',
+    cursor: 'pointer',
   },
 
   expandButton: (expanded) => ({

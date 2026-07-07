@@ -83,11 +83,14 @@ export function actionChipStyle(action, overrides = {}) {
 }
 
 // The output-ready projection (IM.OUT-02a): a changeset comment omits `file`; a
-// file comment includes `file`; a range comment adds `startLine` / `endLine`.
-// Internal-only fields (id, the render-anchor rows) are dropped.
+// file comment includes `file`; a range comment adds `startLine` / `endLine`; a
+// commit-message comment carries `target: 'commit-message'` (and no file) so the
+// agent can tell it apart from a plain changeset comment. Internal-only fields
+// (id, the render-anchor rows) are dropped.
 export function commentToOutput(c) {
   const out = { body: (c.body || '').trim(), action: c.action };
   const t = c.target || {};
+  if (t.type === 'commit-message') out.target = 'commit-message';
   if (t.file) out.file = t.file;
   if (t.type === 'range') {
     out.startLine = t.startLine;

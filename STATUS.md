@@ -2,6 +2,8 @@
 
 **Spec:** v0.2 | **Audited:** 2026-06-22 | **Coverage:** all non-deferred requirements have implementing code
 
+The 2026-07-06 change lets the reviewer comment on the **commit message** ([CO-09], [NV-22]) — a fourth comment target alongside changeset / file / range, so the message stays inside the same feedback loop as the code — and, in the same pass, reworked how every non-line comment is created: **the target is inferred from the surface** ([CO-05]). Each target has one contextual control — the changeset (a control on the header's change region, plus the `c` / `C` key, [NV-23]), the commit message (a control on the expanded details panel, plus `m` / `M`, [CO-09]), and a file (its file-header control) — and the comments panel is now **management-only** ([CO-08]): it lists, edits, re-actions, and deletes, but no longer offers the `+ changeset` / `+ commit message` / `+ this file` picker. The changeset control falls back to the status-row chip only when there is no change region (a context-less review), so exactly one changeset entry point is always on screen. The panel and send-feedback dialog list message comments under a "commit message" group. It all reuses the existing comment pipeline — action model, exit-code gating (a `fix-now` message comment blocks approval like any other), continuous sidecar flush — so the only new contract is the `target: "commit-message"` discriminator on the output comment ([IM.OUT-02a]). The details panel is now expandable whenever the change carries a title, since expanding always offers the annotation controls, and a click anywhere in the change region toggles it ([IM.IN-01] / [NV-17]) — a far larger hit target than the details chevron (clicks on its buttons and text selections are exempted). To keep the *vanilla* line case first-class under the new per-surface model, the new-side gutter grew a **hover `+`** ([CO-04], `FileDiffView.jsx`) — a visible path to comment on a line (click) or a range (drag from it), so line commenting no longer relies on the invisible gesture or the context menu alone. Landed in `comments.js` (`commentToOutput` + new `comments.test.js`), `ReviewShell.jsx` (`addChangesetComment` / `addMessageComment`, `messageComments`, `c` / `m` keys, panel demoted to management, feedback grouping), `ContextHeader.jsx` (inline message comments + the changeset / message add controls, status-chip rework, expand gating), `FileDiffView.jsx` (`DiffRow` hover `+`), and `KeyboardHelp.jsx` / `docs/keyboard.md`.
+
 The 2026-06-09 comments redesign reconciled the former per-hunk rejections and free-text notes into one **comment** concept (new category [CO-01]..[CO-08], `src/engine/comments.js`). A comment carries a `body`, an `action` (`fix-now` / `fix-later` / `consider`, defaulting to `fix-now`), and a target — the changeset, a file, or a line range. Only `fix-now` gates the exit code (EC-01/02), earns the red sidebar/badge treatment, and gates the quit dialog; `fix-later` (amber) and `consider` (accent) are advisory. Hunk review state is now binary (reviewed / unreviewed) — "blocking" is a comment property, not a third hunk state. Range comments are created from the new (right) side's line-number gutter (drag = range, long-press = single line; a plain click toggles a changed line's reviewed state but comments an unchanged context line, so neighboring code can be flagged — [CO-04]; the old/left gutter is inert, since feedback references the new file), by Space / Enter on the current hunk ([NV-07]), or by the context-menu "Comment" ([CM-04]); changeset and file comments come from the header / file-header controls ([CO-05]) and the comments panel ([CO-08], `n` key). Each range comment bands its covered lines with an action-colored outline ([CO-07]). The sidecar `output` now carries a single `comments[]` array ([IM.OUT-02a]) — `rejections[]` and `notes[]` are gone. Retired: [NV-11], [NV-12] (→ [CO-06]/[CO-07]), [CM-07] (→ the action control), [IM.OUT-06] (→ `comments[]`). The work landed in `comments.js` (action vocabulary + output projection), `ReviewShell.jsx` (comment state, CommentsPanel, fix-now badges/summary), `FileDiffView.jsx` (gutter gesture, composer, comment bars), `ContextHeader.jsx`, `Sidebar.jsx`, `Minimap.jsx`, `KeyboardHelp.jsx`, `App.jsx` (exit code), and `electron/main.js` (close-payload default).
 
 The 2026-06-05 details-panel work shipped four active requirements (implemented 2026-06-06): the label-less changeset header ([IM.IN-02]) — always-visible location eyebrow + commit-message headline, expanding to the full message body and a provenance grid — plus keyboard expand/collapse ([NV-17]), the `?` shortcuts overlay ([NV-18]), and the `f`/`F` sidebar toggle ([DD-16]). They landed in `ContextHeader.jsx` (the changeset header, dropping the `→ inputs` / `← outputs` channel labels for a quiet gutter cue + `status` strip), `ReviewShell.jsx` (lifted details state, global `d`/`D`/`f`/`F`/`?` keys), `FileDiffView.jsx` (`paused` prop), and the new `KeyboardHelp.jsx`. The `prev` reference and the `[prev]` read-only preview were prototyped this session and then removed before shipping — unreachable without a caller emitting `prev`. The 2026-05-31 audit closed the four items previously flagged: [UP-01] was reworded to match the shipped JetBrains Mono webfont (with platform-monospace fallback); [NV-13] was decomposed into NV-13a..d with a clause separating it from search-match positioning; and the two reverse-scan behaviors (active-row font zoom, single-file footer) were captured as [UP-05] and [IM.OUT-05]. The audit also decomposed three overloaded requirements ([AS-08], [IM.OUT-02], [FD-03]) into atomic forms.
@@ -30,7 +32,7 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [FD-08] | Binary file detection | Done |
 | [FD-09] | Dim reviewed hunks | Done |
 
-### Navigation (NV) — 21/21
+### Navigation (NV) — 23/23
 
 | Req | Description | Status |
 |-----|-------------|--------|
@@ -52,9 +54,11 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [NV-16] | Transient error toast when preview fails | Done |
 | [NV-17] | d toggles input details panel (either case) | Done |
 | [NV-18] | `?` toggles keyboard-shortcuts overlay | Done |
-| [NV-19] | n / comments control opens the comments panel ([CO-08]) | Done |
+| [NV-19] | n / comments control opens the comments panel to manage ([CO-08]) | Done |
 | [NV-20] | =/-/0 zoom in/out/reset, no modifier | Done |
 | [NV-21] | r toggles source / rendered preview (either case) | Done |
+| [NV-22] | m begins a comment on the commit message ([CO-09], either case) | Done |
+| [NV-23] | c begins a comment on the changeset ([CO-05], either case) | Done |
 
 ### Directory Diff (DD) — 16/16
 
@@ -77,18 +81,19 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [DD-15] | Rename/move detection (`git mv`) — single entry instead of L+R | Done |
 | [DD-16] | f toggles sidebar, either case (keyboard companion to DD-11) | Done |
 
-### Comments (CO) — 8/8
+### Comments (CO) — 9/9
 
 | Req | Description | Status |
 |-----|-------------|--------|
 | [CO-01] | Comment = body + action + target; reconciles rejections / notes | Done |
-| [CO-02] | Target: changeset / file / line range (changed or context lines) | Done |
+| [CO-02] | Target: changeset / commit message / file / line range (changed or context lines) | Done |
 | [CO-03] | Action defaults to `fix-now`; settable consider / fix-later / fix-now; only fix-now gates | Done |
-| [CO-04] | New-side gutter: click = toggle review (changed) / comment (context), drag = range, long-press = single line; left gutter inert | Done |
-| [CO-05] | Header control = changeset comment; file-header control = file comment | Done |
+| [CO-04] | New-side gutter: hover `+` = comment the line (drag from it = range), click = toggle review (changed) / comment (context), drag = range, long-press = single line; left gutter inert | Done |
+| [CO-05] | Contextual add controls infer the target from their surface: change-region = changeset (+ c key), file-header = file, message pane = commit message ([CO-09]); no picker | Done |
 | [CO-06] | Inline composer: auto-grow textarea + action control; Enter / Shift+Enter / Esc; Tab / Shift+Tab cycle action | Done |
 | [CO-07] | Banded line range (action-colored outline) + persistent comment bar; click to edit, confirmed delete | Done |
-| [CO-08] | Comments panel lists all; inline edit, action cycle, confirmed delete | Done |
+| [CO-08] | Comments panel manages all (list, inline edit, action cycle, confirmed delete); not a target picker | Done |
+| [CO-09] | Comment on the commit message from the expanded details panel (control + m key); same action model, fix-now gates | Done |
 
 ### Text Entry (TE) — 3/3
 
@@ -169,7 +174,7 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [IM.IN-01] | Render `input.title` + `input.details` in header (caller-defined shape); reveal via hover/click/`d`-`D` | Done |
 | [IM.IN-02] | Label-less changeset header: location eyebrow + message headline always visible; expand reveals body + provenance grid | Done |
 | [IM.OUT-01] | Stream `output` writes, flushing on every hunk review change and comment change | Done |
-| [IM.OUT-02a] | Output always includes `reviewer` + `comments[{body,action,file?,startLine?,endLine?}]` | Done |
+| [IM.OUT-02a] | Output always includes `reviewer` + `comments[{body,action,target?,file?,startLine?,endLine?}]` (commit-message comment carries `target:"commit-message"`) | Done |
 | [IM.OUT-02b] | `exitCode` present only after exit (finalization signal) | Done |
 | [IM.OUT-03] | Fix-now badges in header's output region | Done |
 | [IM.OUT-04] | Review progress in header's output region | Done |

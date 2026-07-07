@@ -86,7 +86,9 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   }, [lineStats]);
 
   // Gate the d/D keys on the same predicate ContextHeader uses for its expand
-  // affordance, so the keyboard toggle and the on-screen button agree.
+  // affordance, so the keyboard toggle and the on-screen button agree. Expanding
+  // always reveals at least the commit-message annotation control (CO-09), so a
+  // present input title is enough on its own.
   const hasDetails = useMemo(
     () => hasExpandableDetails(inputContext) || totalLineStats.added > 0 || totalLineStats.removed > 0,
     [inputContext, totalLineStats],
@@ -119,15 +121,10 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     setComments(prev => prev.filter(c => c.id !== id));
   }, []);
 
-  // NV-19 / CO-05: open the comments panel. When it would otherwise open empty,
-  // seed a changeset comment so the reviewer types straight into it — no second
-  // "+ changeset" click (closeComments prunes it if left blank).
+  // NV-19: open the comments panel to manage existing comments (list / edit /
+  // action / delete). Adding is done from each target's own surface — the panel
+  // is no longer a target picker (CO-08).
   const openComments = useCallback(() => {
-    setComments(prev => {
-      if (prev.length > 0) return prev;
-      const id = ++commentIdRef.current;
-      return [{ id, body: '', action: DEFAULT_ACTION, target: { type: 'changeset' } }];
-    });
     setCommentsPanelOpen(true);
   }, []);
 
@@ -138,6 +135,14 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     setCommentsPanelOpen(false);
   }, []);
 
+  // CO-05: add a comment on the overall changeset, then open the panel to type
+  // it. The target is inferred from the surface (the change-region control or
+  // the `c` key) — no picker.
+  const addChangesetComment = useCallback(() => {
+    addComment({ target: { type: 'changeset' } });
+    setCommentsPanelOpen(true);
+  }, [addComment]);
+
   // CO-05: add a comment on the current file, then open the panel to type it
   // (a file comment has no line anchor, so it is edited in the panel).
   const addFileComment = useCallback((fileKey) => {
@@ -146,10 +151,26 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     setCommentsPanelOpen(true);
   }, [addComment]);
 
+  // CO-09: annotate the commit message. Expand the details pane so the message
+  // is in view, then open the panel to type the comment (the message has no
+  // line anchor, so it is edited in the panel like a file / changeset comment).
+  const addMessageComment = useCallback(() => {
+    addComment({ target: { type: 'commit-message' } });
+    setDetailsExpanded(true);
+    setCommentsPanelOpen(true);
+  }, [addComment]);
+
   // The output-ready projection (IM.OUT-02a): drop ids / anchor rows and empty
   // bodies. Always written, even when empty.
   const outComments = useMemo(
     () => comments.map(commentToOutput).filter(c => c.body),
+    [comments],
+  );
+
+  // CO-09: the comments annotating the commit message — rendered inline in the
+  // expanded details pane so the annotations sit next to the message.
+  const messageComments = useMemo(
+    () => comments.filter(c => c.target?.type === 'commit-message'),
     [comments],
   );
 
@@ -426,10 +447,17 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
       const body = (c.body || '').trim();
       if (!body) continue;
       const t = c.target || {};
-      const key = t.file || '__changeset__';
-      const label = t.file
-        ? relativePath(t.file, rightPath || leftPath)
-        : 'whole changeset';
+      let key, label;
+      if (t.file) {
+        key = t.file;
+        label = relativePath(t.file, rightPath || leftPath);
+      } else if (t.type === 'commit-message') {
+        key = '__commit_message__';
+        label = 'commit message';
+      } else {
+        key = '__changeset__';
+        label = 'whole changeset';
+      }
       if (!groups.has(key)) groups.set(key, { key, label, items: [] });
       groups.get(key).items.push({ id: c.id, body, action: c.action });
     }
@@ -488,10 +516,20 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
           e.preventDefault();
           api?.zoomReset?.();
           break;
-        case 'n': // NV-19: open the comments panel
+        case 'n': // NV-19: open the comments panel (manage)
         case 'N':
           e.preventDefault();
           openComments();
+          break;
+        case 'c': // NV-23: comment on the changeset (CO-05)
+        case 'C':
+          e.preventDefault();
+          addChangesetComment();
+          break;
+        case 'm': // NV-22: comment on the commit message (CO-09)
+        case 'M':
+          e.preventDefault();
+          addMessageComment();
           break;
         case 'q':
         case 'Escape':
@@ -503,7 +541,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [requestClose, quitDialog, helpOpen, hasDetails, toggleDetails, api, commentsPanelOpen, openComments, closeComments]);
+  }, [requestClose, quitDialog, helpOpen, hasDetails, toggleDetails, api, commentsPanelOpen, openComments, closeComments, addChangesetComment, addMessageComment]);
 
   useEffect(() => {
     if (shellRef.current) shellRef.current.focus();
@@ -550,6 +588,9 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
         detailsExpanded={detailsExpanded}
         onToggleDetails={toggleDetails}
         lineStats={totalLineStats}
+        messageComments={messageComments}
+        onAddMessageComment={addMessageComment}
+        onAddChangesetComment={addChangesetComment}
         commentCount={outComments.length}
         onOpenComments={openComments}
         onApprove={handleApprove}
@@ -661,10 +702,6 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
         <CommentsPanel
           comments={comments}
           basePath={rightPath || leftPath}
-          currentFileKey={currentFileKey}
-          currentFilePath={currentFile ? relativePath(currentFileKey, rightPath || leftPath) : null}
-          onAddChangeset={() => addComment({ target: { type: 'changeset' } })}
-          onAddFile={() => currentFileKey && addComment({ target: { type: 'file', file: currentFileKey } })}
           onUpdate={updateComment}
           onSetAction={setCommentAction}
           onDelete={deleteComment}
@@ -827,13 +864,15 @@ function targetLabel(comment, basePath) {
     return `${relativePath(t.file, basePath)}${loc}`;
   }
   if (t.type === 'file') return relativePath(t.file, basePath);
+  if (t.type === 'commit-message') return 'commit message';
   return 'changeset';
 }
 
-// CO-08: the comments panel — every comment (changeset / file / range) with its
-// target, body, and action. Editing is inline; the action chip cycles
-// consider → fix-later → fix-now; deleting confirms first.
-function CommentsPanel({ comments, basePath, currentFileKey, currentFilePath, onAddChangeset, onAddFile, onUpdate, onSetAction, onDelete, onClose }) {
+// CO-08: the comments panel manages every comment (changeset / commit message /
+// file / range) — its target, body, and action. Editing is inline; the action
+// chip cycles consider → fix-later → fix-now; deleting confirms first. Adding is
+// done from each target's own surface, so the panel is not a target picker.
+function CommentsPanel({ comments, basePath, onUpdate, onSetAction, onDelete, onClose }) {
   const [confirmingId, setConfirmingId] = useState(null);
   const lastRef = useRef(null);
 
@@ -883,7 +922,6 @@ function CommentsPanel({ comments, basePath, currentFileKey, currentFilePath, on
     cursor: 'pointer',
   };
   const primaryBtn = { ...baseBtn, background: 'var(--color-accent)', borderColor: 'var(--color-accent)', color: 'var(--bg-deep)', fontWeight: 600 };
-  const linkBtn = { ...baseBtn, background: 'transparent', color: 'var(--color-accent)', borderColor: 'var(--color-accent-border)' };
   const xBtn = { background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '13px', lineHeight: 1, padding: '0 2px' };
   const confirmBtn = { ...baseBtn, padding: '2px 8px', fontSize: '11px', color: 'var(--color-conflict)', borderColor: 'var(--color-conflict)' };
   const keepBtn = { ...baseBtn, padding: '2px 8px', fontSize: '11px' };
@@ -917,7 +955,9 @@ function CommentsPanel({ comments, basePath, currentFileKey, currentFilePath, on
         <div style={sub}>Feedback for the author. Set an action — only <strong>fix now</strong> blocks shipping.</div>
         <div style={list}>
           {comments.length === 0 && (
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px 0' }}>No comments yet.</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px 0' }}>
+              No comments yet — add one from a line (Space), the file header, the commit message (<kbd>m</kbd>), or the changeset (<kbd>c</kbd>).
+            </div>
           )}
           {comments.map((c, i) => (
             <div key={c.id} style={card}>
@@ -959,10 +999,6 @@ function CommentsPanel({ comments, basePath, currentFileKey, currentFilePath, on
           ))}
         </div>
         <div style={footer}>
-          <button type="button" style={linkBtn} onClick={onAddChangeset}>+ changeset</button>
-          {currentFileKey && (
-            <button type="button" style={linkBtn} onClick={onAddFile} title={currentFilePath || ''}>+ this file</button>
-          )}
           <div style={{ flex: 1 }} />
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
             Enter to finish · Shift+Enter newline

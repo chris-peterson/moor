@@ -22,6 +22,15 @@ rolls back to the previous one — so a long review is just `j` held down.
 | Key | Action |
 |-----|--------|
 | `Space` / `Enter` | Comment on the current change — opens an inline composer anchored to its lines. |
+| `c` | Comment on the whole changeset. |
+| `m` | Comment on the commit message — expands the details pane and opens the comments panel to type it. |
+
+Every comment infers its **target from where you start it** — the controls read
+consistently as `+ comment on <target>`: a line or range from the diff (the
+gutter `+`), a file from its header's `+ comment on file`, the commit message
+from the `+ comment on message` control in the expanded details pane (or `m`),
+and the whole changeset from the `+ comment on changeset` control on the header
+(or `c`).
 
 The composer grows as you type. `Enter` confirms, `Shift+Enter` inserts a
 newline, `Escape` confirms a non-empty comment or discards an empty one. Each
@@ -34,12 +43,14 @@ the tiers (`Shift+Tab` walks back up), or click one in the composer:
 | **fix later** | Should be addressed, but needn't block this ship. |
 | **consider** | Advisory. Doesn't block shipping. |
 
-To comment on an arbitrary span, **drag the new (right) side's line-number
-gutter** across the lines you want, then release. Comments anchor to the new
-file, so the gutter affordance lives on the right side only. You can comment on
-**any** right-side line — including unchanged context lines, so you can flag a
-bug you spot in neighboring code: click an unchanged line's number (or
-long-press / right-click any line). Each
+To comment on a single line, **hover its right-side gutter and click the `+`**
+that appears — the visible, one-click path (changed or context line). To comment
+on an arbitrary span, **drag** — from that `+` or across the new (right) side's
+line-number gutter — over the lines you want, then release. Comments anchor to the new file, so the gutter
+affordance lives on the right side only. You can comment on **any** right-side
+line — including unchanged context lines, so you can flag a bug you spot in
+neighboring code (the `+`, an unchanged line's number, or long-press / right-click
+any line). Each
 comment **bands** the lines it covers with an outline in its action color, so
 it's clear at a glance what the comment applies to. To remove a comment, click
 the ✕ on its bar (it confirms before discarding a typed body). Comments travel
@@ -59,22 +70,25 @@ long line.
 
 | Key | Action |
 |-----|--------|
-| `n` | Open the comments panel (also the `comments` control in the status strip). |
+| `n` | Manage comments (also the `comments` control in the status strip). |
 
-The panel lists every comment — on the whole changeset, a file, or a line range
-— and lets you edit the body inline, cycle its action, or delete it (deleting
-confirms first, since a typed comment is hard to recreate). It's also where you
-add a comment on the whole changeset.
+The panel **manages** existing comments — on the whole changeset, the commit
+message, a file, or a line range — letting you edit the body inline, cycle the
+action, or delete it (deleting confirms first, since a typed comment is hard to
+recreate). It is no longer a target picker: you *add* a comment from its target's
+own surface (a line, the file header, the commit-message control, the changeset
+control) and *manage* it here.
 
 Comments ride along in the result context as a `comments` array of
-`{ body, action, file?, startLine?, endLine? }`. Only `fix-now` comments affect
-the exit code; `fix-later` and `consider` are advisory.
+`{ body, action, file?, startLine?, endLine? }`. A comment on the commit message
+carries `target: "commit-message"` (and no `file`). Only `fix-now` comments
+affect the exit code; `fix-later` and `consider` are advisory.
 
 ## View
 
 | Key | Action |
 |-----|--------|
-| `d` | Toggle the details panel (when the review context carries expandable details). |
+| `d` | Toggle the details panel — the keyboard companion to clicking anywhere in the change region. |
 | `f` | Toggle the file sidebar. |
 | `r` | Toggle source / rendered preview for a file that has one (Markdown, SVG). Each side renders with scripts disabled. |
 | `=` / `-` | Zoom in / out. `0` resets. |
@@ -110,7 +124,9 @@ Everything reviewable by keyboard is reachable by mouse too:
 
 | Gesture | Action |
 |---------|--------|
+| Click the change region (header) | Toggle the details panel expand / collapse. |
 | Click a changed line | Mark it reviewed. |
+| Hover the right-side gutter, click the **+** | Comment on that line (changed or context); drag from it to select a range. |
 | Click an unchanged line's number (right side) | Comment on that line. |
 | Drag the right-side line-number gutter | Select a line range (changed or context) and open a comment composer. |
 | Long-press the right-side line-number gutter | Comment on that single line. |

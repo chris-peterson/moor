@@ -64,8 +64,35 @@ function CharDiffSpans({ oldStr, newStr, side }) {
 }
 
 function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick, onContextMenu, onGutterMouseDown, onRowEnter }) {
+  const [hovered, setHovered] = useState(false);
   const fontSize = active ? '15px' : '13px';
   const dimmed = reviewed;
+
+  // CO-04: the hover "+" on the new-side gutter — a visible, discoverable way to
+  // comment on a single line, on par with the file / message / changeset
+  // controls. Dragging the gutter still selects a range; this is the one-click
+  // path for a single line (changed or context) without the long-press gesture.
+  const commentAddStyle = {
+    position: 'absolute',
+    left: '2px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    width: '16px',
+    height: '16px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+    border: 'none',
+    borderRadius: '3px',
+    background: 'var(--color-accent)',
+    color: 'var(--bg-deep)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '12px',
+    fontWeight: 700,
+    lineHeight: 1,
+    cursor: 'pointer',
+  };
 
   const barColor = active
     ? 'var(--color-accent)'
@@ -119,7 +146,8 @@ function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLe
     <div
       onClick={isHunk ? onClick : undefined}
       onContextMenu={onContextMenu}
-      onMouseEnter={() => onRowEnter(idx)}
+      onMouseEnter={() => { onRowEnter(idx); setHovered(true); }}
+      onMouseLeave={() => setHovered(false)}
       style={{ display: 'flex', height: ROW_HEIGHT + 'px', cursor: isHunk ? 'pointer' : 'default' }}
     >
       <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0, background: barColor }} />
@@ -133,7 +161,23 @@ function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLe
       </div>
       <div onMouseDown={onResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
       <div style={{ width: rightWidth + 'px', display: 'flex', overflow: 'clip', background: cellBg(rightType, 'right') }}>
-        <span data-gutter="1" onMouseDown={(e) => onGutterMouseDown(e, idx)} style={{ ...gutterStyle, cursor: 'pointer' }}>{row.rightNum ?? ''}</span>
+        <span data-gutter="1" onMouseDown={(e) => onGutterMouseDown(e, idx)} style={{ ...gutterStyle, cursor: 'pointer', position: 'relative' }}>
+          {hovered && row.rightNum != null && (
+            <button
+              type="button"
+              data-comment-add="1"
+              // Start the same gesture as the gutter, flagged to comment on a
+              // plain release; stopPropagation so the gutter span doesn't also
+              // start an unflagged press. onClick is swallowed so the row's
+              // review-toggle click doesn't fire.
+              onMouseDown={(e) => { e.stopPropagation(); onGutterMouseDown(e, idx, { commentOnClick: true }); }}
+              onClick={(e) => e.stopPropagation()}
+              title="Comment on this line — drag to select a range"
+              style={commentAddStyle}
+            >+</button>
+          )}
+          {row.rightNum ?? ''}
+        </span>
         <span style={codeStyle}>
           {showCharDiff
             ? <CharDiffSpans oldStr={row.leftLine} newStr={row.rightLine} side="right" />
@@ -587,8 +631,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     setComposing(null);
   }, [onAddComment, onUpdateComment, onDeleteComment]);
 
-  // CO-04 gesture: begin from a line-number gutter press.
-  const beginGutterGesture = useCallback((e, rowIdx) => {
+  // CO-04 gesture: begin from a line-number gutter press. `commentOnClick` marks
+  // a press that started on the hover "+" — a plain release then always comments
+  // the single line (never toggles review), while a drag still selects a range.
+  const beginGutterGesture = useCallback((e, rowIdx, opts = {}) => {
     if (e.button !== 0) return;
     e.preventDefault();
     if (pressRef.current?.timer) clearTimeout(pressRef.current.timer);
@@ -598,7 +644,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       p.longPressed = true;
       openComposerForRows(p.startRow, p.startRow);
     }, LONG_PRESS_MS);
-    pressRef.current = { startRow: rowIdx, endRow: rowIdx, startY: e.clientY, moved: false, longPressed: false, timer };
+    pressRef.current = { startRow: rowIdx, endRow: rowIdx, startY: e.clientY, moved: false, longPressed: false, commentOnClick: !!opts.commentOnClick, timer };
     // Selection highlight appears once a drag actually starts (handleRowEnter),
     // so a plain click doesn't flash the row.
   }, [openComposerForRows]);
@@ -631,6 +677,11 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       if (p.longPressed) return; // composer already opened by the timer
       if (p.moved) {
         openComposerForRows(p.startRow, p.endRow);
+      } else if (p.commentOnClick) {
+        // Started on the hover "+": a plain release always comments the single
+        // line (never toggles review), matching the affordance's intent (CO-04).
+        openComposerForRows(p.startRow, p.startRow);
+        setSelection(null);
       } else {
         // Plain click: a changed line toggles reviewed; an unchanged (context)
         // line opens a single-line comment (CO-04).
@@ -1419,7 +1470,7 @@ function HeaderActions({ previewKind, viewMode, onToggle, onAddFileComment, file
             borderRadius: '3px',
             cursor: 'pointer',
           }}
-        >+ comment</button>
+        >+ comment on file</button>
       )}
     </span>
   );
