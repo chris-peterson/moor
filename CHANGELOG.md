@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.16.0
+
+**Full Changelog**: https://github.com/chris-peterson/moor/compare/v0.15.0...v0.16.0
+
 ## Unreleased
 
 ### Features
