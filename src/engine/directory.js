@@ -183,9 +183,64 @@ function collectFilesByStatus(node, status, acc, parentChildren) {
   }
 }
 
-// Detect rename/move pairs (identical-content left-only ↔ right-only files)
-// and collapse each pair into a single 'renamed' entry placed at the right-
-// side (destination) location. Mutates the tree in place.
+// Collapse a matched (left-only, right-only) pair into one 'renamed' entry at
+// the right-side (destination) location, dropping the left node from its
+// parent. The right node keeps its rightPath and gains the old leftPath, so its
+// diff view shows the content changes between the two versions (zero-hunk when
+// the move is content-identical, real hunks when the move carried edits).
+function collapseRename(leftItem, rightItem) {
+  if (leftItem.parentChildren) {
+    const idx = leftItem.parentChildren.indexOf(leftItem.node);
+    if (idx !== -1) leftItem.parentChildren.splice(idx, 1);
+  }
+  const r = rightItem.node;
+  r.status = 'renamed';
+  r.leftPath = leftItem.node.leftPath;
+  r.fromName = leftItem.node.name;
+}
+
+// git detects a move even when the file was edited in the same commit, scoring
+// content similarity against a threshold (default 50%) rather than requiring an
+// identical blob. Matching that: a line-multiset overlap over the larger side's
+// line count, so a moved file with a few edits still reads as high-similarity.
+const RENAME_SIMILARITY_THRESHOLD = 0.5;
+
+// Split into lines, dropping a single trailing newline's empty element so a
+// one-line file isn't scored as half-empty-line (which would let two unrelated
+// single-line files clear the 50% bar on the shared blank alone).
+function toLines(text) {
+  return (text.endsWith('\n') ? text.slice(0, -1) : text).split('\n');
+}
+
+function lineSimilarity(a, b) {
+  const al = toLines(a);
+  const bl = toLines(b);
+  const max = Math.max(al.length, bl.length);
+  if (max === 0) return 1;
+  const counts = new Map();
+  for (const line of al) counts.set(line, (counts.get(line) || 0) + 1);
+  let common = 0;
+  for (const line of bl) {
+    const c = counts.get(line) || 0;
+    if (c > 0) { common++; counts.set(line, c - 1); }
+  }
+  return common / max;
+}
+
+// Read a candidate's text for similarity scoring, skipping binary content (a
+// NUL in the first 8000 bytes, matching the viewer's binary rule) since
+// line-based similarity is meaningless there — such a move stays unpaired.
+async function readRenameText(path) {
+  const text = await safeReadFile(path);
+  if (text == null) return null;
+  if (text.slice(0, 8000).includes('\x00')) return null;
+  return text;
+}
+
+// Detect rename/move pairs among left-only ↔ right-only files and collapse each
+// into a single 'renamed' entry. Two passes, mirroring git: identical-content
+// pairs first (fast, exact), then content-similarity pairs for the rest (a move
+// that also carried edits). Mutates the tree in place.
 async function detectRenames(rootChildren) {
   const root = { type: 'directory', children: rootChildren };
   const leftCandidates = [];
@@ -208,6 +263,8 @@ async function detectRenames(rootChildren) {
     rightByHash.get(h).push(i);
   }
 
+  // Pass 1: exact content.
+  const matchedLeft = new Set();
   const matchedRight = new Set();
   for (let i = 0; i < leftCandidates.length; i++) {
     const h = leftHashes[i];
@@ -216,20 +273,42 @@ async function detectRenames(rootChildren) {
     if (!bucket) continue;
     const rightIdx = bucket.find(idx => !matchedRight.has(idx));
     if (rightIdx === undefined) continue;
+    matchedLeft.add(i);
     matchedRight.add(rightIdx);
+    collapseRename(leftCandidates[i], rightCandidates[rightIdx]);
+  }
 
-    const leftItem = leftCandidates[i];
-    const rightItem = rightCandidates[rightIdx];
+  // Pass 2: content similarity for whatever the exact pass left unmatched.
+  const unmatchedLeft = leftCandidates.map((_, i) => i).filter(i => !matchedLeft.has(i));
+  const unmatchedRight = rightCandidates.map((_, j) => j).filter(j => !matchedRight.has(j));
+  if (unmatchedLeft.length === 0 || unmatchedRight.length === 0) return;
 
-    if (leftItem.parentChildren) {
-      const idx = leftItem.parentChildren.indexOf(leftItem.node);
-      if (idx !== -1) leftItem.parentChildren.splice(idx, 1);
+  const [leftTexts, rightTexts] = await Promise.all([
+    Promise.all(unmatchedLeft.map(i => readRenameText(leftCandidates[i].node.leftPath))),
+    Promise.all(unmatchedRight.map(j => readRenameText(rightCandidates[j].node.rightPath))),
+  ]);
+
+  const pairs = [];
+  for (let a = 0; a < unmatchedLeft.length; a++) {
+    if (leftTexts[a] == null) continue;
+    for (let b = 0; b < unmatchedRight.length; b++) {
+      if (rightTexts[b] == null) continue;
+      const score = lineSimilarity(leftTexts[a], rightTexts[b]);
+      if (score < RENAME_SIMILARITY_THRESHOLD) continue;
+      const sameName = leftCandidates[unmatchedLeft[a]].node.name === rightCandidates[unmatchedRight[b]].node.name;
+      pairs.push({ a, b, score, sameName });
     }
+  }
+  // Best score first; a matching basename breaks ties (a move keeps its name).
+  pairs.sort((x, y) => (y.score - x.score) || (Number(y.sameName) - Number(x.sameName)));
 
-    const r = rightItem.node;
-    r.status = 'renamed';
-    r.leftPath = leftItem.node.leftPath;
-    r.fromName = leftItem.node.name;
+  const usedLeft = new Set();
+  const usedRight = new Set();
+  for (const { a, b } of pairs) {
+    if (usedLeft.has(a) || usedRight.has(b)) continue;
+    usedLeft.add(a);
+    usedRight.add(b);
+    collapseRename(leftCandidates[unmatchedLeft[a]], rightCandidates[unmatchedRight[b]]);
   }
 }
 

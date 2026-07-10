@@ -94,6 +94,41 @@ describe('compareDirectories — rename detection', () => {
     assert.equal(tree.summary.modified, 1);
   });
 
+  test('detects a moved file that was also lightly edited (DD-15)', async () => {
+    const local = await mkdtemp(join(tmpdir(), 'moor-dir-move-'));
+    await mkdir(join(local, 'left/pkg'), { recursive: true });
+    await mkdir(join(local, 'right/lib'), { recursive: true });
+    const original = Array.from({ length: 20 }, (_, i) => `line ${i}`).join('\n') + '\n';
+    const edited = original.replace('line 5', 'line 5 (edited during the move)');
+    await writeFile(join(local, 'left/pkg/mod.js'), original);
+    await writeFile(join(local, 'right/lib/mod.js'), edited);
+
+    const tree = await compareDirectories(join(local, 'left'), join(local, 'right'));
+    const dest = findFile(tree, 'mod.js');
+    assert.ok(dest, 'moved file present at destination');
+    assert.equal(dest.status, 'renamed', 'a lightly-edited move is a rename, not delete+create');
+    assert.ok(dest.leftPath.endsWith('left/pkg/mod.js'));
+    assert.ok(dest.rightPath.endsWith('right/lib/mod.js'));
+
+    await rm(local, { recursive: true, force: true });
+  });
+
+  test('does not pair files below the similarity threshold', async () => {
+    const local = await mkdtemp(join(tmpdir(), 'moor-dir-dissimilar-'));
+    await mkdir(join(local, 'left'), { recursive: true });
+    await mkdir(join(local, 'right'), { recursive: true });
+    const a = Array.from({ length: 20 }, (_, i) => `alpha ${i}`).join('\n') + '\n';
+    const b = Array.from({ length: 20 }, (_, i) => `beta ${i}`).join('\n') + '\n';
+    await writeFile(join(local, 'left/gone.js'), a);
+    await writeFile(join(local, 'right/fresh.js'), b);
+
+    const tree = await compareDirectories(join(local, 'left'), join(local, 'right'));
+    assert.equal(findFile(tree, 'gone.js')?.status, 'left-only');
+    assert.equal(findFile(tree, 'fresh.js')?.status, 'right-only');
+
+    await rm(local, { recursive: true, force: true });
+  });
+
   test('does not match files with differing content', async () => {
     const local = await mkdtemp(join(tmpdir(), 'moor-dir-nomatch-'));
     await writeFile(join(local, 'a.txt'), 'alpha\n');

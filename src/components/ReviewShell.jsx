@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Sidebar from './Sidebar.jsx';
 import FileDiffView from './FileDiffView.jsx';
 import FileNavbar from './FileNavbar.jsx';
-import ContextHeader, { hasExpandableDetails } from './ContextHeader.jsx';
+import ContextHeader, { hasExpandableDetails, commitMessageOf } from './ContextHeader.jsx';
 import KeyboardHelp from './KeyboardHelp.jsx';
 import { computeLineChanges, countDisplayHunks, computeContentLineStats, BINARY_SENTINEL } from '../engine/diff.js';
 import { DEFAULT_ACTION, isBlocking, commentToOutput, actionLabel, actionChipStyle, cycleAction } from '../engine/comments.js';
@@ -64,6 +64,10 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [draggingSidebar, setDraggingSidebar] = useState(false);
   const [fileContents, setFileContents] = useState({});
+  // BF-03: file keys the reviewer forced to text comparison, overriding the
+  // binary verdict for the residual case where a real NUL sits in the first
+  // 8000 bytes (the detection heuristic's blind spot).
+  const [forcedTextKeys, setForcedTextKeys] = useState(() => new Set());
   const [quitDialog, setQuitDialog] = useState(null);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -74,6 +78,11 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   const [comments, setComments] = useState([]);
   const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
   const commentIdRef = useRef(0);
+  // CO-10: the reviewer's edited commit message (null until they edit it).
+  // Editing the message as prose is lower-friction than describing the change
+  // as a series of comments; the edited text rides back through the sidecar.
+  const originalMessage = useMemo(() => commitMessageOf(inputContext), [inputContext]);
+  const [editedMessage, setEditedMessage] = useState(null);
 
   const totalLineStats = useMemo(() => {
     let added = 0;
@@ -167,6 +176,17 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     [comments],
   );
 
+  // The `output` section the sidecar carries (IM.OUT-02a plus the edited commit
+  // message, IM.OUT-07). commitMessage is present only once the reviewer has
+  // actually changed the text, so an untouched review omits it entirely.
+  const outputPayload = useMemo(() => {
+    const payload = { comments: outComments };
+    if (editedMessage != null && editedMessage !== originalMessage) {
+      payload.commitMessage = { original: originalMessage, edited: editedMessage };
+    }
+    return payload;
+  }, [outComments, editedMessage, originalMessage]);
+
   // CO-09: the comments annotating the commit message — rendered inline in the
   // expanded details pane so the annotations sit next to the message.
   const messageComments = useMemo(
@@ -219,12 +239,16 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   const currentFile = files[currentIndex] || null;
   const currentFileKey = currentFile ? (currentFile.rightPath || currentFile.leftPath) : null;
 
+  const currentForcedText = currentFileKey != null && forcedTextKeys.has(currentFileKey);
+
   // Prefer the prefetched content; fall back to a direct read if a file is
-  // selected before the startup prefetch has populated this index.
+  // selected before the startup prefetch has populated this index. A file the
+  // reviewer forced to text (BF-03) is always re-read with asText so the binary
+  // verdict is bypassed — the cached content is the pre-force binary sentinel.
   useEffect(() => {
     if (!currentFile) return;
     const cached = fileContents[currentIndex];
-    if (cached) {
+    if (cached && !currentForcedText) {
       setLeftContent(cached.left);
       setRightContent(cached.right);
       setLoading(false);
@@ -235,8 +259,8 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     setLoading(true);
     (async () => {
       const [left, right] = await Promise.all([
-        currentFile.leftPath ? api.readFile(currentFile.leftPath) : Promise.resolve(''),
-        currentFile.rightPath ? api.readFile(currentFile.rightPath) : Promise.resolve(''),
+        currentFile.leftPath ? api.readFile(currentFile.leftPath, currentForcedText) : Promise.resolve(''),
+        currentFile.rightPath ? api.readFile(currentFile.rightPath, currentForcedText) : Promise.resolve(''),
       ]);
       if (cancelled) return;
       setLeftContent(left);
@@ -244,7 +268,31 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [currentFile, currentIndex, fileContents, api]);
+  }, [currentFile, currentIndex, fileContents, api, currentForcedText]);
+
+  // BF-03: force the current file to text comparison. Re-reading as text and
+  // folding the result back into the prefetch caches means the hunk counter and
+  // review tracking treat it as the text file it now is, not a binary blob
+  // (which reports zero hunks).
+  const forceCurrentAsText = useCallback(() => {
+    if (!api || !currentFile || currentFileKey == null) return;
+    setForcedTextKeys(prev => {
+      if (prev.has(currentFileKey)) return prev;
+      const next = new Set(prev);
+      next.add(currentFileKey);
+      return next;
+    });
+    (async () => {
+      const [left, right] = await Promise.all([
+        currentFile.leftPath ? api.readFile(currentFile.leftPath, true) : Promise.resolve(''),
+        currentFile.rightPath ? api.readFile(currentFile.rightPath, true) : Promise.resolve(''),
+      ]);
+      const idx = currentIndex;
+      setFileContents(prev => ({ ...prev, [idx]: { left, right } }));
+      setHunkCounts(prev => ({ ...prev, [idx]: hunkCountFor(left, right) }));
+      setLineStats(prev => ({ ...prev, [idx]: computeContentLineStats(left, right) }));
+    })();
+  }, [api, currentFile, currentFileKey, currentIndex]);
 
   const viewed = useMemo(() => {
     const set = new Set();
@@ -371,18 +419,18 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     // Coalesce rapid state changes (typing a comment body fires per-keystroke
     // effects) into one IPC write per frame.
     const handle = requestAnimationFrame(() => {
-      api.writeOutput({ comments: outComments });
+      api.writeOutput(outputPayload);
     });
     return () => cancelAnimationFrame(handle);
-  }, [api, outComments]);
+  }, [api, outputPayload]);
 
   const closeWithExitCode = useCallback((exitCode) => {
     if (window.moor?.forceClose) {
-      window.moor.forceClose({ exitCode, comments: outComments });
+      window.moor.forceClose({ exitCode, ...outputPayload });
     } else {
       onClose();
     }
-  }, [outComments, onClose]);
+  }, [outputPayload, onClose]);
 
   const unreviewedCount = Math.max(0, totalChanges - reviewedChanges);
 
@@ -590,6 +638,9 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
         lineStats={totalLineStats}
         messageComments={messageComments}
         onAddMessageComment={addMessageComment}
+        originalMessage={originalMessage}
+        editedMessage={editedMessage}
+        onEditMessage={setEditedMessage}
         onAddChangesetComment={addChangesetComment}
         commentCount={outComments.length}
         onOpenComments={openComments}
@@ -672,6 +723,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
               onSetCommentAction={setCommentAction}
               onDeleteComment={deleteComment}
               onAddFileComment={addFileComment}
+              onForceText={forceCurrentAsText}
               paused={helpOpen || commentsPanelOpen}
             />
           ) : (
@@ -687,8 +739,6 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
           mode={quitDialog.mode}
           fixNowCount={totalFixNow}
           unreviewedCount={unreviewedCount}
-          viewedChanges={reviewedChanges}
-          totalChanges={totalChanges}
           feedbackSummary={feedbackSummary}
           onCancel={() => setQuitDialog(null)}
           // Sending feedback keeps the spec's exit-code verdict: fix-now blocks
@@ -722,7 +772,7 @@ const contentMessageStyle = (color) => ({
   fontFamily: 'var(--font-ui)',
 });
 
-function QuitDialog({ mode, fixNowCount, unreviewedCount, viewedChanges, totalChanges, feedbackSummary, onCancel, onSendReviewFeedback, onQuitAnyway, onApproveAnyway }) {
+function QuitDialog({ mode, fixNowCount, unreviewedCount, feedbackSummary, onCancel, onSendReviewFeedback, onQuitAnyway, onApproveAnyway }) {
   const dialogRef = useRef(null);
 
   const handleDialogKeyDown = (e) => {
@@ -783,18 +833,20 @@ function QuitDialog({ mode, fixNowCount, unreviewedCount, viewedChanges, totalCh
   const primaryBtn = { ...baseBtn, background: 'var(--color-accent)', borderColor: 'var(--color-accent)', color: 'var(--bg-deep)', fontWeight: 600 };
 
   if (mode === 'approve') {
-    const pct = totalChanges > 0 ? Math.round((viewedChanges / totalChanges) * 100) : 0;
     return (
       <div style={overlay} onClick={onCancel}>
         <div ref={dialogRef} style={dialog} onClick={(e) => e.stopPropagation()} onKeyDown={handleDialogKeyDown} role="dialog" aria-modal="true">
           <h2 style={heading}>Approve without viewing everything?</h2>
           <div style={body}>
-            You've viewed {viewedChanges} of {totalChanges} change{totalChanges === 1 ? '' : 's'} ({pct}%).
-            Approving now finalizes the review as clean.
+            You have {unreviewedCount} unreviewed hunk{unreviewedCount === 1 ? '' : 's'}.
+            Resuming picks up where you left off; approving now finalizes the review as clean.
           </div>
+          {/* The low-friction default is to keep reviewing (primary + focused):
+              finalizing a review you haven't finished should take the extra,
+              deliberate reach for the secondary action. */}
           <div style={buttonRow}>
-            <button style={baseBtn} onClick={onCancel}>Cancel</button>
-            <button style={primaryBtn} onClick={onApproveAnyway} autoFocus>Approve anyway</button>
+            <button style={baseBtn} onClick={onApproveAnyway}>Approve anyway</button>
+            <button style={primaryBtn} onClick={onCancel} autoFocus>Resume review</button>
           </div>
         </div>
       </div>
@@ -845,7 +897,7 @@ function QuitDialog({ mode, fixNowCount, unreviewedCount, viewedChanges, totalCh
       <div ref={dialogRef} style={dialog} onClick={(e) => e.stopPropagation()} onKeyDown={handleDialogKeyDown} role="dialog" aria-modal="true">
         <h2 style={heading}>Quit?</h2>
         <div style={body}>
-          {unreviewedCount} unreviewed change{unreviewedCount === 1 ? '' : 's'} remaining.
+          You have {unreviewedCount} unreviewed hunk{unreviewedCount === 1 ? '' : 's'} remaining.
         </div>
         <div style={buttonRow}>
           <button style={baseBtn} onClick={onCancel}>Cancel</button>

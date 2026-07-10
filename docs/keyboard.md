@@ -90,7 +90,8 @@ affect the exit code; `fix-later` and `consider` are advisory.
 |-----|--------|
 | `d` | Toggle the details panel — the keyboard companion to clicking anywhere in the change region. |
 | `f` | Toggle the file sidebar. |
-| `r` | Toggle source / rendered preview for a file that has one (Markdown, SVG). Each side renders with scripts disabled. |
+| `r` | Toggle source / rendered preview for a file that has one (Markdown, SVG). Markdown renders GFM tables and `mermaid` diagrams; each side renders with content scripts disabled, and the two sides scroll together. |
+| `t` | Compare a file that was detected as binary as text instead — the escape hatch when a stray null byte misflags an otherwise-text file. |
 | `=` / `-` | Zoom in / out. `0` resets. |
 | `?` | Toggle the keyboard help overlay. |
 

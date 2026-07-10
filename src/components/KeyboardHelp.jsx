@@ -37,6 +37,7 @@ const GROUPS = [
       [['d'], 'Toggle details'],
       [['f'], 'Toggle file sidebar'],
       [['r'], 'Toggle source / rendered (Markdown, SVG)'],
+      [['t'], 'Compare a binary-detected file as text'],
       [['=', '-'], 'Zoom in / out (0 resets)'],
       [['?'], 'Toggle this help'],
     ],

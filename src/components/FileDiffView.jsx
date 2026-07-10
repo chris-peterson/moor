@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useCallback, useState, useEffect, useLayoutEffe
 import { computeLineChanges, diffChars, buildDisplayRows, BINARY_SENTINEL } from '../engine/diff.js';
 import { DEFAULT_ACTION, ACTIONS, ACTIONS_BY_SEVERITY, isBlocking, commentToOutput, actionColor, actionBg, actionLabel, actionChipStyle, cycleAction, cycleActionDown } from '../engine/comments.js';
 import { previewKindFor, renderMarkdown } from '../engine/preview.js';
+import { renderMermaid, hasMermaid } from '../mermaid.js';
 import Minimap from './Minimap.jsx';
 
 const TAB_SPACES = '    ';
@@ -190,7 +191,22 @@ function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLe
 
 const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|bmp|webp|svg|ico)$/i;
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, onNavigatePrevFile, startAtEnd, startAtRow, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, fileComments = [], onAddComment, onUpdateComment, onSetCommentAction, onDeleteComment, onAddFileComment, paused = false }) {
+const inlineKbdStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minWidth: '16px',
+  padding: '1px 5px',
+  background: 'var(--bg-deep)',
+  border: '1px solid var(--border)',
+  borderRadius: '4px',
+  color: 'var(--text-primary)',
+  fontFamily: 'var(--font-mono)',
+  fontSize: '11px',
+  fontWeight: 600,
+};
+
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, onNavigatePrevFile, startAtEnd, startAtRow, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, fileComments = [], onAddComment, onUpdateComment, onSetCommentAction, onDeleteComment, onAddFileComment, onForceText, paused = false }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
@@ -251,12 +267,54 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   // FUT-01: the rendered body for each side. Markdown is converted to HTML;
   // SVG is its own markup. Both are dropped into a scripts-disabled sandbox
   // iframe (renderedDoc), so embedded scripts never run.
-  const leftRendered = useMemo(
+  const leftBase = useMemo(
     () => previewKind === 'markdown' ? renderMarkdown(leftContent) : (leftContent || ''),
     [previewKind, leftContent]);
-  const rightRendered = useMemo(
+  const rightBase = useMemo(
     () => previewKind === 'markdown' ? renderMarkdown(rightContent) : (rightContent || ''),
     [previewKind, rightContent]);
+
+  // BF-04: mermaid diagrams render asynchronously (the library needs a DOM), so
+  // the body starts at the placeholder-bearing HTML and upgrades to the
+  // diagram-substituted HTML once mermaid resolves. Markdown without a mermaid
+  // fence, and SVG, settle synchronously on the first pass.
+  const [leftRendered, setLeftRendered] = useState('');
+  const [rightRendered, setRightRendered] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    setLeftRendered(leftBase);
+    if (hasMermaid(leftBase)) renderMermaid(leftBase).then(h => { if (!cancelled) setLeftRendered(h); });
+    return () => { cancelled = true; };
+  }, [leftBase]);
+  useEffect(() => {
+    let cancelled = false;
+    setRightRendered(rightBase);
+    if (hasMermaid(rightBase)) renderMermaid(rightBase).then(h => { if (!cancelled) setRightRendered(h); });
+    return () => { cancelled = true; };
+  }, [rightBase]);
+
+  // FD-01 (rendered mode): source mode scrolls both columns as one because they
+  // share a single scroll container. Rendered mode mounts two iframes, so each
+  // pane is sized to the content height its height-reporter posts back and the
+  // panes sit in one shared scroll container — the outer scrollbar then drives
+  // both sides in lockstep, matching source mode. Heights reset per file so a
+  // short file after a long one doesn't inherit stale scroll extent.
+  const leftIframeRef = useRef(null);
+  const rightIframeRef = useRef(null);
+  const [leftRenderedHeight, setLeftRenderedHeight] = useState(0);
+  const [rightRenderedHeight, setRightRenderedHeight] = useState(0);
+  useEffect(() => { setLeftRenderedHeight(0); setRightRenderedHeight(0); }, [leftBase, rightBase]);
+  useEffect(() => {
+    const onMessage = (e) => {
+      const h = e.data?.moorHeight;
+      if (typeof h !== 'number') return;
+      if (e.source === leftIframeRef.current?.contentWindow) setLeftRenderedHeight(h);
+      else if (e.source === rightIframeRef.current?.contentWindow) setRightRenderedHeight(h);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+  const renderedHeight = Math.max(leftRenderedHeight, rightRenderedHeight);
 
   const hunks = useMemo(() => isBinary ? [] : computeLineChanges(leftLines, rightLines), [leftLines, rightLines, isBinary]);
   const rows = useMemo(() => isBinary ? [] : buildDisplayRows(leftLines, rightLines, hunks), [leftLines, rightLines, hunks, isBinary]);
@@ -888,6 +946,17 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
           toggleViewMode();
           break;
         }
+        case 't':
+        case 'T': {
+          // BF-03: force a file flagged binary to text comparison. Meaningless
+          // for an image (its bytes aren't text), so it's offered only for the
+          // "Binary files differ" case.
+          if (isBinary && !isImage && onForceText) {
+            e.preventDefault();
+            onForceText();
+          }
+          break;
+        }
         case 'q':
         case 'Escape': {
           if (!onNavigateNext) {
@@ -901,7 +970,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hunkRanges, currentHunk, reviewedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, composing, paused, openComposerForRows, editComment, fileComments, lineForRow, handlePreview, toggleViewMode, setReviewedHunks]);
+  }, [hunkRanges, currentHunk, reviewedHunks, markCurrentReviewed, totalHeight, maxScroll, onNavigateNext, onNavigatePrev, onNavigatePrevFile, composing, paused, openComposerForRows, editComment, fileComments, lineForRow, handlePreview, toggleViewMode, setReviewedHunks, isBinary, isImage, onForceText]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -1051,10 +1120,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                 {!actionsOnLeft && <HeaderActions previewKind={previewKind} viewMode={viewMode} onToggle={toggleViewMode} onAddFileComment={onAddFileComment} fileKey={fileKey} />}
               </div>
             </div>
-            <div style={{ flex: 1, display: 'flex', background: 'var(--bg-deep)', overflow: 'hidden' }}>
-              <RenderedPane kind={previewKind} html={leftRendered} hasContent={Boolean(leftContent)} width={leftWidth} />
-              <div onMouseDown={onResizerDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: resizerCursor }} />
-              <RenderedPane kind={previewKind} html={rightRendered} hasContent={Boolean(rightContent)} width={rightWidth} />
+            <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', background: 'var(--bg-deep)', overflowY: 'auto', overflowX: 'hidden' }}>
+              <RenderedPane kind={previewKind} html={leftRendered} hasContent={Boolean(leftContent)} width={leftWidth} iframeRef={leftIframeRef} height={renderedHeight} />
+              <div onMouseDown={onResizerDown} style={{ alignSelf: 'stretch', width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: resizerCursor }} />
+              <RenderedPane kind={previewKind} html={rightRendered} hasContent={Boolean(rightContent)} width={rightWidth} iframeRef={rightIframeRef} height={renderedHeight} />
             </div>
           </>
         ) : isBinary ? (
@@ -1090,7 +1159,14 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                   </div>
                 </>
               ) : (
-                <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-ui)', fontSize: '14px' }}>Binary files differ</span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-ui)', fontSize: '14px' }}>Binary files differ</span>
+                  {onForceText && (
+                    <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-ui)', fontSize: '12px' }}>
+                      Detected as binary. Press <kbd style={inlineKbdStyle}>t</kbd> to compare as text.
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </>
@@ -1518,10 +1594,21 @@ function themeTokens() {
   };
 }
 
-// FUT-01: one rendered side. Markdown HTML and SVG markup both render inside a
-// sandbox iframe with no allow-scripts, so any embedded script or event handler
-// is inert. SVG is centered like the image preview; Markdown scrolls.
-function RenderedPane({ kind, html, hasContent, width }) {
+// FD-01 (rendered mode): the only script the preview iframe is allowed to run —
+// it posts the document's content height to the parent so the pane can be sized
+// to its content and the shared outer scrollbar drives both sides together. The
+// CSP below hash-pins script execution to exactly these bytes, so an embedded
+// script or inline handler in the SVG / Markdown never runs. Changing this
+// string means recomputing RENDERED_SCRIPT_CSP_HASH.
+const RENDERED_HEIGHT_REPORTER = "function post(){parent.postMessage({moorHeight:document.body.scrollHeight},'*');}new ResizeObserver(post).observe(document.body);post();";
+const RENDERED_SCRIPT_CSP_HASH = "sha256-EtHshYpk8hDv9It8uW6E7furBG0yxjBCRSesa8z2SKo=";
+
+// FUT-01: one rendered side. Markdown HTML and SVG markup render inside a
+// sandbox iframe whose CSP hash-pins scripts to the height reporter alone
+// (RENDERED_HEIGHT_REPORTER), so any script or event handler embedded in the
+// content stays inert. The pane is sized to the reported content height so the
+// shared container scrolls both sides in lockstep (FD-01).
+function RenderedPane({ kind, html, hasContent, width, iframeRef, height }) {
   const srcDoc = useMemo(() => {
     if (!hasContent) return null;
     const t = themeTokens();
@@ -1541,30 +1628,41 @@ function RenderedPane({ kind, html, hasContent, width }) {
          blockquote{margin:0 0 0 4px;padding-left:12px;border-left:3px solid ${t.border};color:${t.muted};}
          a{color:${t.accent};}
          h1,h2,h3,h4,h5,h6{font-family:${t.fontUi};}
-         hr{border:none;border-top:1px solid ${t.border};}`;
-    // A CSP that allows only inline styles blocks every subresource fetch, so
-    // a remote image or beacon embedded in an SVG / Markdown image can't phone
-    // home, and scripts stay disabled even if the iframe sandbox is loosened.
-    const csp = `default-src 'none'; style-src 'unsafe-inline'; img-src data:`;
+         hr{border:none;border-top:1px solid ${t.border};}
+         table{border-collapse:collapse;margin:10px 0;font-size:0.95em;}
+         th,td{border:1px solid ${t.border};padding:5px 10px;vertical-align:top;}
+         th{background:${t.panel};font-family:${t.fontUi};text-align:left;}
+         .mermaid-diagram{margin:14px 0;overflow-x:auto;}
+         .mermaid-diagram svg{max-width:100%;height:auto;}`;
+    // The CSP allows only inline styles and the hash-pinned height reporter:
+    // every subresource fetch is blocked so a remote image or beacon in an SVG
+    // / Markdown image can't phone home, and no content-supplied script runs.
+    const csp = `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src '${RENDERED_SCRIPT_CSP_HASH}'`;
     return `<!doctype html><html><head><meta charset="utf-8">
       <meta http-equiv="Content-Security-Policy" content="${csp}"><style>
       html,body{margin:0;}
       body{background:${t.bg};color:${t.text};font-family:${t.fontUi};font-size:14px;}
       ${layout}
-    </style></head><body>${body}</body></html>`;
+    </style></head><body>${body}<script>${RENDERED_HEIGHT_REPORTER}</script></body></html>`;
   }, [kind, html, hasContent]);
 
+  // Before the reporter's first message the pane fills the viewport; once a
+  // height arrives it is sized to content so the pane never scrolls internally.
+  const sizedHeight = height > 0 ? height + 'px' : '100%';
+
   return (
-    <div style={{ width: width + 'px', display: 'flex', flexShrink: 0, overflow: 'hidden' }}>
+    <div style={{ width: width + 'px', flexShrink: 0, height: sizedHeight, overflow: 'hidden' }}>
       {srcDoc ? (
         <iframe
-          sandbox=""
+          ref={iframeRef}
+          sandbox="allow-scripts"
+          scrolling="no"
           srcDoc={srcDoc}
           title="Rendered preview"
-          style={{ flex: 1, border: 'none', background: 'var(--bg-deep)' }}
+          style={{ display: 'block', width: '100%', height: '100%', border: 'none', background: 'var(--bg-deep)' }}
         />
       ) : (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-ui)', fontSize: '12px' }}>(empty)</div>
+        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-ui)', fontSize: '12px' }}>(empty)</div>
       )}
     </div>
   );

@@ -42,7 +42,7 @@ moor opens a sidebar listing changed files. User navigates between files, review
 
 ### File Diff View (FD)
 
-- **[FD-01]** The diff viewer shall display two files side-by-side with synchronized scrolling
+- **[FD-01]** The diff viewer shall display two files side-by-side with synchronized scrolling, in both the source diff and the rendered preview (BF-02)
 - **[FD-02]** The diff viewer shall highlight changed lines with distinct colors per source (left vs right)
 - **[FD-03]** The diff viewer shall show hybrid word/character differences within changed lines (char-level for single clean edits, word-level when noisy)
 - **[FD-04]** The diff viewer shall display line numbers in both panels
@@ -98,8 +98,9 @@ When launched with two directories (`git difftool --dir-diff`):
 - **[DD-12]** When the user attempts to close with one or more comments of any action, the viewer shall display a send-feedback confirmation dialog revealing every comment grouped by location (per-location count and, for each comment, its action and body), with the primary CTA labeled "Send review feedback" that confirms the close. Exit code follows the verdict: EC-02 when any `fix-now` comment exists, otherwise EC-03 when unreviewed hunks remain, otherwise EC-01.
 - **[DD-13]** When the user attempts to close with one or more unreviewed hunks and no comments, the viewer shall display a quit confirmation dialog with the existing OK / Cancel actions plus an "Approve anyway" button. "Approve anyway" shall close the viewer with exit code 0 (clean approve) regardless of the unreviewed count. When unreviewed hunks remain alongside advisory (non-`fix-now`) feedback, the send-feedback dialog (DD-12) shall offer the same "Approve anyway" escape hatch.
 - **[DD-14]** While a quit confirmation dialog (DD-12, DD-13) is open, the viewer shall support keyboard navigation between dialog buttons via Tab / Shift+Tab and Left / Right arrow keys; Enter shall activate the focused button and Escape shall cancel.
-- **[DD-15]** While in directory diff mode, when a left-only file and a right-only file are determined to be a rename or move of the same content (e.g., via `git mv`), the viewer shall display the pair as a single entry showing the old → new path, instead of as separate L and R entries. The entry shall contribute one item to the sidebar and hunk counts (DD-06), and its diff view shall show content changes between the two versions (zero-hunk when the rename is content-identical).
+- **[DD-15]** While in directory diff mode, when a left-only file and a right-only file are determined to be a rename or move of the same or highly similar content, the viewer shall display the pair as a single entry showing the old → new path, instead of as separate L and R entries. Detection matches git: identical content pairs first, then content similarity above a threshold (so a move that also carried edits is still recognized as a move, not a delete plus a create). The entry shall contribute one item to the sidebar and hunk counts (DD-06), and its diff view shall show content changes between the two versions (zero-hunk when the rename is content-identical).
 - **[DD-16]** When the user presses `f` (either case), the viewer shall toggle the file sidebar — the keyboard companion to DD-11's collapse / show controls.
+- **[DD-17]** When the user approves with one or more unreviewed hunks and no `fix-now` comments, the viewer shall confirm first, stating the count of unreviewed hunks (not a viewed/total ratio). The low-friction default action (focused, primary) shall resume the review where the reviewer left off; finalizing the review as a clean approve (exit code 0) shall be the secondary action.
 
 ### Context Menu (CM)
 
@@ -123,6 +124,7 @@ A **comment** is review feedback the reviewer leaves for the change's author. Co
 - **[CO-06]** When the user opens a comment composer (Space / Enter on the current hunk per NV-07, a range selection per CO-04, or a changeset / file control per CO-05), the viewer shall present an auto-growing text area with an action control, following the text-entry conventions (TE-01..03). For this composer specifically, Escape confirms a non-empty comment and discards an empty one (TE-02), and Tab down-classifies the action `fix-now` → `fix-later` → `consider` → `fix-now`, with Shift+Tab walking back up (TE-03).
 - **[CO-07]** While a line-range comment exists (or is being composed), the viewer shall **band** the covered lines — a colored outline spanning the range in the comment's action color — and display a persistent bar at the range's lower edge showing the body and action. Clicking the body shall reopen it for editing, and a delete control shall remove it after a confirmation.
 - **[CO-08]** When the user opens the comments panel (the header comments control or the `n` key, either case), the viewer shall list every comment with its target, body, and action; each shall be editable inline, action-changeable, and deletable after a confirmation. The panel **manages** existing comments — it does not add them; adding is done from each target's own surface (CO-04, CO-05, CO-09).
+- **[CO-10]** The viewer shall let the reviewer **edit the commit message directly** — an inline textarea seeded with the current message, reachable from the change region's `✎ edit message` control — as a lower-friction alternative to describing message changes through commit-message comments (CO-09). The edit shall be revertable to the original, and the two mechanisms may coexist. The edited message travels back through the sidecar output (IM.OUT-07).
 
 ### Text Entry (TE)
 
@@ -140,14 +142,16 @@ Conventions for any field the reviewer types into. The keyboard contract — Ent
 ### Binary Formats (BF)
 
 - **[BF-01]** When a recognized image file is opened, the diff viewer shall display the images side-by-side
-- **[BF-02]** When a file has both a text and a rendered representation (Markdown, SVG), the diff viewer shall offer a toggle between the source diff and a side-by-side rendered preview, in the file header and via the `r` key (NV-21). An SVG file shall open in the rendered preview by default; all other files shall open in the source diff. The rendered preview shall display each side's content with embedded scripts disabled and remote subresource loads blocked, and shall offer the same file-comment affordance as the source diff.
+- **[BF-02]** When a file has both a text and a rendered representation (Markdown, SVG), the diff viewer shall offer a toggle between the source diff and a side-by-side rendered preview, in the file header and via the `r` key (NV-21). An SVG file shall open in the rendered preview by default; all other files shall open in the source diff. The rendered preview shall display each side's content with content-supplied scripts disabled (the preview iframe's Content-Security-Policy hash-pins script execution to a single internal height reporter and blocks remote subresource loads), and shall offer the same file-comment affordance as the source diff. The two rendered panes shall scroll together as one, matching source-mode synchronized scrolling (FD-01).
+- **[BF-03]** When a file detected as binary (DA-04) is displayed as "Binary files differ", the diff viewer shall offer a "compare as text" action (the `t` key) that re-reads both sides as UTF-8 text and shows the source diff, overriding the binary verdict. The action shall not be offered for recognized image files (BF-01).
+- **[BF-04]** When rendering Markdown (BF-02), the rendered preview shall support GFM pipe tables (with per-column alignment) and `mermaid` fenced code blocks (rendered as diagrams). A mermaid block that fails to parse shall show its error in place rather than being omitted.
 
 ### Diff Algorithm (DA)
 
 - **[DA-01]** The diff engine shall compute line-level diffs using Myers algorithm
 - **[DA-02]** The diff engine shall compute hybrid intra-line diffs: character-level when a word has a single clean edit, word-level when multiple edits make char highlighting noisy
 - **[DA-03]** The diff engine shall ignore trailing whitespace differences when computing diffs
-- **[DA-04]** When computing a diff, the diff engine shall detect binary files via null byte check
+- **[DA-04]** When reading a file, the viewer shall detect binary content the way git does — a NUL byte within the first 8000 bytes — rather than scanning the whole file, so a stray NUL beyond that prefix does not misflag an otherwise-text file. The reviewer may override the verdict per file (BF-03).
 
 ### Application Shell (AS)
 
@@ -189,6 +193,7 @@ moor exposes a bidirectional contract with its caller via a JSON file. The calle
 
 - **[IM.OUT-01]** The viewer shall write review state to the context file's `output` section continuously, flushing after every hunk review-state change (review, unreview) and every comment change (add, edit, action change, delete). On exit, the file shall reflect the final state.
 - **[IM.OUT-02a]** The output section shall always include `reviewer` (string, from `git config user.name`) and `comments` (array). Each comment is `{ body, action, target?, file?, startLine?, endLine? }`: a changeset comment omits `file` and `target`; a commit-message comment (CO-09) includes `target: "commit-message"` and omits `file`; a file comment includes `file`; a line-range comment includes `file`, `startLine`, and `endLine`. `action` is one of `fix-now`, `fix-later`, `consider`. The calling agent interprets the comments.
+- **[IM.OUT-07]** When the reviewer edits the commit message (CO-10), the output section shall include `commitMessage: { original, edited }` — the message as launched and the reviewer's rewrite — flushed continuously like comments (IM.OUT-01). It shall be absent while the message is unedited (including after a revert), so its presence signals an intended rewrite the calling agent can apply.
 - **[IM.OUT-02b]** The output section shall include `exitCode` (number) only after the viewer exits; its presence signals that the review has been finalized, while its absence signals an in-progress review whose comments may still change.
 - **[IM.OUT-03]** While `fix-now` comments exist, the viewer shall display one badge per affected file in the header's output region, each showing the file's `fix-now` count; when the user clicks a badge, the viewer shall navigate to that file's first `fix-now` comment.
 - **[IM.OUT-04]** The viewer shall display review progress ("X of Y changes viewed") in the header's output region.

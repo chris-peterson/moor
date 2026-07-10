@@ -139,9 +139,17 @@ app.whenReady().then(async () => {
     contextInput = readContextInput(contextPath);
   }
 
-  ipcMain.handle('read-file', async (_event, { filePath }) => {
+  // git's own binary rule: a blob is binary iff a NUL byte appears within its
+  // first 8000 bytes (buffer_is_binary, FIRST_FEW_BYTES = 8000). Scanning the
+  // whole file — the old behaviour — is stricter than git, so a stray NUL from
+  // a misencoding deep in an otherwise-text file misfires as binary. Matching
+  // git's prefix scan gives the same verdict git's own difftool would.
+  // `asText: true` (the force-to-text escape hatch) skips the check for the
+  // residual case where a real NUL sits inside the first 8000 bytes.
+  const BINARY_SCAN_BYTES = 8000;
+  ipcMain.handle('read-file', async (_event, { filePath, asText = false }) => {
     const buf = await fs.readFile(filePath);
-    if (buf.includes(0)) return '\x00BINARY';
+    if (!asText && buf.subarray(0, BINARY_SCAN_BYTES).includes(0)) return '\x00BINARY';
     return buf.toString('utf-8');
   });
 

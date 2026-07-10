@@ -54,19 +54,64 @@ function renderInline(text) {
   return out;
 }
 
-// A line-oriented Markdown subset: ATX headings, fenced code blocks, unordered
-// and ordered lists, blockquotes, horizontal rules, and paragraphs, with inline
-// spans inside each. The source is HTML-escaped up front so embedded HTML
-// (a raw <script>, an onerror attribute) renders as visible text rather than
-// live markup.
+// A GFM pipe-table row splits on unescaped `|`, dropping the optional leading
+// and trailing pipe. Cells are already HTML-escaped, so a literal `|` in source
+// text would arrive as `|` — table columns win over inline pipes, matching GFM.
+function splitTableRow(line) {
+  let trimmed = line.trim();
+  if (trimmed.startsWith('|')) trimmed = trimmed.slice(1);
+  if (trimmed.endsWith('|')) trimmed = trimmed.slice(0, -1);
+  return trimmed.split('|').map(c => c.trim());
+}
+
+// The delimiter row under a table header: each cell is dashes with optional
+// leading/trailing colons marking alignment (`:--` left, `:-:` center, `--:`
+// right). Its presence is what promotes the preceding line from a paragraph
+// with pipes into a table.
+function parseTableDelimiter(line) {
+  if (!/\|/.test(line)) return null;
+  const cells = splitTableRow(line);
+  const aligns = [];
+  for (const cell of cells) {
+    if (!/^:?-+:?$/.test(cell)) return null;
+    const left = cell.startsWith(':');
+    const right = cell.endsWith(':');
+    aligns.push(right && left ? 'center' : right ? 'right' : left ? 'left' : null);
+  }
+  return aligns.length ? aligns : null;
+}
+
+function renderTable(headerLine, aligns, bodyLines) {
+  const cellHtml = (text, align, tag) => {
+    const style = align ? ` style="text-align:${align}"` : '';
+    return `<${tag}${style}>${renderInline(text)}</${tag}>`;
+  };
+  const header = splitTableRow(headerLine);
+  const head = `<thead><tr>${header.map((c, i) => cellHtml(c, aligns[i], 'th')).join('')}</tr></thead>`;
+  const rows = bodyLines.map(line => {
+    const cells = splitTableRow(line);
+    // Normalize each row to the header's column count (GFM: extra cells are
+    // dropped, missing cells render empty).
+    const tds = header.map((_, i) => cellHtml(cells[i] ?? '', aligns[i], 'td'));
+    return `<tr>${tds.join('')}</tr>`;
+  }).join('');
+  return `<table>${head}<tbody>${rows}</tbody></table>`;
+}
+
+// A line-oriented Markdown subset: ATX headings, fenced code blocks, GFM pipe
+// tables, unordered and ordered lists, blockquotes, horizontal rules, and
+// paragraphs, with inline spans inside each. The source is HTML-escaped up
+// front so embedded HTML (a raw <script>, an onerror attribute) renders as
+// visible text rather than live markup. A ```mermaid fence is emitted as an
+// inert placeholder (data-mermaid) carrying its source; the renderer turns it
+// into an SVG diagram before display (BF-04), keeping this function pure and
+// synchronous.
 export function renderMarkdown(source) {
   const lines = escapeHtml(source ?? '').split('\n');
   const blocks = [];
   let paragraph = [];
   let listItems = null;
   let listOrdered = false;
-  let inFence = false;
-  let fenceLines = [];
 
   const flushParagraph = () => {
     if (paragraph.length) {
@@ -82,21 +127,26 @@ export function renderMarkdown(source) {
     }
   };
 
-  for (const line of lines) {
-    if (/^\s*```/.test(line)) {
-      if (inFence) {
-        blocks.push(`<pre><code>${fenceLines.join('\n')}</code></pre>`);
-        fenceLines = [];
-        inFence = false;
-      } else {
-        flushParagraph();
-        flushList();
-        inFence = true;
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+    const fence = line.match(/^\s*```\s*(\S*)/);
+    if (fence) {
+      flushParagraph();
+      flushList();
+      const lang = fence[1];
+      const fenceLines = [];
+      li++;
+      while (li < lines.length && !/^\s*```/.test(lines[li])) {
+        fenceLines.push(lines[li]);
+        li++;
       }
-      continue;
-    }
-    if (inFence) {
-      fenceLines.push(line);
+      // li now rests on the closing fence (or past the end for an unterminated
+      // block); the loop's own li++ steps past it.
+      if (lang.toLowerCase() === 'mermaid') {
+        blocks.push(`<div class="mermaid-diagram" data-mermaid>${fenceLines.join('\n')}</div>`);
+      } else {
+        blocks.push(`<pre><code>${fenceLines.join('\n')}</code></pre>`);
+      }
       continue;
     }
 
@@ -107,6 +157,25 @@ export function renderMarkdown(source) {
       const level = heading[1].length;
       blocks.push(`<h${level}>${renderInline(heading[2].trim())}</h${level}>`);
       continue;
+    }
+
+    // A table is a header row immediately followed by a delimiter row; without
+    // the delimiter the line is just a paragraph that happens to contain pipes.
+    if (/\|/.test(line) && li + 1 < lines.length) {
+      const aligns = parseTableDelimiter(lines[li + 1]);
+      if (aligns) {
+        flushParagraph();
+        flushList();
+        const bodyLines = [];
+        let bi = li + 2;
+        while (bi < lines.length && lines[bi].trim() !== '' && /\|/.test(lines[bi])) {
+          bodyLines.push(lines[bi]);
+          bi++;
+        }
+        blocks.push(renderTable(line, aligns, bodyLines));
+        li = bi - 1;
+        continue;
+      }
     }
 
     if (/^\s*([-*_])\1\1+\s*$/.test(line)) {
@@ -145,7 +214,6 @@ export function renderMarkdown(source) {
     paragraph.push(line.trim());
   }
 
-  if (inFence) blocks.push(`<pre><code>${fenceLines.join('\n')}</code></pre>`);
   flushParagraph();
   flushList();
   return blocks.join('\n');

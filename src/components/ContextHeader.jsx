@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { actionChipStyle, actionLabel } from '../engine/comments.js';
 
 // IM.IN-02: the change region reads as a changeset header, not a labeled data
@@ -20,6 +20,24 @@ const HIDDEN_LABELS = new Set(['range']);
 function pickRow(details, labels) {
   const row = details.find(d => labels.includes(String(d.label).toLowerCase()));
   return row ? row.value : null;
+}
+
+// CO-10: the commit message as one string — the subject (`title`) plus the body
+// row, joined by a blank line the git-standard way. This is the source text the
+// reviewer edits and the baseline the edit is diffed against.
+export function commitMessageOf(context) {
+  if (!context || !context.title) return '';
+  const details = (context && Array.isArray(context.details)) ? context.details : [];
+  const body = pickRow(details, BODY_LABELS);
+  return body ? `${context.title}\n\n${body}` : context.title;
+}
+
+// Split a commit message back into subject (first line) and body (the rest,
+// leading blank lines trimmed) for display.
+function splitMessage(message) {
+  const nl = message.indexOf('\n');
+  if (nl === -1) return { title: message, body: '' };
+  return { title: message.slice(0, nl), body: message.slice(nl + 1).replace(/^\n+/, '') };
 }
 
 // Whether expanding the header would reveal anything. A present change title is
@@ -50,6 +68,9 @@ export function ContextHeader({
   lineStats = null,
   messageComments = [],
   onAddMessageComment,
+  originalMessage = '',
+  editedMessage = null,
+  onEditMessage,
   onAddChangesetComment,
   commentCount = 0,
   onOpenComments,
@@ -57,6 +78,12 @@ export function ContextHeader({
   onReject,
   approveDisabled = false,
 }) {
+  // CO-10: inline commit-message editing. `editing` swaps the message display
+  // for a textarea; the draft lives in the textarea until saved so a cancel
+  // leaves the stored edit untouched.
+  const [editing, setEditing] = useState(false);
+  const editRef = useRef(null);
+
   if (!channelConfigured) {
     return (
       <div style={styles.shell}>
@@ -89,7 +116,17 @@ export function ContextHeader({
   const project = pickRow(details, LOCATION_PROJECT_LABELS);
   const branch = pickRow(details, LOCATION_BRANCH_LABELS);
   const task = pickRow(details, TASK_LABELS);
-  const body = pickRow(details, BODY_LABELS);
+
+  // CO-10: show the edited message when the reviewer has changed it, else the
+  // original. Splitting back into subject / body keeps the headline + body
+  // layout whether or not it's been edited.
+  const effectiveMessage = editedMessage != null ? editedMessage : (originalMessage || context.title || '');
+  const isEdited = editedMessage != null && editedMessage !== originalMessage;
+  const shown = splitMessage(effectiveMessage);
+  const body = shown.body || null;
+
+  const saveEdit = () => { onEditMessage?.(editRef.current?.value ?? ''); setEditing(false); };
+  const cancelEdit = () => setEditing(false);
   const secondary = details.filter(d => {
     const l = String(d.label).toLowerCase();
     return !CONSUMED_LABELS.has(l) && !HIDDEN_LABELS.has(l);
@@ -131,9 +168,39 @@ export function ContextHeader({
                 {task && <span style={styles.eyebrowTask}>{task}</span>}
               </div>
             )}
-            <div style={styles.headline}>{context.title}</div>
-            {detailsExpanded && body && (
-              <div style={styles.bodyText}>{body}</div>
+            {editing ? (
+              <div style={styles.editWrap}>
+                <textarea
+                  ref={editRef}
+                  defaultValue={effectiveMessage}
+                  rows={Math.min(16, Math.max(3, effectiveMessage.split('\n').length + 1))}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    // Cmd/Ctrl+Enter saves (plain Enter is a newline — this is
+                    // prose); Escape cancels. Keys stay out of the diff view.
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(); }
+                    else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+                    e.stopPropagation();
+                  }}
+                  style={styles.editTextarea}
+                />
+                <div style={styles.editActions}>
+                  <span style={styles.editHint}>Edit the commit message · ⌘/Ctrl+Enter saves · Esc cancels</span>
+                  <span style={{ flex: 1 }} />
+                  <button type="button" onClick={cancelEdit} style={styles.editButton}>Cancel</button>
+                  <button type="button" onClick={saveEdit} style={{ ...styles.editButton, ...styles.editButtonPrimary }}>Save message</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div style={styles.headline}>
+                  {shown.title}
+                  {isEdited && <span style={styles.editedBadge}>edited</span>}
+                </div>
+                {detailsExpanded && body && (
+                  <div style={styles.bodyText}>{body}</div>
+                )}
+              </>
             )}
             {detailsExpanded && messageComments.length > 0 && (
               <div style={styles.messageComments}>
@@ -170,6 +237,26 @@ export function ContextHeader({
                   title="Comment on the commit message (m)"
                 >
                   + comment on message
+                </button>
+              )}
+              {onEditMessage && !editing && (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  style={styles.addCommentChip}
+                  title="Edit the commit message directly"
+                >
+                  ✎ edit message
+                </button>
+              )}
+              {isEdited && !editing && (
+                <button
+                  type="button"
+                  onClick={() => onEditMessage(null)}
+                  style={styles.addCommentChip}
+                  title="Discard your edits and restore the original message"
+                >
+                  revert message
                 </button>
               )}
             </div>
@@ -472,6 +559,79 @@ const styles = {
     lineHeight: 1.4,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
+  },
+
+  // CO-10: the "edited" marker beside a message the reviewer has rewritten.
+  editedBadge: {
+    marginLeft: '8px',
+    padding: '1px 6px',
+    borderRadius: '3px',
+    background: 'var(--color-accent-bg)',
+    border: '1px solid var(--color-accent-border)',
+    color: 'var(--color-accent)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '9px',
+    fontWeight: 700,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+    verticalAlign: 'middle',
+  },
+
+  // CO-10: the inline editor that replaces the message while editing.
+  editWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    background: 'var(--bg-panel)',
+    border: '1px solid var(--color-accent-border)',
+    borderRadius: '4px',
+    padding: '8px',
+  },
+
+  editTextarea: {
+    display: 'block',
+    width: '100%',
+    boxSizing: 'border-box',
+    padding: '6px 8px',
+    fontSize: '13px',
+    fontFamily: 'var(--font-mono)',
+    lineHeight: 1.5,
+    background: 'var(--bg-deep)',
+    color: 'var(--text-primary)',
+    border: '1px solid var(--border)',
+    borderRadius: '3px',
+    outline: 'none',
+    resize: 'vertical',
+  },
+
+  editActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+
+  editHint: {
+    fontFamily: 'var(--font-mono)',
+    fontSize: '10px',
+    color: 'var(--text-muted)',
+  },
+
+  editButton: {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '12px',
+    padding: '3px 12px',
+    borderRadius: '4px',
+    border: '1px solid var(--border)',
+    background: 'var(--bg-deep)',
+    color: 'var(--text-primary)',
+    cursor: 'pointer',
+  },
+
+  editButtonPrimary: {
+    background: 'var(--color-accent)',
+    borderColor: 'var(--color-accent)',
+    color: 'var(--bg-deep)',
+    fontWeight: 600,
   },
 
   // The commit body, revealed on expand as a continuation of the message.

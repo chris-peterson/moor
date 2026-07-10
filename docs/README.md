@@ -150,8 +150,10 @@ moor --context ./review.json old-dir/ new-dir/
 The caller writes `input` (a `title` and `details` rendered in moor's header);
 moor streams `output` back — `exitCode`, `reviewer`, and a `comments` array of
 `{body, action, file?, startLine?, endLine?}` where `action` is `fix-now`,
-`fix-later`, or `consider` — flushing on every state change. When no channel is
-configured, moor shows a banner and still works as a plain viewer.
+`fix-later`, or `consider` — flushing on every state change. If the reviewer
+edits the commit message directly, `output` also carries
+`commitMessage: {original, edited}`. When no channel is configured, moor shows a
+banner and still works as a plain viewer.
 
 ## Reference
 

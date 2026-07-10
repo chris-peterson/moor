@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+### Features
+- **Edit the commit message directly.** Rather than describing message changes
+  as a series of comments, click **✎ edit message** in the change header and
+  rewrite it inline — revertable, and it coexists with message comments. The
+  edit rides back to the caller as `commitMessage: { original, edited }`.
+- **Rendered Markdown does more.** The rendered preview (`r`) now draws GFM
+  tables and `mermaid` diagrams, and its two sides scroll together as one —
+  matching the source diff — so a long document stays aligned across both
+  versions.
+- **Compare a mis-detected binary file as text.** A stray null byte no longer
+  condemns a whole file: binary detection now matches git (a null byte in the
+  first 8000 bytes), and when a file is still flagged, press `t` to compare it
+  as text anyway.
+
+### Fixed
+- **Moved-and-edited files are recognized as moves.** Directory diffs now detect
+  a rename/move by content *similarity*, not just identical content, so a file
+  that moved and picked up a few edits shows as one renamed entry instead of a
+  separate delete and create.
+
+### Changed
+- Binary detection scans only the first 8000 bytes for a null byte, the way git
+  does, instead of the whole file.
+- The approve-without-viewing confirmation now states how many hunks are
+  unreviewed (no viewed/total percentage) and defaults to resuming the
+  review — finalizing a clean approve is the secondary, deliberate action.
+
 ## 0.15.0
 
 ### Features
