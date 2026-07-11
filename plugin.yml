@@ -34,6 +34,15 @@ suite:
   # moor is an interactive review tool, not a set of slash-command skills, so the
   # examples are anchored on its core interactions — launching a review and the
   # per-change comment/reject flow that travels back to the agent.
+  # >>> shipyard:describe — generated from source by `shipyard gen-describe`; do not edit >>>
+  describe:
+    rules:
+      launch-with-sidecar: Launch moor with the sidecar, never via raw `git difftool`
+    hooks:
+      cli-freshness: SessionStart — Detect CLI wrapper drift after a plugin update.
+      emit-rules: SessionStart — Emit this plugin's ambient rules into context.
+      hooks: 'Hook wiring: SessionStart→cli-freshness, emit-rules.'
+  # <<< shipyard:describe <<<
   examples:
     - label: "review a diff"
       ac: "--ship"
