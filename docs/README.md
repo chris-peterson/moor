@@ -23,10 +23,9 @@ A typical pass:
 
 1. **Claude finishes a change and hands it to moor.** You don't reach for
    `git difftool` yourself — the [ambient rule](/ambient-rules) the plugin
-   installs routes the launch through a sidecar so the verdict survives. With
-   the anchor plugin, `/anchor:preview` diffs the working tree against `HEAD`
-   and `/anchor:commit` targets a specific commit; either way moor opens with a
-   `MOOR_CONTEXT` file wired up.
+   installs routes the launch through a sidecar so the verdict survives. An
+   upstream caller wires up the `MOOR_CONTEXT` file, launches moor, and reads
+   the verdict back — see the [calling contract](/calling-contract).
 2. **You read the *why* before the *what*.** The briefing header up top carries
    the change's rationale — the commit message, the range under review, who
    authored it — so you start from intent, not an unlabelled wall of green and

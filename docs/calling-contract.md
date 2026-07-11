@@ -7,9 +7,8 @@ a process exit code. This page describes that contract from the caller's side:
 how to launch moor, what to write, and what to read back.
 
 The contract is caller-agnostic. Any script, CLI, or agent that can write a
-file, spawn a process, and read the file back can drive moor. The `anchor`
-plugin's `review-diff.sh` is one reference implementation, not the subject of
-this page.
+file, spawn a process, and read the file back can drive moor. This page
+describes the contract itself, independent of any particular caller.
 
 The normative source is [`SPEC.md`](/SPEC.md) — the requirements referenced here
 (`IM-*`, `IM.IN-*`, `IM.OUT-*`, `EC-*`) define the behavior; this page shows how
