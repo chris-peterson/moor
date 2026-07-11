@@ -4,7 +4,7 @@ dist/
 .vite/
 docs/SPEC.md
 docs/rules/
-docs/suite.json
+docs/plugin-docs.json
 __pycache__
 
 *~
