@@ -10,9 +10,8 @@ review outcome is silently lost.
 
 - **Reviewing a git range** (working tree, a commit, a branch) — launch
   through a wrapper that sets `MOOR_CONTEXT`, then read the verdict back
-  from the file it names. If the anchor plugin is installed,
-  `/anchor:preview` (working tree vs `HEAD`) and `/anchor:commit` (a
-  specific commit) do this.
+  from the file it names. An upstream caller supplies that wrapper; moor
+  itself ships no git-range launcher.
 - **Arbitrary two-path or two-directory diff** unrelated to a git range —
   use moor's CLI directly: `moor <left> <right>`.
 
