@@ -1,44 +1,18 @@
 name: Deploy docs
 
+# Delegates to shipyard's reusable docs deploy (float to @actions during
+# consolidation). Pages permissions are granted here because reusable-workflow
+# permissions are capped by the caller's token.
+
 on:
   push:
     branches: [main]
-    paths:
-      - 'docs/**'
-      - 'SPEC.md'
-      - 'rules/**'
-      - 'plugin.yml'
   workflow_dispatch:
 
 permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
 jobs:
   deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/configure-pages@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.x'
-      - run: pip install pyyaml
-      - name: Copy SPEC.md into docs
-        run: cp SPEC.md docs/SPEC.md
-      - name: Copy ambient rules into docs
-        run: mkdir -p docs/rules && cp rules/*.md docs/rules/
-      - name: Render suite.json for the session preview
-        run: python3 scripts/gen-suite-json.py
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: docs
-      - id: deployment
-        uses: actions/deploy-pages@v5
+    uses: chris-peterson/shipyard/.github/workflows/deploy-docs.yml@main

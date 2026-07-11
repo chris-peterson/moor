@@ -14,5 +14,6 @@
     "git",
     "code-review",
     "electron"
-  ]
+  ],
+  "homepage": "https://chris-peterson.github.io/moor/#/"
 }
