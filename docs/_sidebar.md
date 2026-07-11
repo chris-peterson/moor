@@ -2,4 +2,4 @@
 - [Keyboard shortcuts](/keyboard)
 - [Calling contract](/calling-contract)
 - [Ambient rules](/ambient-rules)
-- [Requirements](/SPEC.md)
+- [SPEC](/spec)
