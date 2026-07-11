@@ -1,0 +1,8 @@
+# Source of record for moor's hooks — shipyard generates hooks.json.
+hooks:
+  - event: SessionStart
+    command: 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/cli-freshness.sh"'
+    description: Detect CLI wrapper drift after a plugin update.
+  - event: SessionStart
+    command: 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/emit-rules.sh"'
+    description: Emit this plugin's ambient rules into context.

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# DOCUMENTATION: Detect CLI wrapper drift after a plugin update.
 # SessionStart hook: detect CLI wrapper drift after a plugin update.
 #
 # `moor install-cli` drops a wrapper at ~/.local/bin/moor whose path is
