@@ -13,3 +13,4 @@ __pycache__
 *.rej
 *.swp
 .DS_Store
+docs/index.html

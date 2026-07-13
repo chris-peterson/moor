@@ -64,3 +64,7 @@ suite:
     - { t: thought, text: "the fix-now's right — parseISO never applies ISO_DATE" }
     - { t: claude, text: "You're right — guarding parseISO so a non-ISO string throws instead of silently building a Date:" }
     - { t: moor, del: "return new Date(s)", add: "if (!ISO_DATE.test(s)) throw new RangeError('not ISO-8601')", rej: "✓ re-review clean — non-ISO now rejected" }
+
+docs:
+  code_languages: [bash, json, javascript]
+  mermaid: true
