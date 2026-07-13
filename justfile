@@ -7,12 +7,12 @@ install-cli:
     ./bin/moor install-cli
 
 # regenerate all generated artifacts from source (describe, plugin.json, docs)
-plugin-build:
-    scripts/shipyard build
+generate:
+    scripts/shipyard generate
 
-# verify committed generated artifacts (plugin.json, describe) match source
+# validate source projects cleanly and preview the pending projection (no write)
 check:
-    scripts/shipyard check
+    scripts/shipyard generate --dry-run
 
 # preview the docsify docs site locally
 docs:
@@ -26,12 +26,6 @@ plugin-json:
 # resync plugin.yml suite.describe from the skills/rules/hooks sources
 describe:
     scripts/shipyard gen-describe
-
-# install the git pre-commit hook that keeps generated artifacts in sync
-install-hooks:
-    cp scripts/hooks/pre-commit .git/hooks/pre-commit
-    chmod +x .git/hooks/pre-commit
-    @echo "installed .git/hooks/pre-commit"
 
 build:
     ./node_modules/.bin/vite build
