@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { statusColor, statusLabel } from '../engine/file-status.js';
 
-function SidebarNode({ node, depth, files, currentIndex, viewed, fixNowFiles, onSelect, expanded, onToggle, fileStats }) {
+function SidebarNode({ node, depth, files, currentIndex, viewed, blockingFiles, onSelect, expanded, onToggle, fileStats }) {
   const isDir = node.type === 'directory';
   const isIdentical = node.status === 'identical';
   const nodeKey = node.leftPath || node.rightPath || node.name;
@@ -10,7 +10,7 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, fixNowFiles, on
   const fileIndex = isDir ? -1 : files.indexOf(node);
   const isCurrent = fileIndex === currentIndex;
   const isViewed = viewed.has(fileIndex);
-  const hasFixNow = !isDir && fixNowFiles && fixNowFiles.has(fileIndex);
+  const hasBlocking = !isDir && blockingFiles && blockingFiles.has(fileIndex);
   const isClickable = !isDir && fileIndex >= 0;
 
   const stat = !isDir && fileStats ? fileStats[fileIndex] : null;
@@ -49,7 +49,7 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, fixNowFiles, on
           fontFamily: 'var(--font-mono)',
           fontSize: '11px',
           lineHeight: '1.8',
-          color: hasFixNow ? 'var(--color-conflict)' : isViewed ? 'var(--text-muted)' : 'var(--text-primary)',
+          color: hasBlocking ? 'var(--color-conflict)' : isViewed ? 'var(--text-muted)' : 'var(--text-primary)',
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -90,7 +90,7 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, fixNowFiles, on
           files={files}
           currentIndex={currentIndex}
           viewed={viewed}
-          fixNowFiles={fixNowFiles}
+          blockingFiles={blockingFiles}
           onSelect={onSelect}
           expanded={expanded}
           onToggle={onToggle}
@@ -101,7 +101,7 @@ function SidebarNode({ node, depth, files, currentIndex, viewed, fixNowFiles, on
   );
 }
 
-export function Sidebar({ tree, files, currentIndex, viewed, fixNowFiles, onSelect, width, onCollapse, fileStats }) {
+export function Sidebar({ tree, files, currentIndex, viewed, blockingFiles, onSelect, width, onCollapse, fileStats }) {
   const [expanded, setExpanded] = useState(() => {
     const set = new Set();
     const expandAll = (node) => {
@@ -202,7 +202,7 @@ export function Sidebar({ tree, files, currentIndex, viewed, fixNowFiles, onSele
             files={files}
             currentIndex={currentIndex}
             viewed={viewed}
-            fixNowFiles={fixNowFiles}
+            blockingFiles={blockingFiles}
             onSelect={onSelect}
             expanded={expanded}
             onToggle={onToggle}

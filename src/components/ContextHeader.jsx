@@ -91,11 +91,11 @@ export function hasExpandableDetails(context) {
 export function ContextHeader({
   context,
   channelConfigured,
-  fixNowBadges = [],
+  blockingBadges = [],
   viewedChanges = 0,
   totalChanges = 0,
   allViewed = false,
-  onNavigateToFixNow,
+  onNavigateToBlocking,
   detailsExpanded = false,
   onToggleDetails,
   lineStats = null,
@@ -133,7 +133,7 @@ export function ContextHeader({
             <div style={styles.warningHint}>
               pass <code style={styles.warningCode}>--context &lt;path&gt;</code>
               {' '}or set{' '}
-              <code style={styles.warningCode}>MOOR_CONTEXT</code>{' '}
+              <code style={styles.warningCode}>REVIEW_CONTEXT</code>{' '}
               to capture review feedback
             </div>
           </div>
@@ -319,11 +319,11 @@ export function ContextHeader({
         <span style={styles.channelLabel('right')}>status</span>
 
         <div style={styles.badges}>
-          {fixNowBadges.map(({ fileIndex, count, name }) => (
+          {blockingBadges.map(({ fileIndex, count, name }) => (
             <button
               key={fileIndex}
               type="button"
-              onClick={() => onNavigateToFixNow?.(fileIndex)}
+              onClick={() => onNavigateToBlocking?.(fileIndex)}
               style={styles.badge}
               title={`Jump to ${name}`}
             >
@@ -389,7 +389,7 @@ export function ContextHeader({
                 kind="approve"
                 disabled={approveDisabled}
                 onClick={() => onApprove?.()}
-                title={approveDisabled ? 'Resolve fix-now comments before approving' : 'Approve — finalize the review clean'}
+                title={approveDisabled ? 'Resolve must-fix comments before approving' : 'Approve — finalize the review clean'}
               >✓ Approve</VerdictButton>
               <VerdictButton
                 kind="reject"
@@ -858,7 +858,7 @@ const styles = {
   },
 
   // The comments control (NV-19) reads as a status chip in the accent color —
-  // distinct from the red fix-now badges. Doubles as the "+ comment" CTA when
+  // distinct from the red must-fix badges. Doubles as the "+ comment" CTA when
   // there are none yet.
   noteChip: {
     display: 'inline-flex',

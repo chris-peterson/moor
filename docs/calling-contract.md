@@ -48,15 +48,15 @@ git config difftool.moor.cmd 'moor "$LOCAL" "$REMOTE"'
 
 git then calls `moor <left> <right>` for you when you run `git difftool`
 (`--dir-diff` opens the whole range in one session). Because git owns the
-command line here, the caller wires the sidecar through the **`MOOR_CONTEXT`**
+command line here, the caller wires the sidecar through the **`REVIEW_CONTEXT`**
 environment variable rather than a flag:
 
 ```bash
-MOOR_CONTEXT=/path/to/review.json git difftool --dir-diff
+REVIEW_CONTEXT=/path/to/review.json git difftool --dir-diff
 ```
 
 moor itself ships no git-range launcher — the caller supplies the wrapper that
-sets `MOOR_CONTEXT`, runs `git difftool`, and reads the verdict back.
+sets `REVIEW_CONTEXT`, runs `git difftool`, and reads the verdict back.
 
 ### Directly on the CLI (arbitrary two-path diffs)
 
@@ -72,7 +72,7 @@ moor --context /path/to/review.json old-dir/ new-dir/
 moor resolves the sidecar path by checking, in order (`IM-01`):
 
 1. the `--context <path>` CLI flag (also accepted as `--context=<path>`), then
-2. the `MOOR_CONTEXT` environment variable.
+2. the `REVIEW_CONTEXT` environment variable.
 
 The first one set wins. When neither is set, moor runs as a plain viewer and
 shows a warning banner in its header so the disconnect is visible during the
@@ -122,14 +122,14 @@ time on exit. A representative finalized `output`:
     "comments": [
       {
         "body": "This still races with a concurrent read — invalidate under the lock.",
-        "action": "fix-now",
+        "action": "must-fix",
         "file": "src/cache.js",
         "startLine": 42,
         "endLine": 45
       },
       {
-        "body": "Consider a metric here.",
-        "action": "consider",
+        "body": "A metric here would help.",
+        "action": "suggestion",
         "file": "src/cache.js"
       }
     ],
@@ -167,11 +167,12 @@ Each comment is `{ body, action, target?, file?, startLine?, endLine? }`
 
 | `action` | Meaning | Effect on exit code |
 |----------|---------|---------------------|
-| `fix-now` | Must be addressed before shipping | Gates the exit code (drives `1`) |
-| `fix-later` | Must be addressed, but need not block this ship | None |
-| `consider` | Advisory | None |
+| `must-fix` | Must be addressed before shipping | Gates the exit code (drives `1`) |
+| `suggestion` | A recommended change | None |
+| `nit` | A trivial / style point | None |
+| `question` | A query for the author | None |
 
-The caller interprets the comments — for an agent caller, `fix-now` comments
+The caller interprets the comments — for an agent caller, `must-fix` comments
 read as concrete, line-anchored instructions to address before the change ships.
 
 ### Commit-message rewrite
@@ -201,15 +202,15 @@ matches the `exitCode` written into the sidecar:
 
 | Code | Outcome | Requirement |
 |------|---------|-------------|
-| `0` | All changes reviewed, no `fix-now` comments — clean approve | `EC-01` |
-| `1` | One or more `fix-now` comments | `EC-02` |
-| `2` | One or more unreviewed changes, no `fix-now` comments | `EC-03` |
+| `0` | All changes reviewed, no `must-fix` comments — clean approve | `EC-01` |
+| `1` | One or more `must-fix` comments | `EC-02` |
+| `2` | One or more unreviewed changes, no `must-fix` comments | `EC-03` |
 | `3` | Closed before review began (no interaction) | `EC-04` |
 
 A caller branches on the code:
 
 - **`0`** — proceed; the change is approved.
-- **`1`** — do not ship as-is; read the `fix-now` comments and address them, then
+- **`1`** — do not ship as-is; read the `must-fix` comments and address them, then
   re-review.
 - **`2`** — the review is incomplete; the caller decides whether to treat an
   incomplete review as a block or to re-launch for another pass.
@@ -228,7 +229,7 @@ sequenceDiagram
     participant M as moor
     participant F as Sidecar file
     C->>F: write input title and details
-    C->>M: launch with MOOR_CONTEXT or --context
+    C->>M: launch with REVIEW_CONTEXT or --context
     M->>F: read input section
     Note over M: reviewer walks the diff
     M->>F: flush output comments, no exitCode
@@ -244,13 +245,13 @@ sequenceDiagram
    `/tmp/review-abc.json`) and writes the `input` section — `title` and the
    `details` rows describing the change.
 2. **Caller names the sidecar and launches moor.** For a git-range review it
-   exports `MOOR_CONTEXT=/tmp/review-abc.json` and runs `git difftool
+   exports `REVIEW_CONTEXT=/tmp/review-abc.json` and runs `git difftool
    --dir-diff`; for a direct diff it passes `--context /tmp/review-abc.json` on
    moor's command line.
 3. **moor reads the input** on launch and renders the header from `title` and
    `details`.
 4. **The reviewer works.** They walk each change, mark hunks reviewed, and leave
-   comments with `fix-now` / `fix-later` / `consider` actions.
+   comments with `must-fix` / `suggestion` / `nit` / `question` actions.
 5. **moor flushes output continuously.** After every review-state or comment
    change it rewrites the `output` section (comments, and `commitMessage` if the
    message was edited) — without `exitCode`, since the review is still open.
@@ -258,7 +259,7 @@ sequenceDiagram
    `exitCode`, and the process exits with the matching code.
 7. **Caller reads the output back and acts.** It reads `output` from the sidecar
    (or observes the process exit code), branches on the code, and applies the
-   `fix-now` comments and any `commitMessage.edited` rewrite.
+   `must-fix` comments and any `commitMessage.edited` rewrite.
 
 ## Reference
 

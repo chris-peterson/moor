@@ -448,8 +448,8 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   useEffect(() => {
     if (onNavigateNext) return;
     const unreviewed = Math.max(0, hunkRanges.length - reviewedHunks.size);
-    const fixNow = fileComments.filter(c => isBlocking(c.action) && (c.body || '').trim()).length;
-    window.__moorQuitState = { fixNow, unreviewed, comments: fileComments.map(commentToOutput).filter(c => c.body) };
+    const blocking = fileComments.filter(c => isBlocking(c.action) && (c.body || '').trim()).length;
+    window.__moorQuitState = { blocking, unreviewed, comments: fileComments.map(commentToOutput).filter(c => c.body) };
     return () => { window.__moorQuitState = null; };
   }, [hunkRanges, reviewedHunks, fileComments, onNavigateNext]);
 
@@ -494,7 +494,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   // tint, the bar, and the minimap markers. The in-progress composer counts too,
   // so the range bands while you type.
   const rowActionMap = useMemo(() => {
-    const rank = { 'consider': 0, 'fix-later': 1, 'fix-now': 2 };
+    const rank = { 'question': 0, 'nit': 1, 'suggestion': 2, 'must-fix': 3 };
     const map = new Map();
     const apply = (startRow, endRow, action) => {
       if (startRow == null) return;
@@ -652,7 +652,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       return;
     }
     const isFirstScrollForFile = scrolledForKey.current !== fileKeyId;
-    // IM.OUT-03: a fix-now badge navigates to a specific row — scroll straight
+    // IM.OUT-03: a must-fix badge navigates to a specific row — scroll straight
     // to it on the first pass for the file.
     if (isFirstScrollForFile && startAtRow != null) {
       scrollContainerRef.current.scrollTop = Math.max(0, rowLayout.rowTop(startAtRow) - ROW_HEIGHT);
@@ -1130,7 +1130,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const onResizerDown = collapseLayout ? undefined : handleResizerMouseDown;
   const resizerCursor = collapseLayout ? 'default' : 'col-resize';
 
-  const fileFixNowCount = fileComments.filter(c => isBlocking(c.action) && (c.body || '').trim()).length;
+  const fileBlockingCount = fileComments.filter(c => isBlocking(c.action) && (c.body || '').trim()).length;
 
   // For a collapsed (new/deleted) file the empty side carries no path label — a
   // narrow strip would only truncate "(empty)" — and the file-comment / preview
@@ -1456,7 +1456,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
         color: 'var(--text-primary)',
         gap: '12px',
       }}>
-        {fileFixNowCount > 0 && (
+        {fileBlockingCount > 0 && (
           <span style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -1467,7 +1467,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
             fontSize: '10px',
             fontWeight: 600,
           }}>
-            {fileFixNowCount} fix-now
+            {fileBlockingCount} must-fix
           </span>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1529,7 +1529,7 @@ function CollapsedPanePlaceholder({ kind, left, width, top, bottom }) {
 // CO-06: the inline composer — an auto-growing text area plus the action
 // control. Enter confirms; Shift+Enter inserts a newline; Escape confirms a
 // non-empty comment or discards an empty one (closeComposer decides). Tab
-// down-classifies the action (fix-now → fix-later → consider → fix-now);
+// down-classifies the action (must-fix → suggestion → nit → question → must-fix);
 // Shift+Tab walks back up.
 function CommentComposer({ composing, composerRef, onResize, onSetAction, onClose }) {
   return (
@@ -1626,7 +1626,7 @@ function CommentBar({ comment, onEdit, onCycleAction, onDelete }) {
         <button
           type="button"
           onClick={onCycleAction}
-          title="Cycle action: consider → fix later → fix now"
+          title="Cycle action: question → nit → suggestion → must fix"
           style={actionChipStyle(comment.action, { flexShrink: 0, padding: '1px 6px', cursor: 'pointer' })}
         >{actionLabel(comment.action)}</button>
         <span onClick={onEdit} style={{ flex: 1, whiteSpace: 'pre-wrap', color: 'var(--text-primary)', cursor: 'text' }}>{comment.body}</span>
