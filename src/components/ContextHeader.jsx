@@ -34,10 +34,43 @@ export function commitMessageOf(context) {
 
 // Split a commit message back into subject (first line) and body (the rest,
 // leading blank lines trimmed) for display.
-function splitMessage(message) {
+export function splitMessage(message) {
   const nl = message.indexOf('\n');
   if (nl === -1) return { title: message, body: '' };
   return { title: message.slice(0, nl), body: message.slice(nl + 1).replace(/^\n+/, '') };
+}
+
+// CO-10: the inline commit-message editor body — a textarea seeded with the
+// current message plus Save / Cancel. Shared by the change header and the
+// approve dialog (issue #6) so the two edit surfaces cannot drift: both seed
+// from the same effective message and write the reviewer's rewrite through the
+// same onEditMessage path. ⌘/Ctrl+Enter saves (plain Enter is a newline — this
+// is prose); Escape cancels. Keys are kept out of the diff view.
+export function MessageEditTextarea({ defaultValue, onSave, onCancel }) {
+  const editRef = useRef(null);
+  const save = () => onSave(editRef.current?.value ?? '');
+  return (
+    <div style={styles.editWrap}>
+      <textarea
+        ref={editRef}
+        defaultValue={defaultValue}
+        rows={Math.min(16, Math.max(3, defaultValue.split('\n').length + 1))}
+        autoFocus
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
+          else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+          e.stopPropagation();
+        }}
+        style={styles.editTextarea}
+      />
+      <div style={styles.editActions}>
+        <span style={styles.editHint}>Edit the commit message · ⌘/Ctrl+Enter saves · Esc cancels</span>
+        <span style={{ flex: 1 }} />
+        <button type="button" onClick={onCancel} style={styles.editButton}>Cancel</button>
+        <button type="button" onClick={save} style={{ ...styles.editButton, ...styles.editButtonPrimary }}>Save message</button>
+      </div>
+    </div>
+  );
 }
 
 // Whether expanding the header would reveal anything. A present change title is
@@ -82,7 +115,6 @@ export function ContextHeader({
   // for a textarea; the draft lives in the textarea until saved so a cancel
   // leaves the stored edit untouched.
   const [editing, setEditing] = useState(false);
-  const editRef = useRef(null);
 
   if (!channelConfigured) {
     return (
@@ -125,7 +157,6 @@ export function ContextHeader({
   const shown = splitMessage(effectiveMessage);
   const body = shown.body || null;
 
-  const saveEdit = () => { onEditMessage?.(editRef.current?.value ?? ''); setEditing(false); };
   const cancelEdit = () => setEditing(false);
   const secondary = details.filter(d => {
     const l = String(d.label).toLowerCase();
@@ -169,28 +200,11 @@ export function ContextHeader({
               </div>
             )}
             {editing ? (
-              <div style={styles.editWrap}>
-                <textarea
-                  ref={editRef}
-                  defaultValue={effectiveMessage}
-                  rows={Math.min(16, Math.max(3, effectiveMessage.split('\n').length + 1))}
-                  autoFocus
-                  onKeyDown={(e) => {
-                    // Cmd/Ctrl+Enter saves (plain Enter is a newline — this is
-                    // prose); Escape cancels. Keys stay out of the diff view.
-                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(); }
-                    else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
-                    e.stopPropagation();
-                  }}
-                  style={styles.editTextarea}
-                />
-                <div style={styles.editActions}>
-                  <span style={styles.editHint}>Edit the commit message · ⌘/Ctrl+Enter saves · Esc cancels</span>
-                  <span style={{ flex: 1 }} />
-                  <button type="button" onClick={cancelEdit} style={styles.editButton}>Cancel</button>
-                  <button type="button" onClick={saveEdit} style={{ ...styles.editButton, ...styles.editButtonPrimary }}>Save message</button>
-                </div>
-              </div>
+              <MessageEditTextarea
+                defaultValue={effectiveMessage}
+                onSave={(text) => { onEditMessage?.(text); setEditing(false); }}
+                onCancel={cancelEdit}
+              />
             ) : (
               <>
                 <div style={styles.headline}>
