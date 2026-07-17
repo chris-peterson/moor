@@ -60,10 +60,24 @@ suite:
     - { t: claude, text: "Refactored the date parser — here's the diff." }
     - { t: thought, text: "let me actually read it" }
     - { t: cmd, cmd: "MOOR_CONTEXT=review.json git difftool --dir-diff", out: "Opens the change in moor." }
-    - { t: moor, del: "return new Date(s)", add: "return parseISO(s)", rej: "reject — non-ISO inputs still reach here → sent back as a fix" }
+    - t: moor
+      file: date.js
+      lines:
+        - { ln: 12, text: "export function toDate(s) {" }
+        - { ln: 13, text: "return new Date(s)", del: true }
+        - { ln: 14, text: "return parseISO(s)", add: true }
+        - { ln: 15, text: "}" }
+      comment: { ln: 14, action: fix-now, body: "non-ISO inputs still reach here → sent back as a fix" }
     - { t: thought, text: "the fix-now's right — parseISO never applies ISO_DATE" }
     - { t: claude, text: "You're right — guarding parseISO so a non-ISO string throws instead of silently building a Date:" }
-    - { t: moor, del: "return new Date(s)", add: "if (!ISO_DATE.test(s)) throw new RangeError('not ISO-8601')", rej: "✓ re-review clean — non-ISO now rejected" }
+    - t: moor
+      file: date.js
+      lines:
+        - { ln: 12, text: "export function toDate(s) {" }
+        - { ln: 13, text: "return new Date(s)", del: true }
+        - { ln: 14, text: "if (!ISO_DATE.test(s)) throw new RangeError('not ISO-8601')", add: true }
+        - { ln: 15, text: "}" }
+      verdict: "re-review clean"
 
 docs:
   code_languages: [bash, json, javascript]
