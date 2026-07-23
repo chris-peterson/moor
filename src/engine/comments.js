@@ -1,32 +1,35 @@
 // The comment model (CO-01..08): review feedback anchored to the changeset, a
-// file, or a line range, distinguished by an `action`. Comments reconcile the
-// former per-hunk rejections (now `fix-now`) and free-text notes (now
-// `consider`). This module is the single home for the action vocabulary, its
-// color/label mapping, and the output projection.
+// file, or a line range, distinguished by an `action`. The action vocabulary is
+// the review-sidecar contract's severity taxonomy (see docs/review-sidecar-
+// contract.md), aligned with the wider agent-diff ecosystem (diffity's
+// must-fix / suggestion / nit / question). This module is the single home for
+// that vocabulary, its color/label mapping, and the output projection.
 
-export const ACTIONS = ['consider', 'fix-later', 'fix-now'];
+// Ascending severity: the reviewer escalates question → nit → suggestion →
+// must-fix (Tab down-classifies the other way).
+export const ACTIONS = ['question', 'nit', 'suggestion', 'must-fix'];
 // Severity order, most-actionable first — the left-to-right order the composer
-// renders the action buttons in (fix now → fix later → consider).
-export const ACTIONS_BY_SEVERITY = ['fix-now', 'fix-later', 'consider'];
+// renders the action buttons in (must-fix → suggestion → nit → question).
+export const ACTIONS_BY_SEVERITY = ['must-fix', 'suggestion', 'nit', 'question'];
 // New comments start at the most actionable tier; the reviewer down-classifies
 // (Tab in the composer) toward advisory as warranted.
-export const DEFAULT_ACTION = 'fix-now';
+export const DEFAULT_ACTION = 'must-fix';
 
-// `fix-now` is the only action that gates the exit code (EC-01/02) and earns
-// the red treatment / header badges. `fix-later` and `consider` are advisory.
+// `must-fix` is the only action that gates the exit code (EC-01/02) and earns
+// the red treatment / header badges. suggestion / nit / question are advisory.
 export function isBlocking(action) {
-  return action === 'fix-now';
+  return action === 'must-fix';
 }
 
 // Cycle order matches the escalation the action control walks through:
-// consider → fix-later → fix-now → consider.
+// question → nit → suggestion → must-fix → question.
 export function cycleAction(action) {
   const i = ACTIONS.indexOf(action);
   return ACTIONS[(i + 1) % ACTIONS.length];
 }
 
 // The reverse walk — down-classification toward advisory:
-// fix-now → fix-later → consider → fix-now.
+// must-fix → suggestion → nit → question → must-fix.
 export function cycleActionDown(action) {
   const i = ACTIONS.indexOf(action);
   return ACTIONS[(i - 1 + ACTIONS.length) % ACTIONS.length];
@@ -34,32 +37,35 @@ export function cycleActionDown(action) {
 
 export function actionLabel(action) {
   switch (action) {
-    case 'fix-now': return 'fix now';
-    case 'fix-later': return 'fix later';
-    default: return 'consider';
+    case 'must-fix': return 'must fix';
+    case 'suggestion': return 'suggestion';
+    case 'nit': return 'nit';
+    default: return 'question';
   }
 }
 
-// Reuse the existing palette: conflict red for the blocker, the amber `left`
-// hue for fix-later, accent blue for the advisory tier.
+// Reuse the existing palette: conflict red for the blocker, accent blue for a
+// suggestion, the amber `left` hue for a nit, teal `right` for a question.
 export function actionColor(action) {
   switch (action) {
-    case 'fix-now': return 'var(--color-conflict)';
-    case 'fix-later': return 'var(--color-left)';
-    default: return 'var(--color-accent)';
+    case 'must-fix': return 'var(--color-conflict)';
+    case 'suggestion': return 'var(--color-accent)';
+    case 'nit': return 'var(--color-left)';
+    default: return 'var(--color-right)';
   }
 }
 
 export function actionBg(action) {
   switch (action) {
-    case 'fix-now': return 'var(--color-conflict-bg)';
-    case 'fix-later': return 'var(--color-left-bg)';
-    default: return 'var(--color-accent-bg)';
+    case 'must-fix': return 'var(--color-conflict-bg)';
+    case 'suggestion': return 'var(--color-accent-bg)';
+    case 'nit': return 'var(--color-left-bg)';
+    default: return 'var(--color-right-bg)';
   }
 }
 
 export function actionBorder(action) {
-  return action === 'consider' ? 'var(--color-accent-border)' : actionColor(action);
+  return action === 'suggestion' ? 'var(--color-accent-border)' : actionColor(action);
 }
 
 // The action badge shared across the composer, the comment bars, the comments

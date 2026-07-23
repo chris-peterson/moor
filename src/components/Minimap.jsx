@@ -14,7 +14,13 @@ const typeToColor = {
 // change bands line up with the diff rows, which begin below that header. The
 // minimap still stretches to the full column height — the offset is handled in
 // the math, not by shrinking the element (which would collapse its canvas).
-export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, topOffset = 0, onScrollTo, reviewedRows, commentRowColors }) {
+export function Minimap({ rows, totalHeight, contentHeight, rowOffsets, viewportHeight, scrollTop, topOffset = 0, onScrollTo, reviewedRows, commentRowColors }) {
+  // #3: the scrollable content is the code rows plus the space reserved for
+  // comment overlays. Map against that full height so the viewport indicator and
+  // click-to-scroll track real scroll, and offset each row band by the overlays
+  // above it (rowOffsets) so the bands stay aligned with the shifted rows.
+  const scrollHeight = contentHeight ?? totalHeight;
+  const offsetAt = (i) => (rowOffsets ? rowOffsets[i] || 0 : 0);
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const [containerHeight, setContainerHeight] = useState(0);
@@ -35,7 +41,7 @@ export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, topOffse
   // at real size (mirroring the diff view) instead of ballooning a few changed
   // lines into a full-height block.
   const availableHeight = Math.max(0, containerHeight - topOffset);
-  const scale = availableHeight > 0 && totalHeight > 0 ? Math.min(1, availableHeight / totalHeight) : 1;
+  const scale = availableHeight > 0 && scrollHeight > 0 ? Math.min(1, availableHeight / scrollHeight) : 1;
 
   const colorMap = useMemo(() => {
     return rows.map((row, i) => {
@@ -59,7 +65,8 @@ export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, topOffse
 
     // ROW_HEIGHT (= totalHeight / rows.length) scaled by the fit factor: rows
     // shrink to fit a long file, but never stretch beyond their real size.
-    const rowHeight = rows.length > 0 ? (totalHeight / rows.length) * scale : 1;
+    const baseRowHeight = rows.length > 0 ? totalHeight / rows.length : 1;
+    const rowHeight = baseRowHeight * scale;
     const style = getComputedStyle(document.documentElement);
     const resolvedColors = new Map();
     const resolve = (cssValue) => {
@@ -77,12 +84,12 @@ export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, topOffse
 
       ctx.globalAlpha = reviewedRows && reviewedRows.has(i) ? 0.5 : 1;
       ctx.fillStyle = color;
-      const y = topOffset + i * rowHeight;
+      const y = topOffset + (i * baseRowHeight + offsetAt(i)) * scale;
       const h = Math.max(1, rowHeight);
       ctx.fillRect(0, y, MINIMAP_WIDTH, h);
     }
     ctx.globalAlpha = 1;
-  }, [colorMap, containerHeight, rows.length, reviewedRows, totalHeight, scale, topOffset]);
+  }, [colorMap, containerHeight, rows.length, reviewedRows, totalHeight, scale, topOffset, rowOffsets]);
 
   const viewportIndicatorTop = topOffset + scrollTop * scale;
   const viewportIndicatorHeight = Math.max(10, viewportHeight * scale);
@@ -91,10 +98,10 @@ export function Minimap({ rows, totalHeight, viewportHeight, scrollTop, topOffse
     const rect = containerRef.current.getBoundingClientRect();
     const y = clientY - rect.top - topOffset;
     const targetScroll = availableHeight > 0
-      ? (y / availableHeight) * totalHeight - viewportHeight / 2
+      ? (y / availableHeight) * scrollHeight - viewportHeight / 2
       : 0;
-    onScrollTo(Math.max(0, Math.min(Math.max(0, totalHeight - viewportHeight), targetScroll)));
-  }, [availableHeight, topOffset, totalHeight, viewportHeight, onScrollTo]);
+    onScrollTo(Math.max(0, Math.min(Math.max(0, scrollHeight - viewportHeight), targetScroll)));
+  }, [availableHeight, topOffset, scrollHeight, viewportHeight, onScrollTo]);
 
   const handleClick = useCallback((e) => scrollFromEvent(e.clientY), [scrollFromEvent]);
 

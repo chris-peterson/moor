@@ -6,20 +6,20 @@ function buildQuitMessage() {
   if (!state) return null;
 
   const parts = [];
-  if (state.fixNow > 0) {
-    parts.push(`${state.fixNow} fix-now`);
+  if (state.blocking > 0) {
+    parts.push(`${state.blocking} must-fix`);
   }
   if (state.unreviewed > 0) {
     parts.push(`${state.unreviewed} unreviewed`);
   }
   if (parts.length === 0) return null;
-  return `${parts.join(', ')} change${(state.fixNow + state.unreviewed) === 1 ? '' : 's'}.\n\nQuit anyway?`;
+  return `${parts.join(', ')} change${(state.blocking + state.unreviewed) === 1 ? '' : 's'}.\n\nQuit anyway?`;
 }
 
 function computeExitCode() {
   const state = window.__moorQuitState;
   if (!state || state.noInteraction) return 3;
-  if (state.fixNow > 0) return 1;
+  if (state.blocking > 0) return 1;
   if (state.unreviewed > 0) return 2;
   return 0;
 }
@@ -60,7 +60,7 @@ export function App() {
       } else {
         // A two-file comparison is a one-file directory diff. Route it through
         // the same ReviewShell as directory mode so it gets hunk counting,
-        // comment capture, and the MOOR_CONTEXT verdict. A bare FileDiffView
+        // comment capture, and the REVIEW_CONTEXT verdict. A bare FileDiffView
         // has none of that machinery and always exits 3 (review never counted).
         // Base the displayed paths on each file's parent dir so the sidebar and
         // header show the filename rather than an empty string.

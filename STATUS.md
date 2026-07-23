@@ -175,7 +175,7 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 
 | Req | Description | Status |
 |-----|-------------|--------|
-| [IM-01] | Channel resolution: `--context` flag, then `MOOR_CONTEXT` env var | Done |
+| [IM-01] | Channel resolution: `--context` flag, then `REVIEW_CONTEXT` env var | Done |
 | [IM-02] | Warning banner when no context channel is configured | Done |
 | [IM.IN-01] | Render `input.title` + `input.details` in header (caller-defined shape); reveal via hover/click/`d`-`D` | Done |
 | [IM.IN-02] | Label-less changeset header: location eyebrow + message headline always visible; expand reveals body + provenance grid | Done |
