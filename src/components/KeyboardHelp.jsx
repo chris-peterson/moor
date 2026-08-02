@@ -18,7 +18,7 @@ const GROUPS = [
     rows: [
       [['Space', '⏎'], 'Comment on current change'],
       [['drag'], 'Drag the line gutter to comment on a range'],
-      [['Tab', '⇧Tab'], 'Cycle action while composing (fix now → fix later → consider)'],
+      [['Tab', '⇧Tab'], 'Cycle action while composing (question → nit → suggestion → must fix)'],
       [['c'], 'Comment on the whole changeset'],
       [['m'], 'Comment on the commit message'],
       [['n'], 'Manage comments (edit / set action / delete)'],
@@ -90,7 +90,7 @@ const styles = {
   backdrop: {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(0, 0, 0, 0.55)',
+    background: 'var(--overlay-scrim)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

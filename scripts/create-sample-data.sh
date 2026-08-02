@@ -119,7 +119,7 @@ export const CONFIG = {
 };
 EOF
 
-# A sample MOOR_CONTEXT sidecar so the redesigned change header has data to
+# A sample REVIEW_CONTEXT sidecar so the redesigned change header has data to
 # render: the location eyebrow (repo @ branch), the task, the commit-message
 # headline, and the provenance rows (commit / author; range is suppressed) plus
 # a multi-line body revealed on expand. The rationale intentionally describes

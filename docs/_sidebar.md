@@ -1,5 +1,6 @@
 - [Home](/)
 - [Keyboard shortcuts](/keyboard)
 - [Calling contract](/calling-contract)
+- [Review-sidecar contract](/review-sidecar-contract)
 - [Ambient rules](/ambient-rules)
 - [SPEC](/spec)

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Sidebar from './Sidebar.jsx';
 import FileDiffView from './FileDiffView.jsx';
 import FileNavbar from './FileNavbar.jsx';
-import ContextHeader, { hasExpandableDetails, commitMessageOf } from './ContextHeader.jsx';
+import ContextHeader, { hasExpandableDetails, commitMessageOf, MessageEditTextarea, splitMessage } from './ContextHeader.jsx';
 import KeyboardHelp from './KeyboardHelp.jsx';
 import { computeLineChanges, countDisplayHunks, computeContentLineStats, BINARY_SENTINEL } from '../engine/diff.js';
 import { DEFAULT_ACTION, isBlocking, commentToOutput, actionLabel, actionChipStyle, cycleAction } from '../engine/comments.js';
@@ -106,7 +106,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   const toggleDetails = useCallback(() => setDetailsExpanded(v => !v), []);
 
   // CO-06: create a comment. `partial` carries body / action / target overrides;
-  // a bare call seeds a `fix-now` changeset comment (DEFAULT_ACTION) to type into.
+  // a bare call seeds a `must-fix` changeset comment (DEFAULT_ACTION) to type into.
   const addComment = useCallback((partial = {}) => {
     const id = ++commentIdRef.current;
     setComments(prev => [...prev, {
@@ -312,8 +312,8 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     setCurrentIndex(index);
   }, [files.length]);
 
-  // IM.OUT-03: jump to a file's first fix-now comment (its anchor row).
-  const navigateToFixNow = useCallback((fileIndex) => {
+  // IM.OUT-03: jump to a file's first must-fix comment (its anchor row).
+  const navigateToBlocking = useCallback((fileIndex) => {
     if (fileIndex < 0 || fileIndex >= files.length) return;
     const key = files[fileIndex].rightPath || files[fileIndex].leftPath;
     const rows = comments
@@ -354,18 +354,18 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     [comments, currentFileKey],
   );
 
-  const fixNowComments = useMemo(() => comments.filter(c => isBlocking(c.action) && (c.body || '').trim()), [comments]);
-  const totalFixNow = fixNowComments.length;
+  const blockingComments = useMemo(() => comments.filter(c => isBlocking(c.action) && (c.body || '').trim()), [comments]);
+  const totalBlocking = blockingComments.length;
 
-  // RV-04: files carrying a fix-now comment go red in the sidebar.
-  const fixNowFiles = useMemo(() => {
-    const paths = new Set(fixNowComments.map(c => c.target?.file).filter(Boolean));
+  // RV-04: files carrying a must-fix comment go red in the sidebar.
+  const blockingFiles = useMemo(() => {
+    const paths = new Set(blockingComments.map(c => c.target?.file).filter(Boolean));
     const set = new Set();
     files.forEach((file, i) => {
       if (paths.has(file.rightPath || file.leftPath)) set.add(i);
     });
     return set;
-  }, [fixNowComments, files]);
+  }, [blockingComments, files]);
 
   const totalChanges = Object.values(hunkCounts).reduce((a, b) => a + b, 0);
   const reviewedChanges = Object.values(perFileReviewedHunks).reduce((n, s) => n + s.size, 0);
@@ -383,10 +383,10 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
 
   const hunkCountingDone = Object.keys(hunkCounts).length >= files.length;
 
-  // IM.OUT-03: one badge per file with fix-now comments, in the header.
-  const fixNowBadges = useMemo(() => {
+  // IM.OUT-03: one badge per file with must-fix comments, in the header.
+  const blockingBadges = useMemo(() => {
     const counts = new Map();
-    for (const c of fixNowComments) {
+    for (const c of blockingComments) {
       const f = c.target?.file;
       if (f) counts.set(f, (counts.get(f) || 0) + 1);
     }
@@ -398,21 +398,21 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
       }
     });
     return badges;
-  }, [fixNowComments, files]);
+  }, [blockingComments, files]);
 
   useEffect(() => {
     if (!hunkCountingDone && files.length > 0) {
-      window.__moorQuitState = { noInteraction: true, fixNow: 0, unreviewed: files.length, comments: [] };
+      window.__moorQuitState = { noInteraction: true, blocking: 0, unreviewed: files.length, comments: [] };
       return () => { window.__moorQuitState = null; };
     }
     const unreviewed = Math.max(0, totalChanges - reviewedChanges);
     window.__moorQuitState = {
-      fixNow: totalFixNow,
+      blocking: totalBlocking,
       unreviewed,
       comments: outComments,
     };
     return () => { window.__moorQuitState = null; };
-  }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalFixNow, outComments]);
+  }, [hunkCountingDone, files, totalChanges, reviewedChanges, totalBlocking, outComments]);
 
   useEffect(() => {
     if (!api?.writeOutput) return;
@@ -435,7 +435,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   const unreviewedCount = Math.max(0, totalChanges - reviewedChanges);
 
   const requestClose = useCallback(() => {
-    // Any feedback at all (fix-now or advisory) routes through the send-feedback
+    // Any feedback at all (must-fix or advisory) routes through the send-feedback
     // dialog. Only a feedback-free close with unreviewed hunks gets the plain
     // quit-anyway prompt.
     if (outComments.length > 0) {
@@ -448,11 +448,11 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   }, [outComments.length, unreviewedCount, closeWithExitCode]);
 
   // The top-bar verdict. Approve is the affirmative close: finalize clean (exit
-  // 0), carrying any advisory comments. It is disabled while fix-now comments
+  // 0), carrying any advisory comments. It is disabled while must-fix comments
   // block the change — resolving or dropping them is the way forward.
-  const approveDisabled = totalFixNow > 0;
+  const approveDisabled = totalBlocking > 0;
   const handleApprove = useCallback(() => {
-    if (totalFixNow > 0) return;
+    if (totalBlocking > 0) return;
     // Approving without having viewed everything is legitimate but easy to do by
     // accident — confirm first, showing how much was actually reviewed. A fully
     // reviewed changeset approves straight through.
@@ -461,20 +461,20 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     } else {
       closeWithExitCode(0);
     }
-  }, [totalFixNow, unreviewedCount, closeWithExitCode]);
+  }, [totalBlocking, unreviewedCount, closeWithExitCode]);
 
   // Reject requests changes, and a rejection needs an actionable reason. With
-  // fix-now feedback already present, confirm and send it (EC-02, exit 1);
+  // must-fix feedback already present, confirm and send it (EC-02, exit 1);
   // otherwise seed a blocking changeset comment and open the panel so the
   // reviewer states why before the review can finalize.
   const handleReject = useCallback(() => {
-    if (totalFixNow > 0) {
+    if (totalBlocking > 0) {
       setQuitDialog({ mode: 'feedback' });
     } else {
-      addComment({ action: 'fix-now', target: { type: 'changeset' } });
+      addComment({ action: 'must-fix', target: { type: 'changeset' } });
       setCommentsPanelOpen(true);
     }
-  }, [totalFixNow, addComment]);
+  }, [totalBlocking, addComment]);
 
   useEffect(() => {
     window.__moorConfirmClose = requestClose;
@@ -486,7 +486,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   }, [requestClose]);
 
   // DD-12: the send-feedback dialog reveals every comment the author will
-  // receive — fix-now and advisory alike — grouped by file, with the
+  // receive — must-fix and advisory alike — grouped by file, with the
   // changeset-level ones in their own bucket. Each item carries its action so
   // the reviewer sees the disposition, not just the text.
   const feedbackSummary = useMemo(() => {
@@ -628,11 +628,11 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
       <ContextHeader
         context={inputContext}
         channelConfigured={channelConfigured}
-        fixNowBadges={fixNowBadges}
+        blockingBadges={blockingBadges}
         viewedChanges={reviewedChanges}
         totalChanges={totalChanges}
         allViewed={allReviewed}
-        onNavigateToFixNow={navigateToFixNow}
+        onNavigateToBlocking={navigateToBlocking}
         detailsExpanded={detailsExpanded}
         onToggleDetails={toggleDetails}
         lineStats={totalLineStats}
@@ -680,7 +680,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
               files={files}
               currentIndex={currentIndex}
               viewed={viewed}
-              fixNowFiles={fixNowFiles}
+              blockingFiles={blockingFiles}
               onSelect={navigateTo}
               width={sidebarWidth}
               onCollapse={() => setSidebarCollapsed(true)}
@@ -737,13 +737,16 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
       {quitDialog && (
         <QuitDialog
           mode={quitDialog.mode}
-          fixNowCount={totalFixNow}
+          blockingCount={totalBlocking}
           unreviewedCount={unreviewedCount}
           feedbackSummary={feedbackSummary}
+          originalMessage={originalMessage}
+          editedMessage={editedMessage}
+          onEditMessage={setEditedMessage}
           onCancel={() => setQuitDialog(null)}
-          // Sending feedback keeps the spec's exit-code verdict: fix-now blocks
+          // Sending feedback keeps the spec's exit-code verdict: must-fix blocks
           // (1), otherwise unreviewed hunks signal incomplete (2), else clean (0).
-          onSendReviewFeedback={() => closeWithExitCode(totalFixNow > 0 ? 1 : unreviewedCount > 0 ? 2 : 0)}
+          onSendReviewFeedback={() => closeWithExitCode(totalBlocking > 0 ? 1 : unreviewedCount > 0 ? 2 : 0)}
           onQuitAnyway={() => closeWithExitCode(2)}
           onApproveAnyway={() => closeWithExitCode(0)}
         />
@@ -772,7 +775,113 @@ const contentMessageStyle = (color) => ({
   fontFamily: 'var(--font-ui)',
 });
 
-function QuitDialog({ mode, fixNowCount, unreviewedCount, feedbackSummary, onCancel, onSendReviewFeedback, onQuitAnyway, onApproveAnyway }) {
+// Shared dialog chrome (issue #6): the quit / feedback / approve modes render
+// through one set of tokens so they read as a single finished surface.
+const dialogStyles = {
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'var(--overlay-scrim)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2000,
+    fontFamily: 'var(--font-ui)',
+  },
+  dialog: {
+    background: 'var(--bg-surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    padding: '20px 24px',
+    minWidth: '420px',
+    maxWidth: '640px',
+    color: 'var(--text-primary)',
+    boxShadow: 'var(--shadow-modal)',
+  },
+  heading: { margin: '0 0 10px 0', fontSize: '15px', fontWeight: 600, letterSpacing: '0.01em' },
+  body: { fontSize: '13px', lineHeight: 1.5, color: 'var(--text-secondary)' },
+  buttonRow: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '20px' },
+};
+
+// A dialog button with hover feedback, so the button row reads as finished
+// rather than flat. `variant` picks the emphasis; DD-14 keyboard nav still finds
+// it (it renders a real <button>) and autoFocus / onClick pass straight through.
+function DialogButton({ variant = 'default', children, style, ...props }) {
+  const [hover, setHover] = useState(false);
+  const base = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '13px',
+    padding: '6px 14px',
+    borderRadius: '4px',
+    border: '1px solid var(--border)',
+    cursor: 'pointer',
+    transition: 'background 0.12s ease, opacity 0.12s ease',
+  };
+  const variants = {
+    default: { ...base, background: hover ? 'var(--bg-hover)' : 'var(--bg-deep)', color: 'var(--text-primary)' },
+    primary: { ...base, background: 'var(--color-accent)', borderColor: 'var(--color-accent)', color: 'var(--bg-deep)', fontWeight: 600, opacity: hover ? 0.9 : 1 },
+  };
+  return (
+    <button
+      type="button"
+      style={{ ...variants[variant], ...style }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      {...props}
+    >{children}</button>
+  );
+}
+
+// CO-10 at the approve gate (issue #6): the current commit message with an
+// inline edit affordance, so the reviewer's last look before finalizing can
+// also be their last chance to fix the message. Edits flow through the same
+// onEditMessage path as the change-header editor (IM.OUT-07); reverting restores
+// the original and drops the sidecar payload.
+function ApproveMessagePanel({ originalMessage, editedMessage, onEditMessage }) {
+  const [editing, setEditing] = useState(false);
+  const effectiveMessage = editedMessage != null ? editedMessage : (originalMessage || '');
+  const isEdited = editedMessage != null && editedMessage !== originalMessage;
+  if (!effectiveMessage) return null;
+  const { title, body } = splitMessage(effectiveMessage);
+
+  const wrap = { border: '1px solid var(--border)', borderRadius: '4px', background: 'var(--bg-deep)', padding: '10px 12px', marginTop: '4px' };
+  const label = { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' };
+  const labelText = { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' };
+  const editedBadge = { padding: '1px 6px', borderRadius: '3px', background: 'var(--color-accent-bg)', border: '1px solid var(--color-accent-border)', color: 'var(--color-accent)', fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' };
+  const chip = { display: 'inline-flex', alignItems: 'center', background: 'transparent', border: '1px solid var(--color-accent-border)', color: 'var(--color-accent)', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '2px 8px', borderRadius: '3px', cursor: 'pointer' };
+  const subject = { fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' };
+  const bodyText = { fontFamily: 'var(--font-mono)', fontSize: '12px', lineHeight: 1.55, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: '4px 0 0 0', maxHeight: '160px', overflow: 'auto' };
+
+  return (
+    <div style={wrap}>
+      <div style={label}>
+        <span style={labelText}>commit message</span>
+        {isEdited && <span style={editedBadge}>edited</span>}
+        <span style={{ flex: 1 }} />
+        {!editing && (
+          <button type="button" style={chip} onClick={() => setEditing(true)} title="Edit the commit message directly">✎ edit</button>
+        )}
+        {isEdited && !editing && (
+          <button type="button" style={chip} onClick={() => onEditMessage?.(null)} title="Discard your edits and restore the original message">revert</button>
+        )}
+      </div>
+      {editing ? (
+        <MessageEditTextarea
+          defaultValue={effectiveMessage}
+          onSave={(text) => { onEditMessage?.(text); setEditing(false); }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <>
+          <div style={subject}>{title}</div>
+          {body && <div style={bodyText}>{body}</div>}
+        </>
+      )}
+    </div>
+  );
+}
+
+function QuitDialog({ mode, blockingCount, unreviewedCount, feedbackSummary, originalMessage, editedMessage, onEditMessage, onCancel, onSendReviewFeedback, onQuitAnyway, onApproveAnyway }) {
   const dialogRef = useRef(null);
 
   const handleDialogKeyDown = (e) => {
@@ -783,6 +892,9 @@ function QuitDialog({ mode, fixNowCount, unreviewedCount, feedbackSummary, onCan
       onCancel();
       return;
     }
+    // While the message editor is focused, Tab / arrows belong to the textarea
+    // (indent, caret movement), not the dialog's button cycle (DD-14).
+    if (e.target.tagName === 'TEXTAREA') return;
     if (e.key !== 'Tab' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     const root = dialogRef.current;
     if (!root) return;
@@ -797,40 +909,7 @@ function QuitDialog({ mode, fixNowCount, unreviewedCount, feedbackSummary, onCan
     buttons[nextIdx].focus();
   };
 
-  const overlay = {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0, 0, 0, 0.55)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2000,
-    fontFamily: 'var(--font-ui)',
-  };
-  const dialog = {
-    background: 'var(--bg-surface)',
-    border: '1px solid var(--border)',
-    borderRadius: '8px',
-    padding: '20px 24px',
-    minWidth: '420px',
-    maxWidth: '640px',
-    color: 'var(--text-primary)',
-    boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)',
-  };
-  const heading = { margin: '0 0 12px 0', fontSize: '15px', fontWeight: 600 };
-  const body = { fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' };
-  const buttonRow = { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '20px' };
-  const baseBtn = {
-    fontFamily: 'inherit',
-    fontSize: '13px',
-    padding: '6px 14px',
-    borderRadius: '4px',
-    border: '1px solid var(--border)',
-    background: 'var(--bg-deep)',
-    color: 'var(--text-primary)',
-    cursor: 'pointer',
-  };
-  const primaryBtn = { ...baseBtn, background: 'var(--color-accent)', borderColor: 'var(--color-accent)', color: 'var(--bg-deep)', fontWeight: 600 };
+  const { overlay, dialog, heading, body, buttonRow } = dialogStyles;
 
   if (mode === 'approve') {
     return (
@@ -841,12 +920,13 @@ function QuitDialog({ mode, fixNowCount, unreviewedCount, feedbackSummary, onCan
             You have {unreviewedCount} unreviewed hunk{unreviewedCount === 1 ? '' : 's'}.
             Resuming picks up where you left off; approving now finalizes the review as clean.
           </div>
+          <ApproveMessagePanel originalMessage={originalMessage} editedMessage={editedMessage} onEditMessage={onEditMessage} />
           {/* The low-friction default is to keep reviewing (primary + focused):
               finalizing a review you haven't finished should take the extra,
               deliberate reach for the secondary action. */}
           <div style={buttonRow}>
-            <button style={baseBtn} onClick={onApproveAnyway}>Approve anyway</button>
-            <button style={primaryBtn} onClick={onCancel} autoFocus>Resume review</button>
+            <DialogButton onClick={onApproveAnyway}>Approve anyway</DialogButton>
+            <DialogButton variant="primary" onClick={onCancel} autoFocus>Resume review</DialogButton>
           </div>
         </div>
       </div>
@@ -855,14 +935,14 @@ function QuitDialog({ mode, fixNowCount, unreviewedCount, feedbackSummary, onCan
 
   if (mode === 'feedback') {
     const totalComments = feedbackSummary.reduce((n, g) => n + g.count, 0);
-    const summaryLine = fixNowCount > 0
-      ? `${fixNowCount} fix-now comment${fixNowCount === 1 ? '' : 's'} of ${totalComments} total across ${feedbackSummary.length} location${feedbackSummary.length === 1 ? '' : 's'}.`
+    const summaryLine = blockingCount > 0
+      ? `${blockingCount} must-fix comment${blockingCount === 1 ? '' : 's'} of ${totalComments} total across ${feedbackSummary.length} location${feedbackSummary.length === 1 ? '' : 's'}.`
       : `${totalComments} comment${totalComments === 1 ? '' : 's'} across ${feedbackSummary.length} location${feedbackSummary.length === 1 ? '' : 's'}.`;
     return (
       <div style={overlay} onClick={onCancel}>
         <div ref={dialogRef} style={dialog} onClick={(e) => e.stopPropagation()} onKeyDown={handleDialogKeyDown} role="dialog" aria-modal="true">
           <h2 style={heading}>Review feedback</h2>
-          <div style={body}>{summaryLine}</div>
+          <div style={{ ...body, marginBottom: '12px' }}>{summaryLine}</div>
           <div style={{ maxHeight: '320px', overflow: 'auto', border: '1px solid var(--border)', borderRadius: '4px', padding: '10px 12px', background: 'var(--bg-deep)' }}>
             {feedbackSummary.map(({ key, label, count, items }) => (
               <div key={key} style={{ marginBottom: '10px' }}>
@@ -870,10 +950,10 @@ function QuitDialog({ mode, fixNowCount, unreviewedCount, feedbackSummary, onCan
                   {label} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({count})</span>
                 </div>
                 <ul style={{ margin: '4px 0 0 0', paddingLeft: '18px', fontSize: '12px', color: 'var(--text-secondary)', listStyle: 'none' }}>
-                  {items.map(({ id, body, action }) => (
+                  {items.map(({ id, body: itemBody, action }) => (
                     <li key={id} style={{ display: 'flex', gap: '6px', alignItems: 'baseline', marginBottom: '3px' }}>
                       <span style={actionChipStyle(action, { flexShrink: 0, fontSize: '9px', letterSpacing: '0.06em', padding: '1px 5px' })}>{actionLabel(action)}</span>
-                      <span>{body || '(no description)'}</span>
+                      <span>{itemBody || '(no description)'}</span>
                     </li>
                   ))}
                 </ul>
@@ -881,11 +961,11 @@ function QuitDialog({ mode, fixNowCount, unreviewedCount, feedbackSummary, onCan
             ))}
           </div>
           <div style={buttonRow}>
-            <button style={baseBtn} onClick={onCancel}>Cancel</button>
-            {fixNowCount === 0 && unreviewedCount > 0 && (
-              <button style={baseBtn} onClick={onApproveAnyway}>Approve anyway</button>
+            <DialogButton onClick={onCancel}>Cancel</DialogButton>
+            {blockingCount === 0 && unreviewedCount > 0 && (
+              <DialogButton onClick={onApproveAnyway}>Approve anyway</DialogButton>
             )}
-            <button style={primaryBtn} onClick={onSendReviewFeedback} autoFocus>Send review feedback</button>
+            <DialogButton variant="primary" onClick={onSendReviewFeedback} autoFocus>Send review feedback</DialogButton>
           </div>
         </div>
       </div>
@@ -900,9 +980,9 @@ function QuitDialog({ mode, fixNowCount, unreviewedCount, feedbackSummary, onCan
           You have {unreviewedCount} unreviewed hunk{unreviewedCount === 1 ? '' : 's'} remaining.
         </div>
         <div style={buttonRow}>
-          <button style={baseBtn} onClick={onCancel}>Cancel</button>
-          <button style={baseBtn} onClick={onApproveAnyway}>Approve anyway</button>
-          <button style={primaryBtn} onClick={onQuitAnyway} autoFocus>Quit anyway</button>
+          <DialogButton onClick={onCancel}>Cancel</DialogButton>
+          <DialogButton onClick={onApproveAnyway}>Approve anyway</DialogButton>
+          <DialogButton variant="primary" onClick={onQuitAnyway} autoFocus>Quit anyway</DialogButton>
         </div>
       </div>
     </div>
@@ -922,7 +1002,7 @@ function targetLabel(comment, basePath) {
 
 // CO-08: the comments panel manages every comment (changeset / commit message /
 // file / range) — its target, body, and action. Editing is inline; the action
-// chip cycles consider → fix-later → fix-now; deleting confirms first. Adding is
+// chip cycles question → nit → suggestion → must-fix; deleting confirms first. Adding is
 // done from each target's own surface, so the panel is not a target picker.
 function CommentsPanel({ comments, basePath, onUpdate, onSetAction, onDelete, onClose }) {
   const [confirmingId, setConfirmingId] = useState(null);
@@ -939,7 +1019,7 @@ function CommentsPanel({ comments, basePath, onUpdate, onSetAction, onDelete, on
   const overlay = {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(0, 0, 0, 0.55)',
+    background: 'var(--overlay-scrim)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -954,7 +1034,7 @@ function CommentsPanel({ comments, basePath, onUpdate, onSetAction, onDelete, on
     minWidth: '520px',
     maxWidth: '680px',
     color: 'var(--text-primary)',
-    boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)',
+    boxShadow: 'var(--shadow-modal)',
   };
   const heading = { margin: '0 0 6px 0', fontSize: '15px', fontWeight: 600 };
   const sub = { fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' };
@@ -1004,7 +1084,7 @@ function CommentsPanel({ comments, basePath, onUpdate, onSetAction, onDelete, on
         aria-modal="true"
       >
         <h2 style={heading}>Comments</h2>
-        <div style={sub}>Feedback for the author. Set an action — only <strong>fix now</strong> blocks shipping.</div>
+        <div style={sub}>Feedback for the author. Set an action — only <strong>must fix</strong> blocks shipping.</div>
         <div style={list}>
           {comments.length === 0 && (
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px 0' }}>
@@ -1019,7 +1099,7 @@ function CommentsPanel({ comments, basePath, onUpdate, onSetAction, onDelete, on
                 <button
                   type="button"
                   style={actionChip(c.action)}
-                  title="Cycle action: consider → fix later → fix now"
+                  title="Cycle action: question → nit → suggestion → must fix"
                   onClick={() => onSetAction(c.id, cycleAction(c.action))}
                 >{actionLabel(c.action)}</button>
                 {confirmingId === c.id ? (

@@ -39,9 +39,10 @@ the tiers (`Shift+Tab` walks back up), or click one in the composer:
 
 | Action | Meaning |
 |--------|---------|
-| **fix now** | The default. Must be fixed before shipping — gates the exit code and turns the change red. |
-| **fix later** | Should be addressed, but needn't block this ship. |
-| **consider** | Advisory. Doesn't block shipping. |
+| **must fix** | The default. Must be fixed before shipping — gates the exit code and turns the change red. |
+| **suggestion** | A recommended change. Advisory; doesn't block shipping. |
+| **nit** | A trivial / style point. Advisory. |
+| **question** | A query for the author. Advisory. |
 
 To comment on a single line, **hover its right-side gutter and click the `+`**
 that appears — the visible, one-click path (changed or context line). To comment
@@ -81,8 +82,8 @@ control) and *manage* it here.
 
 Comments ride along in the result context as a `comments` array of
 `{ body, action, file?, startLine?, endLine? }`. A comment on the commit message
-carries `target: "commit-message"` (and no `file`). Only `fix-now` comments
-affect the exit code; `fix-later` and `consider` are advisory.
+carries `target: "commit-message"` (and no `file`). Only `must-fix` comments
+affect the exit code; `suggestion`, `nit`, and `question` are advisory.
 
 ## View
 
@@ -116,7 +117,7 @@ instead. Inside either dialog:
 | `Enter` | Activate the focused button. |
 | `Escape` | Cancel and return to the review. |
 
-The exit code reflects the outcome (clean, fix-now comments, unreviewed, or
+The exit code reflects the outcome (clean, must-fix comments, unreviewed, or
 early close) so the caller knows how the review ended.
 
 ## Mouse equivalents
