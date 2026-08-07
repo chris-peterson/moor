@@ -50,7 +50,7 @@ function parseFlag(name) {
 }
 
 function resolveContextPath() {
-  return parseFlag('context') ?? process.env.MOOR_CONTEXT ?? null;
+  return parseFlag('context') ?? process.env.REVIEW_CONTEXT ?? null;
 }
 
 function readContextInput(filePath) {

@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useCallback, useState, useEffect, useLayoutEffect } from 'react';
 import { computeLineChanges, diffChars, buildDisplayRows, BINARY_SENTINEL } from '../engine/diff.js';
-import { DEFAULT_ACTION, ACTIONS, ACTIONS_BY_SEVERITY, isBlocking, commentToOutput, actionColor, actionBg, actionLabel, actionChipStyle, cycleAction, cycleActionDown } from '../engine/comments.js';
+import { COMMENT_COLOR, COMMENT_BG, commentToOutput } from '../engine/comments.js';
 import { previewKindFor, renderMarkdown } from '../engine/preview.js';
 import { renderMermaid, hasMermaid } from '../mermaid.js';
 import Minimap from './Minimap.jsx';
@@ -64,8 +64,7 @@ function CharDiffSpans({ oldStr, newStr, side }) {
   );
 }
 
-function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick, onContextMenu, onGutterMouseDown, onRowEnter }) {
-  const [hovered, setHovered] = useState(false);
+function DiffRow({ row, idx, active, reviewed, commented, selected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick, onContextMenu, onGutterMouseDown, onRowEnter }) {
   const fontSize = active ? '15px' : '13px';
   const dimmed = reviewed;
 
@@ -73,13 +72,15 @@ function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLe
   // comment on a single line, on par with the file / message / changeset
   // controls. Dragging the gutter still selects a range; this is the one-click
   // path for a single line (changed or context) without the long-press gesture.
+  // It spans the full row height (not a centered 16px chip) so there is no
+  // gutter dead zone above/below it where a press would fall through to the
+  // review toggle; visibility is CSS-driven (see .moor-comment-add).
   const commentAddStyle = {
     position: 'absolute',
     left: '2px',
-    top: '50%',
-    transform: 'translateY(-50%)',
+    top: '2px',
+    bottom: '2px',
     width: '16px',
-    height: '16px',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -97,7 +98,7 @@ function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLe
 
   const barColor = active
     ? 'var(--color-accent)'
-    : (commentAction ? actionColor(commentAction) : 'transparent');
+    : (commented ? COMMENT_COLOR : 'transparent');
 
   const gutterStyle = {
     width: '48px',
@@ -114,7 +115,7 @@ function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLe
 
   const cellBg = (type, side) => {
     if (selected) return 'var(--color-accent-bg)';
-    if (commentAction) return actionBg(commentAction);
+    if (commented) return COMMENT_BG;
     if (dimmed) return 'var(--bg-reviewed)';
     if (type === 'delete' && side === 'left') return 'var(--color-left-bg)';
     if (type === 'insert' && side === 'right') return 'var(--color-right-bg)';
@@ -145,10 +146,10 @@ function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLe
   // changed row still toggles its reviewed state via the row's onClick).
   return (
     <div
+      className="moor-diff-row"
       onClick={isHunk ? onClick : undefined}
       onContextMenu={onContextMenu}
-      onMouseEnter={() => { onRowEnter(idx); setHovered(true); }}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => onRowEnter(idx)}
       style={{ display: 'flex', height: ROW_HEIGHT + 'px', cursor: isHunk ? 'pointer' : 'default' }}
     >
       <div style={{ width: BAR_WIDTH + 'px', flexShrink: 0, background: barColor }} />
@@ -163,9 +164,10 @@ function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLe
       <div onMouseDown={onResizerMouseDown} style={{ width: RESIZER_WIDTH + 'px', flexShrink: 0, background: 'var(--border)', cursor: 'col-resize' }} />
       <div style={{ width: rightWidth + 'px', display: 'flex', overflow: 'clip', background: cellBg(rightType, 'right') }}>
         <span data-gutter="1" onMouseDown={(e) => onGutterMouseDown(e, idx)} style={{ ...gutterStyle, cursor: 'pointer', position: 'relative' }}>
-          {hovered && row.rightNum != null && (
+          {row.rightNum != null && (
             <button
               type="button"
+              className="moor-comment-add"
               data-comment-add="1"
               // Start the same gesture as the gutter, flagged to comment on a
               // plain release; stopPropagation so the gutter span doesn't also
@@ -206,7 +208,7 @@ const inlineKbdStyle = {
   fontWeight: 600,
 };
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, onNavigatePrevFile, startAtEnd, startAtRow, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, fileComments = [], onAddComment, onUpdateComment, onSetCommentAction, onDeleteComment, onAddFileComment, onForceText, paused = false }) {
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, onNavigatePrevFile, startAtEnd, startAtRow, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, fileComments = [], onAddComment, onUpdateComment, onDeleteComment, onAddFileComment, onForceText, paused = false }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
@@ -334,7 +336,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const reviewedHunks = externalReviewedHunks || internalReviewedHunks;
   const setReviewedHunks = onReviewedHunksChange || setInternalReviewedHunks;
   // CO-06: the inline comment composer. null when closed; otherwise
-  // { commentId|null, action, body, target } where target is a range.
+  // { commentId|null, body, target } where target is a range.
   const [composing, setComposing] = useState(null);
   const composerRef = useRef(null);
   // Mirror `composing` into a ref and guard commits so Enter-then-blur (or a
@@ -345,6 +347,14 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   // The live line-range selection during a gutter drag (CO-04).
   const [selection, setSelection] = useState(null);
   const pressRef = useRef(null);
+  // #3: measured pixel height of each rendered comment bar / composer, keyed by
+  // its insert key. Comment overlays reserve vertical space (the rows below them
+  // shift down instead of being covered), so the row grid needs their real
+  // heights — which vary as a bar wraps or the composer grows.
+  const [insertHeights, setInsertHeights] = useState({});
+  const reportInsertHeight = useCallback((key, h) => {
+    setInsertHeights(prev => (prev[key] === h ? prev : { ...prev, [key]: h }));
+  }, []);
   const [splitPercent, setSplitPercent] = useState(50);
   const [viewMode, setViewMode] = useState(defaultViewMode);
   const [draggingResizer, setDraggingResizer] = useState(false);
@@ -438,8 +448,8 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   useEffect(() => {
     if (onNavigateNext) return;
     const unreviewed = Math.max(0, hunkRanges.length - reviewedHunks.size);
-    const fixNow = fileComments.filter(c => isBlocking(c.action) && (c.body || '').trim()).length;
-    window.__moorQuitState = { fixNow, unreviewed, comments: fileComments.map(commentToOutput).filter(c => c.body) };
+    const blocking = fileComments.filter(c => (c.body || '').trim()).length;
+    window.__moorQuitState = { blocking, unreviewed, comments: fileComments.map(commentToOutput).filter(c => c.body) };
     return () => { window.__moorQuitState = null; };
   }, [hunkRanges, reviewedHunks, fileComments, onNavigateNext]);
 
@@ -480,44 +490,40 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     return set;
   }, [hunkRanges, reviewedHunks]);
 
-  // Per-row action of the highest-severity comment covering it — drives the row
-  // tint, the bar, and the minimap markers. The in-progress composer counts too,
-  // so the range bands while you type.
-  const rowActionMap = useMemo(() => {
-    const rank = { 'consider': 0, 'fix-later': 1, 'fix-now': 2 };
-    const map = new Map();
-    const apply = (startRow, endRow, action) => {
+  // The rows any comment covers — drives the row tint, the bar, and the minimap
+  // markers. The in-progress composer counts too, so the range bands while you
+  // type.
+  const commentRows = useMemo(() => {
+    const set = new Set();
+    const apply = (startRow, endRow) => {
       if (startRow == null) return;
-      for (let i = startRow; i <= endRow; i++) {
-        const cur = map.get(i);
-        if (cur == null || rank[action] > rank[cur]) map.set(i, action);
-      }
+      for (let i = startRow; i <= endRow; i++) set.add(i);
     };
-    for (const c of fileComments) apply(c.target?.startRow, c.target?.endRow, c.action);
+    for (const c of fileComments) apply(c.target?.startRow, c.target?.endRow);
     if (composing && composing.target?.type === 'range') {
-      apply(composing.target.startRow, composing.target.endRow, composing.action);
+      apply(composing.target.startRow, composing.target.endRow);
     }
-    return map;
+    return set;
   }, [fileComments, composing]);
 
   const commentRowColors = useMemo(() => {
     const map = new Map();
-    for (const [rowIdx, action] of rowActionMap) map.set(rowIdx, actionColor(action));
+    for (const rowIdx of commentRows) map.set(rowIdx, COMMENT_COLOR);
     return map;
-  }, [rowActionMap]);
+  }, [commentRows]);
 
   // CO-07: one outline band per comment range (and the live composer range),
-  // spanning its rows in the action color so the covered lines are unmistakable.
+  // spanning its rows so the covered lines are unmistakable.
   const commentBands = useMemo(() => {
     const bands = [];
     for (const c of fileComments) {
       const t = c.target || {};
       if (t.startRow == null) continue;
       if (composing && composing.commentId === c.id) continue; // composer band covers it
-      bands.push({ key: `band-${c.id}`, startRow: t.startRow, endRow: t.endRow, action: c.action });
+      bands.push({ key: `band-${c.id}`, startRow: t.startRow, endRow: t.endRow });
     }
     if (composing && composing.target?.type === 'range') {
-      bands.push({ key: 'band-composing', startRow: composing.target.startRow, endRow: composing.target.endRow, action: composing.action });
+      bands.push({ key: 'band-composing', startRow: composing.target.startRow, endRow: composing.target.endRow });
     }
     return bands;
   }, [fileComments, composing]);
@@ -528,6 +534,78 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     for (let i = selection.startRow; i <= selection.endRow; i++) set.add(i);
     return set;
   }, [selection]);
+
+  // #3: the ordered list of comment overlays that reserve vertical space — a bar
+  // per persisted comment (except the one currently being composed, whose bar is
+  // replaced by the composer) plus the composer itself. Each is anchored below
+  // its range's last row (endRow) and sorted by that row so the offset map is
+  // built in document order.
+  const commentInserts = useMemo(() => {
+    const list = [];
+    for (const c of fileComments) {
+      const t = c.target || {};
+      if (t.endRow == null) continue;
+      if (composing && composing.commentId === c.id) continue;
+      list.push({ key: `comment-${c.id}`, kind: 'bar', anchorRow: t.endRow, comment: c });
+    }
+    if (composing) {
+      list.push({ key: `composer-${composing.commentId ?? 'new'}-${composing.target.endRow}`, kind: 'composer', anchorRow: composing.target.endRow });
+    }
+    list.sort((a, b) => a.anchorRow - b.anchorRow || (a.key < b.key ? -1 : 1));
+    return list;
+  }, [fileComments, composing]);
+
+  // #3: the row → Y map. A row's top is its base offset (index * ROW_HEIGHT) plus
+  // the summed height of every comment overlay anchored above it, so overlays
+  // push the following rows down rather than covering them. `rowTop(i)` is the
+  // top of row i's code; `rowEnd(i)` its bottom (before any overlay anchored at
+  // i). `insertTops` places each overlay just below its anchor row, stacking
+  // multiple overlays that share an anchor. All five geometry consumers (row
+  // slice, hunk highlight, bands, scroll-to-hunk, minimap) read through this.
+  const rowLayout = useMemo(() => {
+    const n = rows.length;
+    const byAnchor = new Map();
+    for (const ins of commentInserts) {
+      const h = insertHeights[ins.key] ?? ROW_HEIGHT;
+      byAnchor.set(ins.anchorRow, (byAnchor.get(ins.anchorRow) || 0) + h);
+    }
+    const offsets = new Array(n + 1);
+    let acc = 0;
+    for (let i = 0; i <= n; i++) {
+      offsets[i] = acc;
+      acc += byAnchor.get(i) || 0;
+    }
+    const rowTop = (i) => { const c = i < 0 ? 0 : i > n ? n : i; return c * ROW_HEIGHT + offsets[c]; };
+    const rowEnd = (i) => rowTop(i) + ROW_HEIGHT;
+    const insertTops = new Map();
+    const stackAt = new Map();
+    for (const ins of commentInserts) {
+      const used = stackAt.get(ins.anchorRow) || 0;
+      insertTops.set(ins.key, rowEnd(ins.anchorRow) + used);
+      stackAt.set(ins.anchorRow, used + (insertHeights[ins.key] ?? ROW_HEIGHT));
+    }
+    // Binary search: the largest row index whose top is at or above `y`.
+    const rowAtY = (y) => {
+      let lo = 0, hi = n;
+      while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (rowTop(mid) <= y) lo = mid; else hi = mid - 1; }
+      return lo;
+    };
+    return { offsets, rowTop, rowEnd, insertTops, rowAtY, contentHeight: n * ROW_HEIGHT + acc };
+  }, [rows.length, commentInserts, insertHeights]);
+
+  // Drop measured heights for overlays that no longer exist so the map doesn't
+  // accumulate stale keys across a long session.
+  useEffect(() => {
+    const live = new Set(commentInserts.map(i => i.key));
+    setInsertHeights(prev => {
+      const next = {};
+      let changed = false;
+      for (const k of Object.keys(prev)) {
+        if (live.has(k)) next[k] = prev[k]; else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [commentInserts]);
 
   // The single source for the two pane widths. A new/deleted file pins the empty
   // side to a narrow strip (capped so it never exceeds 40% on a small window);
@@ -570,10 +648,10 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       return;
     }
     const isFirstScrollForFile = scrolledForKey.current !== fileKeyId;
-    // IM.OUT-03: a fix-now badge navigates to a specific row — scroll straight
+    // IM.OUT-03: a comment badge navigates to a specific row — scroll straight
     // to it on the first pass for the file.
     if (isFirstScrollForFile && startAtRow != null) {
-      scrollContainerRef.current.scrollTop = Math.max(0, (startAtRow - 1) * ROW_HEIGHT);
+      scrollContainerRef.current.scrollTop = Math.max(0, rowLayout.rowTop(startAtRow) - ROW_HEIGHT);
       scrolledForKey.current = fileKeyId;
       setScrollLeft(0);
       return;
@@ -593,9 +671,11 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     const range = hunkRanges[effectiveHunk];
     if (!range) return;
     scrolledForKey.current = fileKeyId;
-    const topAtRow2 = Math.max(0, (range.start - 1) * ROW_HEIGHT);
-    const scrollForBottom = (range.end + 1) * ROW_HEIGHT + headerHeight - viewportHeight;
-    const topFlush = range.start * ROW_HEIGHT;
+    // NV-13: positions read through rowLayout so a comment reserving space above
+    // the hunk shifts the scroll target with it.
+    const topAtRow2 = Math.max(0, rowLayout.rowTop(range.start) - ROW_HEIGHT);
+    const scrollForBottom = rowLayout.rowEnd(range.end) + headerHeight - viewportHeight;
+    const topFlush = rowLayout.rowTop(range.start);
     let target;
     if (scrollForBottom <= topAtRow2) {
       target = topAtRow2;
@@ -610,15 +690,15 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     } else {
       const ev = Math.max(0, viewportHeight - headerHeight);
       const visibleTop = scrollContainerRef.current.scrollTop;
-      const hunkTopY = range.start * ROW_HEIGHT;
-      const hunkBottomY = (range.end + 1) * ROW_HEIGHT;
+      const hunkTopY = rowLayout.rowTop(range.start);
+      const hunkBottomY = rowLayout.rowEnd(range.end);
       if (hunkTopY >= visibleTop && hunkBottomY <= visibleTop + ev) {
         return;
       }
       scrollContainerRef.current.scrollTo({ top: target, behavior: 'smooth' });
     }
     setScrollLeft(0);
-  }, [currentHunk, hunkRanges, viewportHeight, headerHeight]);
+  }, [currentHunk, hunkRanges, viewportHeight, headerHeight, rowLayout]);
 
   const toggleHunkReviewed = useCallback((hIdx) => {
     setReviewedHunks(prev => {
@@ -662,12 +742,12 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     const hIdx = rowToHunk.get(startRow);
     if (hIdx != null) setCurrentHunk(hIdx);
     committedRef.current = false;
-    setComposing({ commentId: null, action: DEFAULT_ACTION, body: '', target });
+    setComposing({ commentId: null, body: '', target });
   }, [fileKey, lineForRow, rowToHunk]);
 
   const editComment = useCallback((comment) => {
     committedRef.current = false;
-    setComposing({ commentId: comment.id, action: comment.action, body: comment.body, target: comment.target });
+    setComposing({ commentId: comment.id, body: comment.body, target: comment.target });
   }, []);
 
   // CO-06: Enter confirms; Escape confirms a non-empty comment or discards an
@@ -679,9 +759,9 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     const text = (composerRef.current?.value || '').trim();
     if (cur) {
       if (cur.commentId == null) {
-        if (text && onAddComment) onAddComment({ body: text, action: cur.action, target: cur.target });
+        if (text && onAddComment) onAddComment({ body: text, target: cur.target });
       } else if (text && onUpdateComment) {
-        onUpdateComment(cur.commentId, { body: text, action: cur.action });
+        onUpdateComment(cur.commentId, { body: text });
       } else if (!text && onDeleteComment) {
         onDeleteComment(cur.commentId);
       }
@@ -888,7 +968,9 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
         case 'ArrowDown': {
           e.preventDefault();
           if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTop = Math.min(scrollContainerRef.current.scrollTop + V_SCROLL_STEP, totalHeight);
+            // The container clamps to its own scroll extent, which already
+            // includes the space reserved for comment overlays (#3).
+            scrollContainerRef.current.scrollTop += V_SCROLL_STEP;
           }
           break;
         }
@@ -1034,15 +1116,17 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
 
   const effectiveViewport = Math.max(0, viewportHeight - headerHeight);
   const rowScrollTop = Math.max(0, scrollTop - headerHeight);
-  const startIdx = Math.max(0, Math.floor(rowScrollTop / ROW_HEIGHT) - OVERSCAN);
-  const endIdx = Math.min(rows.length, Math.ceil((rowScrollTop + effectiveViewport) / ROW_HEIGHT) + OVERSCAN);
+  // #3: the visible slice is found through rowLayout (variable row offsets), not
+  // a flat rowScrollTop / ROW_HEIGHT, so comment overlays don't desync it.
+  const startIdx = Math.max(0, rowLayout.rowAtY(rowScrollTop) - OVERSCAN);
+  const endIdx = Math.min(rows.length, rowLayout.rowAtY(rowScrollTop + effectiveViewport) + OVERSCAN + 1);
   const visibleRows = rows.slice(startIdx, endIdx);
 
   // Resizing is meaningless when a pane is pinned collapsed — leave the strip put.
   const onResizerDown = collapseLayout ? undefined : handleResizerMouseDown;
   const resizerCursor = collapseLayout ? 'default' : 'col-resize';
 
-  const fileFixNowCount = fileComments.filter(c => isBlocking(c.action) && (c.body || '').trim()).length;
+  const fileBlockingCount = fileComments.filter(c => (c.body || '').trim()).length;
 
   // For a collapsed (new/deleted) file the empty side carries no path label — a
   // narrow strip would only truncate "(empty)" — and the file-comment / preview
@@ -1192,78 +1276,79 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                 </div>
               </div>
 
-              <div style={{ height: (totalHeight + bottomPad) + 'px', position: 'relative' }}>
+              <div style={{ height: (rowLayout.contentHeight + bottomPad) + 'px', position: 'relative' }}>
                 {hunkRanges[currentHunk] && (
                   <div style={{
                     position: 'absolute',
-                    top: hunkRanges[currentHunk].start * ROW_HEIGHT + 'px',
+                    top: rowLayout.rowTop(hunkRanges[currentHunk].start) + 'px',
                     left: 0,
                     right: 0,
-                    height: (hunkRanges[currentHunk].end - hunkRanges[currentHunk].start + 1) * ROW_HEIGHT + 'px',
+                    height: (rowLayout.rowEnd(hunkRanges[currentHunk].end) - rowLayout.rowTop(hunkRanges[currentHunk].start)) + 'px',
                     border: '1px solid var(--color-accent)',
                     borderRadius: '3px',
                     pointerEvents: 'none',
                     zIndex: 2,
                   }} />
                 )}
-                {/* CO-07: banding outlines over each comment's line range. */}
+                {/* CO-07: banding outlines over each comment's line range. The
+                    band spans only the code rows (rowTop..rowEnd), stopping above
+                    the bar/composer that reserves space just below endRow (#3). */}
                 {commentBands.map((b) => (
                   <div
                     key={b.key}
                     style={{
                       position: 'absolute',
-                      top: b.startRow * ROW_HEIGHT + 'px',
+                      top: rowLayout.rowTop(b.startRow) + 'px',
                       left: 0,
                       right: 0,
-                      height: (b.endRow - b.startRow + 1) * ROW_HEIGHT + 'px',
-                      border: `1.5px solid ${actionColor(b.action)}`,
+                      height: (rowLayout.rowEnd(b.endRow) - rowLayout.rowTop(b.startRow)) + 'px',
+                      border: `1.5px solid ${COMMENT_COLOR}`,
                       borderRadius: '3px',
                       pointerEvents: 'none',
                       zIndex: 3,
                     }}
                   />
                 ))}
-                {/* Persistent comment bars (CO-07) + the inline composer (CO-06). */}
-                {composing && (
-                  <CommentComposer
-                    key={`composer-${composing.commentId ?? 'new'}-${composing.target.endRow}`}
-                    composing={composing}
-                    composerRef={composerRef}
-                    top={(composing.target.endRow + 1) * ROW_HEIGHT}
-                    onResize={resizeComposer}
-                    onSetAction={(action) => setComposing(c => ({ ...c, action }))}
-                    onClose={closeComposer}
-                  />
-                )}
-                {fileComments.map((c) => {
-                  if (composing && composing.commentId === c.id) return null;
-                  const t = c.target || {};
-                  if (t.endRow == null) return null;
+                {/* Persistent comment bars (CO-07) + the inline composer (CO-06),
+                    each in a space-reserving wrapper (#3) that reports its
+                    measured height back so the rows below it shift down. */}
+                {commentInserts.map((ins) => (
+                  <InsertMeasure
+                    key={ins.key}
+                    insKey={ins.key}
+                    top={rowLayout.insertTops.get(ins.key) ?? 0}
+                    zIndex={ins.kind === 'composer' ? 10 : 9}
+                    onMeasure={reportInsertHeight}
+                  >
+                    {ins.kind === 'composer' ? (
+                      <CommentComposer
+                        composing={composing}
+                        composerRef={composerRef}
+                        onResize={resizeComposer}
+                        onClose={closeComposer}
+                      />
+                    ) : (
+                      <CommentBar
+                        comment={ins.comment}
+                        onEdit={() => editComment(ins.comment)}
+                        onDelete={() => {
+                          if ((ins.comment.body || '').trim() && !window.confirm('Delete this comment?')) return;
+                          onDeleteComment(ins.comment.id);
+                        }}
+                      />
+                    )}
+                  </InsertMeasure>
+                ))}
+                {visibleRows.map((row, i) => {
+                  const idx = startIdx + i;
                   return (
-                    <CommentBar
-                      key={`comment-${c.id}`}
-                      comment={c}
-                      top={(t.endRow + 1) * ROW_HEIGHT}
-                      onEdit={() => editComment(c)}
-                      onCycleAction={() => onSetCommentAction(c.id, ACTIONS[(ACTIONS.indexOf(c.action) + 1) % ACTIONS.length])}
-                      onDelete={() => {
-                        if ((c.body || '').trim() && !window.confirm('Delete this comment?')) return;
-                        onDeleteComment(c.id);
-                      }}
-                    />
-                  );
-                })}
-                <div style={{ position: 'absolute', top: startIdx * ROW_HEIGHT + 'px', left: 0, right: 0 }}>
-                  {visibleRows.map((row, i) => {
-                    const idx = startIdx + i;
-                    return (
+                    <div key={idx} style={{ position: 'absolute', top: rowLayout.rowTop(idx) + 'px', left: 0, right: 0 }}>
                       <DiffRow
-                        key={idx}
                         row={row}
                         idx={idx}
                         active={activeRowSet.has(idx)}
                         reviewed={reviewedRowSet.has(idx)}
-                        commentAction={rowActionMap.get(idx)}
+                        commented={commentRows.has(idx)}
                         selected={selectionRowSet ? selectionRowSet.has(idx) : false}
                         scrollLeft={scrollLeft}
                         leftWidth={leftWidth}
@@ -1274,9 +1359,9 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                         onGutterMouseDown={beginGutterGesture}
                         onRowEnter={handleRowEnter}
                       />
-                    );
-                  })}
-                </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -1307,6 +1392,8 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
         <Minimap
           rows={rows}
           totalHeight={totalHeight}
+          contentHeight={rowLayout.contentHeight}
+          rowOffsets={rowLayout.offsets}
           viewportHeight={effectiveViewport}
           scrollTop={rowScrollTop}
           topOffset={headerHeight}
@@ -1363,7 +1450,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
         color: 'var(--text-primary)',
         gap: '12px',
       }}>
-        {fileFixNowCount > 0 && (
+        {fileBlockingCount > 0 && (
           <span style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -1374,7 +1461,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
             fontSize: '10px',
             fontWeight: 600,
           }}>
-            {fileFixNowCount} fix-now
+            {fileBlockingCount} comment{fileBlockingCount === 1 ? '' : 's'}
           </span>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1433,15 +1520,12 @@ function CollapsedPanePlaceholder({ kind, left, width, top, bottom }) {
   );
 }
 
-// CO-06: the inline composer — an auto-growing text area plus the action
-// control. Enter confirms; Shift+Enter inserts a newline; Escape confirms a
-// non-empty comment or discards an empty one (closeComposer decides). Tab
-// down-classifies the action (fix-now → fix-later → consider → fix-now);
-// Shift+Tab walks back up.
-function CommentComposer({ composing, composerRef, top, onResize, onSetAction, onClose }) {
+// CO-06: the inline composer — an auto-growing text area. Enter confirms;
+// Shift+Enter inserts a newline; Escape confirms a non-empty comment or discards
+// an empty one (closeComposer decides).
+function CommentComposer({ composing, composerRef, onResize, onClose }) {
   return (
-    <div style={{ position: 'absolute', top: top + 'px', left: 0, right: 0, zIndex: 10, pointerEvents: 'auto' }}>
-      <div style={{ background: 'var(--bg-panel)', border: `1px solid ${actionColor(composing.action)}`, borderRadius: '3px' }}>
+      <div style={{ background: 'var(--bg-panel)', border: `1px solid ${COMMENT_COLOR}`, borderRadius: '3px' }}>
         <textarea
           ref={composerRef}
           defaultValue={composing.body}
@@ -1455,9 +1539,6 @@ function CommentComposer({ composing, composerRef, top, onResize, onSetAction, o
             } else if (e.key === 'Escape') {
               e.preventDefault();
               onClose();
-            } else if (e.key === 'Tab') {
-              e.preventDefault();
-              onSetAction(e.shiftKey ? cycleAction(composing.action) : cycleActionDown(composing.action));
             }
             e.stopPropagation();
           }}
@@ -1477,49 +1558,47 @@ function CommentComposer({ composing, composerRef, top, onResize, onSetAction, o
             overflow: 'auto',
           }}
         />
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 8px', borderTop: '1px solid var(--border)' }}>
-          {ACTIONS_BY_SEVERITY.map((a) => {
-            const selected = composing.action === a;
-            return (
-              <button
-                key={a}
-                type="button"
-                // onMouseDown + preventDefault keeps the textarea focused so its
-                // blur doesn't close the composer before the action is set.
-                onMouseDown={(e) => { e.preventDefault(); onSetAction(a); }}
-                style={actionChipStyle(a, selected
-                  ? { cursor: 'pointer' }
-                  : { cursor: 'pointer', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-muted)' })}
-              >{actionLabel(a)}</button>
-            );
-          })}
+        <div style={{ display: 'flex', alignItems: 'center', padding: '3px 8px', borderTop: '1px solid var(--border)' }}>
           <span style={{ flex: 1 }} />
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
-            Enter saves · Shift+Enter newline · Tab cycles action · Esc
+            Enter saves · Shift+Enter newline · Esc
           </span>
         </div>
       </div>
+  );
+}
+
+// #3: positions a comment overlay just below its anchor row and reports its
+// measured height so the row grid can reserve space for it (the rows below it
+// shift down instead of being covered). useLayoutEffect measures before paint so
+// the reserved space is correct on the first frame; a ResizeObserver keeps it in
+// sync as the bar wraps or the composer grows.
+function InsertMeasure({ insKey, top, zIndex, onMeasure, children }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const report = () => onMeasure(insKey, el.offsetHeight);
+    report();
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [insKey, onMeasure]);
+  return (
+    <div ref={ref} style={{ position: 'absolute', top: top + 'px', left: 0, right: 0, zIndex, pointerEvents: 'auto' }}>
+      {children}
     </div>
   );
 }
 
-// CO-07: a persistent bar at a comment's anchor showing its body and action.
-// Click the body to edit; click the action chip to cycle; ✕ deletes (confirms).
-function CommentBar({ comment, top, onEdit, onCycleAction, onDelete }) {
-  const color = actionColor(comment.action);
+// CO-07: a persistent bar at a comment's anchor showing its body. Click the body
+// to edit; ✕ deletes (confirms).
+function CommentBar({ comment, onEdit, onDelete }) {
   return (
-    <div style={{ position: 'absolute', top: top + 'px', left: 0, right: 0, zIndex: 9, pointerEvents: 'auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 8px', fontSize: '12px', fontFamily: 'var(--font-ui)', background: 'var(--bg-panel)', borderLeft: `3px solid ${color}` }}>
-        <button
-          type="button"
-          onClick={onCycleAction}
-          title="Cycle action: consider → fix later → fix now"
-          style={actionChipStyle(comment.action, { flexShrink: 0, padding: '1px 6px', cursor: 'pointer' })}
-        >{actionLabel(comment.action)}</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 8px', fontSize: '12px', fontFamily: 'var(--font-ui)', background: 'var(--bg-panel)', borderLeft: `3px solid ${COMMENT_COLOR}` }}>
         <span onClick={onEdit} style={{ flex: 1, whiteSpace: 'pre-wrap', color: 'var(--text-primary)', cursor: 'text' }}>{comment.body}</span>
         <span onClick={onDelete} style={{ opacity: 0.5, cursor: 'pointer', fontSize: '11px' }} title="Delete comment">✕</span>
       </div>
-    </div>
   );
 }
 

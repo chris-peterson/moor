@@ -1,6 +1,8 @@
 # Status
 
-**Spec:** v0.2 | **Audited:** 2026-06-22 | **Coverage:** all non-deferred requirements have implementing code
+**Spec:** v0.2 | **Audited:** 2026-08-06 | **Coverage:** all non-deferred requirements have implementing code
+
+The 2026-08-06 change **removed comment severity entirely** ([CO-03] rewritten, [TE-03] retired). A comment is a body and a target — there is no `action` field in the model, the composer, or the sidecar output ([CO-01], [CO-06], [CO-07], [CO-08], [IM.OUT-02a]). Any comment now gates the exit code, so [EC-01]..[EC-03], [RV-04], [IM.OUT-03], and [IM.OUT-05] all read "comments" where they read "fix-now"/"must-fix" before. The reviewer's escape hatch moved from a per-comment tier to the verdict: the send-feedback dialog carries both outcomes, and which is primary follows how the reviewer arrived — Approve leads with "Approve anyway" (exit 0, comments still delivered), everything else leads with "Send review feedback" (exit 1) ([DD-12]). The unreviewed-close dialog keeps its own "Approve anyway" ([DD-13]). Landed in `comments.js` (the action vocabulary and its four color/label helpers deleted, leaving `COMMENT_COLOR` / `COMMENT_BG` / `commentToOutput`), `ReviewShell.jsx` (`setCommentAction` gone, dialog `intent`, ungated Approve), `FileDiffView.jsx` (composer action row, `rowActionMap` → a plain covered-rows set, comment-bar chip), `ContextHeader.jsx`, `KeyboardHelp.jsx`, `App.jsx`, and the calling-contract / review-sidecar-contract / keyboard docs.
 
 The 2026-07-09 change is a UX pass across four surfaces. Binary detection now matches git — a NUL within the first 8000 bytes rather than a whole-file scan ([DA-04]) — so a stray NUL beyond that prefix no longer misflags an otherwise-text file, and a per-file **compare-as-text** escape hatch (the `t` key) overrides the verdict when a real NUL sits in the prefix ([BF-03], `electron/main.js` read-file, `ReviewShell.jsx`, `FileDiffView.jsx`). The rendered Markdown/SVG preview now scrolls both panes **as one**, matching source-mode sync scroll ([FD-01], [BF-02]): each iframe reports its content height through a CSP-hash-pinned reporter script (`sandbox="allow-scripts"` with `script-src 'sha256-…'`, so content-supplied scripts stay inert) and the panes share one outer scrollbar (`RenderedPane`). Rendered Markdown gained GFM pipe tables and `mermaid` diagrams ([BF-04]) — tables extend the hand-rolled parser in `preview.js`; mermaid renders to inert SVG in the renderer (`src/mermaid.js`, new `mermaid` dependency) before the iframe receives it. The approve-without-viewing confirmation drops the viewed/total ratio for a plain unreviewed-hunk count and makes **resume** the low-friction default with finalize as the secondary action ([DD-17], `ReviewShell.jsx`). Directory-mode move detection now matches git's two passes — identical content, then content **similarity** above 50% ([DD-15], `directory.js`) — so a file that was moved *and* lightly edited reads as one renamed entry instead of a delete plus a create. And the reviewer can now **edit the commit message directly** ([CO-10]) — an inline textarea reachable from the change region, revertable, coexisting with message comments — with the rewrite riding back as `output.commitMessage: { original, edited }` ([IM.OUT-07], `ContextHeader.jsx` + `ReviewShell.jsx`).
 
@@ -15,6 +17,10 @@ An earlier 2026-06-09 change removed search mode ([SM-01]..[SM-06] retired — l
 The 2026-06-10 change made clicking a hunk **toggle** its reviewed state (was one-way mark-reviewed) and dim it immediately on click rather than only after navigating away ([NV-06], [CO-04] reworded; [FD-09] dim now fires while the hunk is still active). [NV-09] was retired into [NV-06] — clicking *a hunk* already covers the currently-selected one, so the separate click-the-current-hunk rule was redundant. `u` and the context menu remain the keyboard/menu unreview paths.
 
 The 2026-06-15 change reworked comment classification and the close confirmation ([CO-03], [CO-06], [DD-12], [DD-13] reworded). New comments default to `fix-now` (was `consider`); the composer's `Tab` / `Shift+Tab` cycle the action and its buttons render severity-first ([CO-06]). The close dialog now routes through a send-feedback dialog whenever any comment exists — not only a `fix-now` — revealing every comment with its action and defaulting to "Send review feedback"; the plain quit prompt is reserved for closing with unreviewed hunks and no comments ([DD-12], [DD-13]). A shared `actionChipStyle` helper in `comments.js` backs the action badge across the composer, comment bars, comments panel, and the dialog.
+
+> **Numbering gaps:** there is no PD-06, and the retired IDs noted in the audit
+> entries above (NV-09..NV-12, CM-07, SM-01..SM-06, IM.OUT-06, TE-03) are not
+> renumbered. Category counts are over the IDs the spec actually declares.
 
 > **Version note:** the product version in `.claude-plugin/plugin.json` and this spec's version (`v0.2`) move independently — PD-01/PD-05 treat plugin.json as the product-version source of truth — so a mismatch between them is expected, not drift.
 
@@ -77,35 +83,34 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [DD-09] | Full file path in lower-left | Done |
 | [DD-10] | Resizable sidebar | Done |
 | [DD-11] | Hide/show sidebar | Done |
-| [DD-12] | Send-feedback dialog reveals all comments (action + body); primary CTA "Send review feedback"; exit code follows verdict | Done |
-| [DD-13] | Feedback-free unreviewed close gets "Approve anyway" (exits 0); advisory feedback + unreviewed reuses it in DD-12 dialog | Done |
+| [DD-12] | Send-feedback dialog reveals all comments; offers both "Send review feedback" (1) and "Approve anyway" (0); primary follows how the reviewer arrived | Done |
+| [DD-13] | Feedback-free unreviewed close gets "Approve anyway" (exits 0) | Done |
 | [DD-14] | Quit dialog keyboard nav (Tab, arrows, Enter, Escape) | Done |
 | [DD-15] | Rename/move detection (identical + similarity, like git) — single entry instead of L+R | Done |
 | [DD-16] | f toggles sidebar, either case (keyboard companion to DD-11) | Done |
-| [DD-17] | Approve-without-viewing confirms; resume is the default, finalize is secondary | Done |
+| [DD-17] | Approve-without-viewing (no comments) confirms; resume is the default, finalize is secondary | Done |
 
 ### Comments (CO) — 10/10
 
 | Req | Description | Status |
 |-----|-------------|--------|
-| [CO-01] | Comment = body + action + target; reconciles rejections / notes | Done |
+| [CO-01] | Comment = body + target; reconciles rejections / notes | Done |
 | [CO-02] | Target: changeset / commit message / file / line range (changed or context lines) | Done |
-| [CO-03] | Action defaults to `fix-now`; settable consider / fix-later / fix-now; only fix-now gates | Done |
+| [CO-03] | Comments are ungraded — no severity field; any comment gates the exit code; approve-anyway is the non-blocking path | Done |
 | [CO-04] | New-side gutter: hover `+` = comment the line (drag from it = range), click = toggle review (changed) / comment (context), drag = range, long-press = single line; left gutter inert | Done |
 | [CO-05] | Contextual add controls infer the target from their surface: change-region = changeset (+ c key), file-header = file, message pane = commit message ([CO-09]); no picker | Done |
-| [CO-06] | Inline composer: auto-grow textarea + action control; Enter / Shift+Enter / Esc; Tab / Shift+Tab cycle action | Done |
-| [CO-07] | Banded line range (action-colored outline) + persistent comment bar; click to edit, confirmed delete | Done |
-| [CO-08] | Comments panel manages all (list, inline edit, action cycle, confirmed delete); not a target picker | Done |
-| [CO-09] | Comment on the commit message from the expanded details panel (control + m key); same action model, fix-now gates | Done |
+| [CO-06] | Inline composer: auto-grow textarea; Enter / Shift+Enter / Esc | Done |
+| [CO-07] | Banded line range (outline) + persistent comment bar; click to edit, confirmed delete | Done |
+| [CO-08] | Comments panel manages all (list, inline edit, confirmed delete); not a target picker | Done |
+| [CO-09] | Comment on the commit message from the expanded details panel (control + m key); gates the exit code like any other | Done |
 | [CO-10] | Edit the commit message directly (inline textarea, `✎ edit message`, revertable); rides back as `commitMessage` ([IM.OUT-07]) | Done |
 
-### Text Entry (TE) — 3/3
+### Text Entry (TE) — 2/2
 
 | Req | Description | Status |
 |-----|-------------|--------|
 | [TE-01] | Enter activates the input's paired primary action, Shift+Enter inserts a newline; governs the composer ([CO-06]) and comments panel ([CO-08]) | Done |
 | [TE-02] | Escape dismisses a text input — composer keeps non-empty / discards empty ([CO-06]); panel / dialog closes ([CO-08], [DD-14]) | Done |
-| [TE-03] | Tab advances a paired cycling control (the composer's action selector), Shift+Tab reverses ([CO-06]) | Done |
 
 ### Context Menu (CM) — 6/6
 
@@ -123,7 +128,7 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | Req | Description | Status |
 |-----|-------------|--------|
 | [RV-01] | "Review Complete!" toast notification | Done |
-| [RV-04] | Sidebar entry red when file has fix-now comments | Done |
+| [RV-04] | Sidebar entry red when file has comments | Done |
 
 ### Binary Formats (BF) — 4/4
 
@@ -147,9 +152,9 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 
 | Req | Description | Status |
 |-----|-------------|--------|
-| [EC-01] | Exit code 0 when all reviewed and no fix-now comments | Done |
-| [EC-02] | Exit code 1 on one or more fix-now comments | Done |
-| [EC-03] | Exit code 2 on unreviewed (no fix-now) | Done |
+| [EC-01] | Exit code 0 when all reviewed and no comments, or on an explicit approve-anyway | Done |
+| [EC-02] | Exit code 1 on one or more comments | Done |
+| [EC-03] | Exit code 2 on unreviewed (no comments) | Done |
 | [EC-04] | Exit code 3 on early close | Done |
 
 ### Application Shell (AS) — 14/14
@@ -175,17 +180,17 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 
 | Req | Description | Status |
 |-----|-------------|--------|
-| [IM-01] | Channel resolution: `--context` flag, then `MOOR_CONTEXT` env var | Done |
+| [IM-01] | Channel resolution: `--context` flag, then `REVIEW_CONTEXT` env var | Done |
 | [IM-02] | Warning banner when no context channel is configured | Done |
 | [IM.IN-01] | Render `input.title` + `input.details` in header (caller-defined shape); reveal via hover/click/`d`-`D` | Done |
 | [IM.IN-02] | Label-less changeset header: location eyebrow + message headline always visible; expand reveals body + provenance grid | Done |
 | [IM.OUT-01] | Stream `output` writes, flushing on every hunk review change and comment change | Done |
-| [IM.OUT-02a] | Output always includes `reviewer` + `comments[{body,action,target?,file?,startLine?,endLine?}]` (commit-message comment carries `target:"commit-message"`) | Done |
+| [IM.OUT-02a] | Output always includes `reviewer` + `comments[{body,target?,file?,startLine?,endLine?}]` (commit-message comment carries `target:"commit-message"`); no severity field | Done |
 | [IM.OUT-02b] | `exitCode` present only after exit (finalization signal) | Done |
 | [IM.OUT-07] | Output includes `commitMessage:{original,edited}` when the message is edited ([CO-10]); absent when unedited | Done |
-| [IM.OUT-03] | Fix-now badges in header's output region | Done |
+| [IM.OUT-03] | Per-file comment badges in header's output region | Done |
 | [IM.OUT-04] | Review progress in header's output region | Done |
-| [IM.OUT-05] | Single-file-mode footer progress bar (q-to-close, fix-now count) | Done |
+| [IM.OUT-05] | Single-file-mode footer progress bar (q-to-close, comment count) | Done |
 
 ### User Preferences (UP) — 5/5
 
@@ -197,7 +202,7 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [UP-04] | Never truncate or wrap; horizontal scroll reveals full lines | Done |
 | [UP-05] | Active diff row renders at 15px for emphasis | Done |
 
-### Plugin Distribution (PD) — 8/8
+### Plugin Distribution (PD) — 7/7
 
 | Req | Description | Status |
 |-----|-------------|--------|

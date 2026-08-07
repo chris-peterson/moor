@@ -4,7 +4,7 @@
 # Usage:
 #   moor dir1 dir2                          # compare directories
 #   moor file1 file2                        # compare files
-#   moor --context <path> dir1 dir2         # capture review output via MOOR_CONTEXT contract
+#   moor --context <path> dir1 dir2         # capture review output via REVIEW_CONTEXT contract
 #   moor --version                          # print version (from plugin.json)
 #   moor install-cli [--dir <path>]         # install/refresh the ~/.local/bin/moor wrapper + completions
 #   moor completions zsh [--print]          # install or print zsh tab completion
@@ -33,7 +33,7 @@ moor — visual diff review
 Usage:
   moor dir1 dir2                          compare directories
   moor file1 file2                        compare files
-  moor --context <path> dir1 dir2         capture review output via MOOR_CONTEXT contract
+  moor --context <path> dir1 dir2         capture review output via REVIEW_CONTEXT contract
   moor install-cli [--dir <path>]         install/refresh the ~/.local/bin/moor wrapper + completions
   moor completions zsh [--print]          install or print zsh tab completion
   moor --version                          print version (from plugin.json)
