@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useCallback, useState, useEffect, useLayoutEffect } from 'react';
 import { computeLineChanges, diffChars, buildDisplayRows, BINARY_SENTINEL } from '../engine/diff.js';
-import { DEFAULT_ACTION, ACTIONS, ACTIONS_BY_SEVERITY, isBlocking, commentToOutput, actionColor, actionBg, actionLabel, actionChipStyle, cycleAction, cycleActionDown } from '../engine/comments.js';
+import { COMMENT_COLOR, COMMENT_BG, commentToOutput } from '../engine/comments.js';
 import { previewKindFor, renderMarkdown } from '../engine/preview.js';
 import { renderMermaid, hasMermaid } from '../mermaid.js';
 import Minimap from './Minimap.jsx';
@@ -64,7 +64,7 @@ function CharDiffSpans({ oldStr, newStr, side }) {
   );
 }
 
-function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick, onContextMenu, onGutterMouseDown, onRowEnter }) {
+function DiffRow({ row, idx, active, reviewed, commented, selected, scrollLeft, leftWidth, rightWidth, onResizerMouseDown, onClick, onContextMenu, onGutterMouseDown, onRowEnter }) {
   const fontSize = active ? '15px' : '13px';
   const dimmed = reviewed;
 
@@ -98,7 +98,7 @@ function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLe
 
   const barColor = active
     ? 'var(--color-accent)'
-    : (commentAction ? actionColor(commentAction) : 'transparent');
+    : (commented ? COMMENT_COLOR : 'transparent');
 
   const gutterStyle = {
     width: '48px',
@@ -115,7 +115,7 @@ function DiffRow({ row, idx, active, reviewed, commentAction, selected, scrollLe
 
   const cellBg = (type, side) => {
     if (selected) return 'var(--color-accent-bg)';
-    if (commentAction) return actionBg(commentAction);
+    if (commented) return COMMENT_BG;
     if (dimmed) return 'var(--bg-reviewed)';
     if (type === 'delete' && side === 'left') return 'var(--color-left-bg)';
     if (type === 'insert' && side === 'right') return 'var(--color-right-bg)';
@@ -208,7 +208,7 @@ const inlineKbdStyle = {
   fontWeight: 600,
 };
 
-export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, onNavigatePrevFile, startAtEnd, startAtRow, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, fileComments = [], onAddComment, onUpdateComment, onSetCommentAction, onDeleteComment, onAddFileComment, onForceText, paused = false }) {
+export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, leftFullPath, rightFullPath, onNavigateNext, onNavigatePrev, onNavigatePrevFile, startAtEnd, startAtRow, onHunkChange, reviewedHunks: externalReviewedHunks, onReviewedHunksChange, fileComments = [], onAddComment, onUpdateComment, onDeleteComment, onAddFileComment, onForceText, paused = false }) {
   const leftBinary = leftContent === BINARY_SENTINEL;
   const rightBinary = rightContent === BINARY_SENTINEL;
   const isBinary = leftBinary || rightBinary;
@@ -336,7 +336,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const reviewedHunks = externalReviewedHunks || internalReviewedHunks;
   const setReviewedHunks = onReviewedHunksChange || setInternalReviewedHunks;
   // CO-06: the inline comment composer. null when closed; otherwise
-  // { commentId|null, action, body, target } where target is a range.
+  // { commentId|null, body, target } where target is a range.
   const [composing, setComposing] = useState(null);
   const composerRef = useRef(null);
   // Mirror `composing` into a ref and guard commits so Enter-then-blur (or a
@@ -448,7 +448,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   useEffect(() => {
     if (onNavigateNext) return;
     const unreviewed = Math.max(0, hunkRanges.length - reviewedHunks.size);
-    const blocking = fileComments.filter(c => isBlocking(c.action) && (c.body || '').trim()).length;
+    const blocking = fileComments.filter(c => (c.body || '').trim()).length;
     window.__moorQuitState = { blocking, unreviewed, comments: fileComments.map(commentToOutput).filter(c => c.body) };
     return () => { window.__moorQuitState = null; };
   }, [hunkRanges, reviewedHunks, fileComments, onNavigateNext]);
@@ -490,44 +490,40 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     return set;
   }, [hunkRanges, reviewedHunks]);
 
-  // Per-row action of the highest-severity comment covering it — drives the row
-  // tint, the bar, and the minimap markers. The in-progress composer counts too,
-  // so the range bands while you type.
-  const rowActionMap = useMemo(() => {
-    const rank = { 'question': 0, 'nit': 1, 'suggestion': 2, 'must-fix': 3 };
-    const map = new Map();
-    const apply = (startRow, endRow, action) => {
+  // The rows any comment covers — drives the row tint, the bar, and the minimap
+  // markers. The in-progress composer counts too, so the range bands while you
+  // type.
+  const commentRows = useMemo(() => {
+    const set = new Set();
+    const apply = (startRow, endRow) => {
       if (startRow == null) return;
-      for (let i = startRow; i <= endRow; i++) {
-        const cur = map.get(i);
-        if (cur == null || rank[action] > rank[cur]) map.set(i, action);
-      }
+      for (let i = startRow; i <= endRow; i++) set.add(i);
     };
-    for (const c of fileComments) apply(c.target?.startRow, c.target?.endRow, c.action);
+    for (const c of fileComments) apply(c.target?.startRow, c.target?.endRow);
     if (composing && composing.target?.type === 'range') {
-      apply(composing.target.startRow, composing.target.endRow, composing.action);
+      apply(composing.target.startRow, composing.target.endRow);
     }
-    return map;
+    return set;
   }, [fileComments, composing]);
 
   const commentRowColors = useMemo(() => {
     const map = new Map();
-    for (const [rowIdx, action] of rowActionMap) map.set(rowIdx, actionColor(action));
+    for (const rowIdx of commentRows) map.set(rowIdx, COMMENT_COLOR);
     return map;
-  }, [rowActionMap]);
+  }, [commentRows]);
 
   // CO-07: one outline band per comment range (and the live composer range),
-  // spanning its rows in the action color so the covered lines are unmistakable.
+  // spanning its rows so the covered lines are unmistakable.
   const commentBands = useMemo(() => {
     const bands = [];
     for (const c of fileComments) {
       const t = c.target || {};
       if (t.startRow == null) continue;
       if (composing && composing.commentId === c.id) continue; // composer band covers it
-      bands.push({ key: `band-${c.id}`, startRow: t.startRow, endRow: t.endRow, action: c.action });
+      bands.push({ key: `band-${c.id}`, startRow: t.startRow, endRow: t.endRow });
     }
     if (composing && composing.target?.type === 'range') {
-      bands.push({ key: 'band-composing', startRow: composing.target.startRow, endRow: composing.target.endRow, action: composing.action });
+      bands.push({ key: 'band-composing', startRow: composing.target.startRow, endRow: composing.target.endRow });
     }
     return bands;
   }, [fileComments, composing]);
@@ -652,7 +648,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
       return;
     }
     const isFirstScrollForFile = scrolledForKey.current !== fileKeyId;
-    // IM.OUT-03: a must-fix badge navigates to a specific row — scroll straight
+    // IM.OUT-03: a comment badge navigates to a specific row — scroll straight
     // to it on the first pass for the file.
     if (isFirstScrollForFile && startAtRow != null) {
       scrollContainerRef.current.scrollTop = Math.max(0, rowLayout.rowTop(startAtRow) - ROW_HEIGHT);
@@ -746,12 +742,12 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     const hIdx = rowToHunk.get(startRow);
     if (hIdx != null) setCurrentHunk(hIdx);
     committedRef.current = false;
-    setComposing({ commentId: null, action: DEFAULT_ACTION, body: '', target });
+    setComposing({ commentId: null, body: '', target });
   }, [fileKey, lineForRow, rowToHunk]);
 
   const editComment = useCallback((comment) => {
     committedRef.current = false;
-    setComposing({ commentId: comment.id, action: comment.action, body: comment.body, target: comment.target });
+    setComposing({ commentId: comment.id, body: comment.body, target: comment.target });
   }, []);
 
   // CO-06: Enter confirms; Escape confirms a non-empty comment or discards an
@@ -763,9 +759,9 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
     const text = (composerRef.current?.value || '').trim();
     if (cur) {
       if (cur.commentId == null) {
-        if (text && onAddComment) onAddComment({ body: text, action: cur.action, target: cur.target });
+        if (text && onAddComment) onAddComment({ body: text, target: cur.target });
       } else if (text && onUpdateComment) {
-        onUpdateComment(cur.commentId, { body: text, action: cur.action });
+        onUpdateComment(cur.commentId, { body: text });
       } else if (!text && onDeleteComment) {
         onDeleteComment(cur.commentId);
       }
@@ -1130,7 +1126,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
   const onResizerDown = collapseLayout ? undefined : handleResizerMouseDown;
   const resizerCursor = collapseLayout ? 'default' : 'col-resize';
 
-  const fileBlockingCount = fileComments.filter(c => isBlocking(c.action) && (c.body || '').trim()).length;
+  const fileBlockingCount = fileComments.filter(c => (c.body || '').trim()).length;
 
   // For a collapsed (new/deleted) file the empty side carries no path label — a
   // narrow strip would only truncate "(empty)" — and the file-comment / preview
@@ -1306,7 +1302,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                       left: 0,
                       right: 0,
                       height: (rowLayout.rowEnd(b.endRow) - rowLayout.rowTop(b.startRow)) + 'px',
-                      border: `1.5px solid ${actionColor(b.action)}`,
+                      border: `1.5px solid ${COMMENT_COLOR}`,
                       borderRadius: '3px',
                       pointerEvents: 'none',
                       zIndex: 3,
@@ -1329,14 +1325,12 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                         composing={composing}
                         composerRef={composerRef}
                         onResize={resizeComposer}
-                        onSetAction={(action) => setComposing(c => ({ ...c, action }))}
                         onClose={closeComposer}
                       />
                     ) : (
                       <CommentBar
                         comment={ins.comment}
                         onEdit={() => editComment(ins.comment)}
-                        onCycleAction={() => onSetCommentAction(ins.comment.id, ACTIONS[(ACTIONS.indexOf(ins.comment.action) + 1) % ACTIONS.length])}
                         onDelete={() => {
                           if ((ins.comment.body || '').trim() && !window.confirm('Delete this comment?')) return;
                           onDeleteComment(ins.comment.id);
@@ -1354,7 +1348,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
                         idx={idx}
                         active={activeRowSet.has(idx)}
                         reviewed={reviewedRowSet.has(idx)}
-                        commentAction={rowActionMap.get(idx)}
+                        commented={commentRows.has(idx)}
                         selected={selectionRowSet ? selectionRowSet.has(idx) : false}
                         scrollLeft={scrollLeft}
                         leftWidth={leftWidth}
@@ -1467,7 +1461,7 @@ export function FileDiffView({ leftPath, rightPath, leftContent, rightContent, l
             fontSize: '10px',
             fontWeight: 600,
           }}>
-            {fileBlockingCount} must-fix
+            {fileBlockingCount} comment{fileBlockingCount === 1 ? '' : 's'}
           </span>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1526,14 +1520,12 @@ function CollapsedPanePlaceholder({ kind, left, width, top, bottom }) {
   );
 }
 
-// CO-06: the inline composer — an auto-growing text area plus the action
-// control. Enter confirms; Shift+Enter inserts a newline; Escape confirms a
-// non-empty comment or discards an empty one (closeComposer decides). Tab
-// down-classifies the action (must-fix → suggestion → nit → question → must-fix);
-// Shift+Tab walks back up.
-function CommentComposer({ composing, composerRef, onResize, onSetAction, onClose }) {
+// CO-06: the inline composer — an auto-growing text area. Enter confirms;
+// Shift+Enter inserts a newline; Escape confirms a non-empty comment or discards
+// an empty one (closeComposer decides).
+function CommentComposer({ composing, composerRef, onResize, onClose }) {
   return (
-      <div style={{ background: 'var(--bg-panel)', border: `1px solid ${actionColor(composing.action)}`, borderRadius: '3px' }}>
+      <div style={{ background: 'var(--bg-panel)', border: `1px solid ${COMMENT_COLOR}`, borderRadius: '3px' }}>
         <textarea
           ref={composerRef}
           defaultValue={composing.body}
@@ -1547,9 +1539,6 @@ function CommentComposer({ composing, composerRef, onResize, onSetAction, onClos
             } else if (e.key === 'Escape') {
               e.preventDefault();
               onClose();
-            } else if (e.key === 'Tab') {
-              e.preventDefault();
-              onSetAction(e.shiftKey ? cycleAction(composing.action) : cycleActionDown(composing.action));
             }
             e.stopPropagation();
           }}
@@ -1569,25 +1558,10 @@ function CommentComposer({ composing, composerRef, onResize, onSetAction, onClos
             overflow: 'auto',
           }}
         />
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 8px', borderTop: '1px solid var(--border)' }}>
-          {ACTIONS_BY_SEVERITY.map((a) => {
-            const selected = composing.action === a;
-            return (
-              <button
-                key={a}
-                type="button"
-                // onMouseDown + preventDefault keeps the textarea focused so its
-                // blur doesn't close the composer before the action is set.
-                onMouseDown={(e) => { e.preventDefault(); onSetAction(a); }}
-                style={actionChipStyle(a, selected
-                  ? { cursor: 'pointer' }
-                  : { cursor: 'pointer', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-muted)' })}
-              >{actionLabel(a)}</button>
-            );
-          })}
+        <div style={{ display: 'flex', alignItems: 'center', padding: '3px 8px', borderTop: '1px solid var(--border)' }}>
           <span style={{ flex: 1 }} />
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
-            Enter saves · Shift+Enter newline · Tab cycles action · Esc
+            Enter saves · Shift+Enter newline · Esc
           </span>
         </div>
       </div>
@@ -1617,18 +1591,11 @@ function InsertMeasure({ insKey, top, zIndex, onMeasure, children }) {
   );
 }
 
-// CO-07: a persistent bar at a comment's anchor showing its body and action.
-// Click the body to edit; click the action chip to cycle; ✕ deletes (confirms).
-function CommentBar({ comment, onEdit, onCycleAction, onDelete }) {
-  const color = actionColor(comment.action);
+// CO-07: a persistent bar at a comment's anchor showing its body. Click the body
+// to edit; ✕ deletes (confirms).
+function CommentBar({ comment, onEdit, onDelete }) {
   return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 8px', fontSize: '12px', fontFamily: 'var(--font-ui)', background: 'var(--bg-panel)', borderLeft: `3px solid ${color}` }}>
-        <button
-          type="button"
-          onClick={onCycleAction}
-          title="Cycle action: question → nit → suggestion → must fix"
-          style={actionChipStyle(comment.action, { flexShrink: 0, padding: '1px 6px', cursor: 'pointer' })}
-        >{actionLabel(comment.action)}</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 8px', fontSize: '12px', fontFamily: 'var(--font-ui)', background: 'var(--bg-panel)', borderLeft: `3px solid ${COMMENT_COLOR}` }}>
         <span onClick={onEdit} style={{ flex: 1, whiteSpace: 'pre-wrap', color: 'var(--text-primary)', cursor: 'text' }}>{comment.body}</span>
         <span onClick={onDelete} style={{ opacity: 0.5, cursor: 'pointer', fontSize: '11px' }} title="Delete comment">✕</span>
       </div>

@@ -5,7 +5,7 @@ import FileNavbar from './FileNavbar.jsx';
 import ContextHeader, { hasExpandableDetails, commitMessageOf, MessageEditTextarea, splitMessage } from './ContextHeader.jsx';
 import KeyboardHelp from './KeyboardHelp.jsx';
 import { computeLineChanges, countDisplayHunks, computeContentLineStats, BINARY_SENTINEL } from '../engine/diff.js';
-import { DEFAULT_ACTION, isBlocking, commentToOutput, actionLabel, actionChipStyle, cycleAction } from '../engine/comments.js';
+import { COMMENT_COLOR, commentToOutput } from '../engine/comments.js';
 
 const emptySet = new Set();
 
@@ -71,7 +71,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   const [quitDialog, setQuitDialog] = useState(null);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  // CO-01: one list of comments, each { id, body, action, target }. target is
+  // CO-01: one list of comments, each { id, body, target }. target is
   // { type:'changeset' } | { type:'file', file } | { type:'range', file,
   // startLine, endLine, startRow, endRow }. The row fields anchor the inline
   // bar; the line fields are what reaches the sidecar (commentToOutput).
@@ -105,14 +105,13 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
 
   const toggleDetails = useCallback(() => setDetailsExpanded(v => !v), []);
 
-  // CO-06: create a comment. `partial` carries body / action / target overrides;
-  // a bare call seeds a `must-fix` changeset comment (DEFAULT_ACTION) to type into.
+  // CO-06: create a comment. `partial` carries body / target overrides; a bare
+  // call seeds an empty changeset comment to type into.
   const addComment = useCallback((partial = {}) => {
     const id = ++commentIdRef.current;
     setComments(prev => [...prev, {
       id,
       body: partial.body ?? '',
-      action: partial.action ?? DEFAULT_ACTION,
       target: partial.target ?? { type: 'changeset' },
     }]);
     return id;
@@ -122,17 +121,13 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     setComments(prev => prev.map(c => (c.id === id ? { ...c, ...patch } : c)));
   }, []);
 
-  const setCommentAction = useCallback((id, action) => {
-    setComments(prev => prev.map(c => (c.id === id ? { ...c, action } : c)));
-  }, []);
-
   const deleteComment = useCallback((id) => {
     setComments(prev => prev.filter(c => c.id !== id));
   }, []);
 
   // NV-19: open the comments panel to manage existing comments (list / edit /
-  // action / delete). Adding is done from each target's own surface — the panel
-  // is no longer a target picker (CO-08).
+  // delete). Adding is done from each target's own surface — the panel is no
+  // longer a target picker (CO-08).
   const openComments = useCallback(() => {
     setCommentsPanelOpen(true);
   }, []);
@@ -312,12 +307,12 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     setCurrentIndex(index);
   }, [files.length]);
 
-  // IM.OUT-03: jump to a file's first must-fix comment (its anchor row).
+  // IM.OUT-03: jump to a file's first comment (its anchor row).
   const navigateToBlocking = useCallback((fileIndex) => {
     if (fileIndex < 0 || fileIndex >= files.length) return;
     const key = files[fileIndex].rightPath || files[fileIndex].leftPath;
     const rows = comments
-      .filter(c => isBlocking(c.action) && c.target?.type === 'range' && c.target.file === key)
+      .filter(c => c.target?.type === 'range' && c.target.file === key)
       .map(c => c.target.startRow ?? 0);
     setTargetRow(rows.length ? Math.min(...rows) : null);
     setCurrentIndex(fileIndex);
@@ -354,10 +349,12 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     [comments, currentFileKey],
   );
 
-  const blockingComments = useMemo(() => comments.filter(c => isBlocking(c.action) && (c.body || '').trim()), [comments]);
+  // CO-03: every comment with a body is blocking feedback — there is no advisory
+  // tier to filter out. Empty ones are still being typed, so they don't count.
+  const blockingComments = useMemo(() => comments.filter(c => (c.body || '').trim()), [comments]);
   const totalBlocking = blockingComments.length;
 
-  // RV-04: files carrying a must-fix comment go red in the sidebar.
+  // RV-04: files carrying a comment go red in the sidebar.
   const blockingFiles = useMemo(() => {
     const paths = new Set(blockingComments.map(c => c.target?.file).filter(Boolean));
     const set = new Set();
@@ -383,7 +380,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
 
   const hunkCountingDone = Object.keys(hunkCounts).length >= files.length;
 
-  // IM.OUT-03: one badge per file with must-fix comments, in the header.
+  // IM.OUT-03: one badge per file carrying comments, in the header.
   const blockingBadges = useMemo(() => {
     const counts = new Map();
     for (const c of blockingComments) {
@@ -435,11 +432,11 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   const unreviewedCount = Math.max(0, totalChanges - reviewedChanges);
 
   const requestClose = useCallback(() => {
-    // Any feedback at all (must-fix or advisory) routes through the send-feedback
-    // dialog. Only a feedback-free close with unreviewed hunks gets the plain
-    // quit-anyway prompt.
+    // Any feedback routes through the send-feedback dialog, defaulting to
+    // sending it (the exit-1 verdict). Only a feedback-free close with
+    // unreviewed hunks gets the plain quit-anyway prompt.
     if (outComments.length > 0) {
-      setQuitDialog({ mode: 'feedback' });
+      setQuitDialog({ mode: 'feedback', intent: 'send' });
     } else if (unreviewedCount > 0) {
       setQuitDialog({ mode: 'unreviewed' });
     } else {
@@ -447,16 +444,15 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
     }
   }, [outComments.length, unreviewedCount, closeWithExitCode]);
 
-  // The top-bar verdict. Approve is the affirmative close: finalize clean (exit
-  // 0), carrying any advisory comments. It is disabled while must-fix comments
-  // block the change — resolving or dropping them is the way forward.
-  const approveDisabled = totalBlocking > 0;
+  // The top-bar verdict. Approve is the affirmative close (exit 0). Comments
+  // don't disable it: with no severity tier, approving while sending notes is
+  // how a reviewer says "worth a look, ship it anyway" (DD-12). Both cases
+  // confirm first, since approving over unsent feedback or unviewed changes is
+  // easy to do by accident.
   const handleApprove = useCallback(() => {
-    if (totalBlocking > 0) return;
-    // Approving without having viewed everything is legitimate but easy to do by
-    // accident — confirm first, showing how much was actually reviewed. A fully
-    // reviewed changeset approves straight through.
-    if (unreviewedCount > 0) {
+    if (totalBlocking > 0) {
+      setQuitDialog({ mode: 'feedback', intent: 'approve' });
+    } else if (unreviewedCount > 0) {
       setQuitDialog({ mode: 'approve' });
     } else {
       closeWithExitCode(0);
@@ -464,14 +460,14 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   }, [totalBlocking, unreviewedCount, closeWithExitCode]);
 
   // Reject requests changes, and a rejection needs an actionable reason. With
-  // must-fix feedback already present, confirm and send it (EC-02, exit 1);
-  // otherwise seed a blocking changeset comment and open the panel so the
-  // reviewer states why before the review can finalize.
+  // feedback already present, confirm and send it (EC-02, exit 1); otherwise
+  // seed a changeset comment and open the panel so the reviewer states why
+  // before the review can finalize.
   const handleReject = useCallback(() => {
     if (totalBlocking > 0) {
-      setQuitDialog({ mode: 'feedback' });
+      setQuitDialog({ mode: 'feedback', intent: 'send' });
     } else {
-      addComment({ action: 'must-fix', target: { type: 'changeset' } });
+      addComment({ target: { type: 'changeset' } });
       setCommentsPanelOpen(true);
     }
   }, [totalBlocking, addComment]);
@@ -486,9 +482,8 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
   }, [requestClose]);
 
   // DD-12: the send-feedback dialog reveals every comment the author will
-  // receive — must-fix and advisory alike — grouped by file, with the
-  // changeset-level ones in their own bucket. Each item carries its action so
-  // the reviewer sees the disposition, not just the text.
+  // receive, grouped by file, with the changeset-level ones in their own
+  // bucket.
   const feedbackSummary = useMemo(() => {
     const groups = new Map();
     for (const c of comments) {
@@ -507,7 +502,7 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
         label = 'whole changeset';
       }
       if (!groups.has(key)) groups.set(key, { key, label, items: [] });
-      groups.get(key).items.push({ id: c.id, body, action: c.action });
+      groups.get(key).items.push({ id: c.id, body });
     }
     return [...groups.values()].map(g => ({ ...g, count: g.items.length }));
   }, [comments, leftPath, rightPath]);
@@ -646,7 +641,6 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
         onOpenComments={openComments}
         onApprove={handleApprove}
         onReject={handleReject}
-        approveDisabled={approveDisabled}
       />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {draggingSidebar && (
@@ -720,7 +714,6 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
               fileComments={currentFileComments}
               onAddComment={addComment}
               onUpdateComment={updateComment}
-              onSetCommentAction={setCommentAction}
               onDeleteComment={deleteComment}
               onAddFileComment={addFileComment}
               onForceText={forceCurrentAsText}
@@ -737,15 +730,16 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
       {quitDialog && (
         <QuitDialog
           mode={quitDialog.mode}
-          blockingCount={totalBlocking}
+          intent={quitDialog.intent}
           unreviewedCount={unreviewedCount}
           feedbackSummary={feedbackSummary}
           originalMessage={originalMessage}
           editedMessage={editedMessage}
           onEditMessage={setEditedMessage}
           onCancel={() => setQuitDialog(null)}
-          // Sending feedback keeps the spec's exit-code verdict: must-fix blocks
-          // (1), otherwise unreviewed hunks signal incomplete (2), else clean (0).
+          // Sending feedback keeps the spec's exit-code verdict: any comment
+          // blocks (1), otherwise unreviewed hunks signal incomplete (2), else
+          // clean (0).
           onSendReviewFeedback={() => closeWithExitCode(totalBlocking > 0 ? 1 : unreviewedCount > 0 ? 2 : 0)}
           onQuitAnyway={() => closeWithExitCode(2)}
           onApproveAnyway={() => closeWithExitCode(0)}
@@ -756,7 +750,6 @@ export function ReviewShell({ tree, leftPath, rightPath, api, channelConfigured,
           comments={comments}
           basePath={rightPath || leftPath}
           onUpdate={updateComment}
-          onSetAction={setCommentAction}
           onDelete={deleteComment}
           onClose={closeComments}
         />
@@ -881,7 +874,7 @@ function ApproveMessagePanel({ originalMessage, editedMessage, onEditMessage }) 
   );
 }
 
-function QuitDialog({ mode, blockingCount, unreviewedCount, feedbackSummary, originalMessage, editedMessage, onEditMessage, onCancel, onSendReviewFeedback, onQuitAnyway, onApproveAnyway }) {
+function QuitDialog({ mode, intent, unreviewedCount, feedbackSummary, originalMessage, editedMessage, onEditMessage, onCancel, onSendReviewFeedback, onQuitAnyway, onApproveAnyway }) {
   const dialogRef = useRef(null);
 
   const handleDialogKeyDown = (e) => {
@@ -935,9 +928,11 @@ function QuitDialog({ mode, blockingCount, unreviewedCount, feedbackSummary, ori
 
   if (mode === 'feedback') {
     const totalComments = feedbackSummary.reduce((n, g) => n + g.count, 0);
-    const summaryLine = blockingCount > 0
-      ? `${blockingCount} must-fix comment${blockingCount === 1 ? '' : 's'} of ${totalComments} total across ${feedbackSummary.length} location${feedbackSummary.length === 1 ? '' : 's'}.`
-      : `${totalComments} comment${totalComments === 1 ? '' : 's'} across ${feedbackSummary.length} location${feedbackSummary.length === 1 ? '' : 's'}.`;
+    const summaryLine = `${totalComments} comment${totalComments === 1 ? '' : 's'} across ${feedbackSummary.length} location${feedbackSummary.length === 1 ? '' : 's'}.`;
+    // DD-12/13: the same two outcomes either way, ordered by how the reviewer
+    // got here — the Approve button leads with approving, everything else leads
+    // with sending. Approving anyway delivers the same comments as notes.
+    const approveIntent = intent === 'approve';
     return (
       <div style={overlay} onClick={onCancel}>
         <div ref={dialogRef} style={dialog} onClick={(e) => e.stopPropagation()} onKeyDown={handleDialogKeyDown} role="dialog" aria-modal="true">
@@ -950,9 +945,9 @@ function QuitDialog({ mode, blockingCount, unreviewedCount, feedbackSummary, ori
                   {label} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({count})</span>
                 </div>
                 <ul style={{ margin: '4px 0 0 0', paddingLeft: '18px', fontSize: '12px', color: 'var(--text-secondary)', listStyle: 'none' }}>
-                  {items.map(({ id, body: itemBody, action }) => (
+                  {items.map(({ id, body: itemBody }) => (
                     <li key={id} style={{ display: 'flex', gap: '6px', alignItems: 'baseline', marginBottom: '3px' }}>
-                      <span style={actionChipStyle(action, { flexShrink: 0, fontSize: '9px', letterSpacing: '0.06em', padding: '1px 5px' })}>{actionLabel(action)}</span>
+                      <span style={{ color: COMMENT_COLOR, flexShrink: 0 }} aria-hidden="true">▪</span>
                       <span>{itemBody || '(no description)'}</span>
                     </li>
                   ))}
@@ -962,10 +957,17 @@ function QuitDialog({ mode, blockingCount, unreviewedCount, feedbackSummary, ori
           </div>
           <div style={buttonRow}>
             <DialogButton onClick={onCancel}>Cancel</DialogButton>
-            {blockingCount === 0 && unreviewedCount > 0 && (
-              <DialogButton onClick={onApproveAnyway}>Approve anyway</DialogButton>
+            {approveIntent ? (
+              <>
+                <DialogButton onClick={onSendReviewFeedback}>Send review feedback</DialogButton>
+                <DialogButton variant="primary" onClick={onApproveAnyway} autoFocus>Approve anyway</DialogButton>
+              </>
+            ) : (
+              <>
+                <DialogButton onClick={onApproveAnyway}>Approve anyway</DialogButton>
+                <DialogButton variant="primary" onClick={onSendReviewFeedback} autoFocus>Send review feedback</DialogButton>
+              </>
             )}
-            <DialogButton variant="primary" onClick={onSendReviewFeedback} autoFocus>Send review feedback</DialogButton>
           </div>
         </div>
       </div>
@@ -1001,10 +1003,10 @@ function targetLabel(comment, basePath) {
 }
 
 // CO-08: the comments panel manages every comment (changeset / commit message /
-// file / range) — its target, body, and action. Editing is inline; the action
-// chip cycles question → nit → suggestion → must-fix; deleting confirms first. Adding is
-// done from each target's own surface, so the panel is not a target picker.
-function CommentsPanel({ comments, basePath, onUpdate, onSetAction, onDelete, onClose }) {
+// file / range) — its target and body. Editing is inline; deleting confirms
+// first. Adding is done from each target's own surface, so the panel is not a
+// target picker.
+function CommentsPanel({ comments, basePath, onUpdate, onDelete, onClose }) {
   const [confirmingId, setConfirmingId] = useState(null);
   const lastRef = useRef(null);
 
@@ -1072,8 +1074,6 @@ function CommentsPanel({ comments, basePath, onUpdate, onSetAction, onDelete, on
     resize: 'vertical',
   };
 
-  const actionChip = (action) => actionChipStyle(action, { cursor: 'pointer' });
-
   return (
     <div style={overlay} onClick={onClose}>
       <div
@@ -1084,7 +1084,7 @@ function CommentsPanel({ comments, basePath, onUpdate, onSetAction, onDelete, on
         aria-modal="true"
       >
         <h2 style={heading}>Comments</h2>
-        <div style={sub}>Feedback for the author. Set an action — only <strong>must fix</strong> blocks shipping.</div>
+        <div style={sub}>Feedback for the author. Every comment is something to address; approve anyway on close to send them without blocking.</div>
         <div style={list}>
           {comments.length === 0 && (
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px 0' }}>
@@ -1096,12 +1096,6 @@ function CommentsPanel({ comments, basePath, onUpdate, onSetAction, onDelete, on
               <div style={cardTop}>
                 <span style={locStyle}>{targetLabel(c, basePath)}</span>
                 <div style={{ flex: 1 }} />
-                <button
-                  type="button"
-                  style={actionChip(c.action)}
-                  title="Cycle action: question → nit → suggestion → must fix"
-                  onClick={() => onSetAction(c.id, cycleAction(c.action))}
-                >{actionLabel(c.action)}</button>
                 {confirmingId === c.id ? (
                   <>
                     <button type="button" style={confirmBtn} onClick={() => onDelete(c.id)}>Delete</button>

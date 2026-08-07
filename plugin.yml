@@ -54,7 +54,7 @@ suite:
       ac: "--orange"
       frames:
         - { t: you, text: "Space" }
-        - { t: claude, text: "Anchor a must-fix comment to the current change; on close, moor streams it back through REVIEW_CONTEXT so the agent gets the rejection in context." }
+        - { t: claude, text: "Anchor a comment to the current change; on close, moor streams it back through REVIEW_CONTEXT so the agent gets the rejection in context." }
         - { t: status, text: "sends each rejected hunk straight back to Claude as a concrete fix" }
   session:
     - { t: claude, text: "Refactored the date parser — here's the diff." }
@@ -67,8 +67,8 @@ suite:
         - { ln: 13, text: "return new Date(s)", del: true }
         - { ln: 14, text: "return parseISO(s)", add: true }
         - { ln: 15, text: "}" }
-      comment: { ln: 14, action: must-fix, body: "non-ISO inputs still reach here → sent back as a fix" }
-    - { t: thought, text: "the must-fix is right — parseISO never applies ISO_DATE" }
+      comment: { ln: 14, action: comment, body: "non-ISO inputs still reach here → sent back as a fix" }
+    - { t: thought, text: "the comment is right — parseISO never applies ISO_DATE" }
     - { t: claude, text: "You're right — guarding parseISO so a non-ISO string throws instead of silently building a Date:" }
     - t: moor
       file: date.js

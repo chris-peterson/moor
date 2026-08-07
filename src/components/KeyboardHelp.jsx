@@ -18,10 +18,9 @@ const GROUPS = [
     rows: [
       [['Space', '⏎'], 'Comment on current change'],
       [['drag'], 'Drag the line gutter to comment on a range'],
-      [['Tab', '⇧Tab'], 'Cycle action while composing (question → nit → suggestion → must fix)'],
       [['c'], 'Comment on the whole changeset'],
       [['m'], 'Comment on the commit message'],
-      [['n'], 'Manage comments (edit / set action / delete)'],
+      [['n'], 'Manage comments (edit / delete)'],
     ],
   },
   {

@@ -6,7 +6,34 @@
 
 ## Unreleased
 
+### Breaking Changes
+- **The sidecar is named by `REVIEW_CONTEXT`, not `MOOR_CONTEXT`.** The variable
+  is named after the contract rather than after one tool that speaks it. There is
+  no alias — a caller still exporting the old name launches a moor with no
+  channel configured, which shows its warning banner, runs as a plain viewer, and
+  captures nothing. Update the caller — anchor's `scripts/review/moor.sh` has
+  moved, in the release following its 1.3.0.
+- **Comments no longer carry an `action`.** A comment is a `body` and a target;
+  the `must-fix` / `suggestion` / `nit` / `question` tiers (and the `fix-now` /
+  `fix-later` / `consider` ones before them) are gone, along with the composer
+  control that set them. Exit `1` now means the reviewer sent comments at all,
+  where it used to mean one or more of them were blocking. A consumer that
+  filtered `comments[]` by `action` should treat every comment as actionable.
+
 ### Features
+- **A comment tells you it isn't blocking by how you close, not by a tier you
+  pick per comment.** The send-feedback dialog carries both outcomes — **Send
+  review feedback** (exit `1`) and **Approve anyway** (exit `0`, delivering the
+  same comments as notes) — and leads with whichever matches how you got there.
+  **Approve** is no longer disabled while comments exist.
+- **The commit message is editable from the approve dialog**, not just the change
+  header, so a message problem you notice at the last moment doesn't cost you the
+  close. Both surfaces share one editor and one revert path, and an edit made
+  here rides back as `commitMessage: { original, edited }` either way.
+- **A contract page any diff viewer can implement.** The review-sidecar contract
+  — the output document, the exit codes, the transports — is now documented
+  standalone, with moor as the reference implementation, so the return channel
+  isn't pinned to one tool.
 - **Edit the commit message directly.** Rather than describing message changes
   as a series of comments, click **✎ edit message** in the change header and
   rewrite it inline — revertable, and it coexists with message comments. The
@@ -21,12 +48,23 @@
   as text anyway.
 
 ### Fixed
+- **Comment bars and the composer push the diff down instead of covering it.**
+  Rows below an overlay shift by its measured height, so typing in the composer
+  or a bar that wraps to a second line reflows the code beneath rather than
+  hiding it. Hunk navigation, the band outlines, and the minimap all read the
+  same row geometry, so they stay aligned with what's on screen.
+- **The gutter `+` is easier to hit.** It spans the full row height and appears
+  on CSS hover rather than waiting on React state, so a fast press — or one
+  slightly above or below the old chip — comments the line instead of falling
+  through to the review toggle.
 - **Moved-and-edited files are recognized as moves.** Directory diffs now detect
   a rename/move by content *similarity*, not just identical content, so a file
   that moved and picked up a few edits shows as one renamed entry instead of a
   separate delete and create.
 
 ### Changed
+- The quit, feedback, and approve dialogs share one set of chrome tokens and
+  hover-aware buttons, so they read as the same surface.
 - Binary detection scans only the first 8000 bytes for a null byte, the way git
   does, instead of the whole file.
 - The approve-without-viewing confirmation now states how many hunks are

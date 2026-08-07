@@ -7,7 +7,7 @@ function buildQuitMessage() {
 
   const parts = [];
   if (state.blocking > 0) {
-    parts.push(`${state.blocking} must-fix`);
+    parts.push(`${state.blocking} comment${state.blocking === 1 ? '' : 's'}`);
   }
   if (state.unreviewed > 0) {
     parts.push(`${state.unreviewed} unreviewed`);

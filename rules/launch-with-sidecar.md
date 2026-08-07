@@ -1,10 +1,9 @@
 # Launch moor with the sidecar, never via raw `git difftool`
 
 When you launch moor to review changes, the outcome — the reviewer's
-comments (each with an action: `must-fix` / `suggestion` / `nit` / `question`),
-whether changes are unreviewed, closed early — comes back through the
+comments, whether changes are unreviewed, closed early — comes back through the
 `REVIEW_CONTEXT` sidecar file and moor's exit code (`0`/`1`/`2`/`3`, where `1`
-means one or more `must-fix` comments), not through the terminal. Raw
+means the reviewer sent comments), not through the terminal. Raw
 `git difftool` swallows the exit code and configures no sidecar, so the
 review outcome is silently lost.
 

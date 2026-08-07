@@ -20,7 +20,8 @@ keybindings, and the review-feedback contract, see the docs site above.
 | `bin/moor` | Launcher + CLI — builds `dist/` on first run and launches Electron; also handles `--version`, `install-cli`, and `completions` |
 | `hooks/` | `SessionStart` hooks: wrapper-drift warning, ambient-rule injection |
 | `rules/` | Ambient rules the `emit-rules.sh` hook injects into every session |
-| `scripts/` | Sample-data generation |
+| `scripts/` | Sample-data generation, and `shipyard`, which projects the generated artifacts |
+| `plugin.yml` | Canonical plugin descriptor — `.claude-plugin/plugin.json` and the generated docs pages are projected from it |
 | `docs/` | Docsify documentation site (deployed to GitHub Pages) |
 | `SPEC.md` | Numbered requirements (EARS) — the behavioral contract |
 | `STATUS.md` | Requirement coverage tracker |
@@ -33,6 +34,16 @@ just build          # vite build → dist/
 just test           # node --test src/engine/*.test.js
 just diff           # build sample data and open a two-file diff
 just dir-diff       # build sample data and open a directory diff
+just diff-context   # same, with a sample REVIEW_CONTEXT sidecar so the header renders
+```
+
+Generated artifacts — `.claude-plugin/plugin.json`, `plugin.yml`'s describe
+block, and the projected docs pages — come from `shipyard` rather than being
+hand-edited:
+
+```bash
+just generate       # rewrite every generated artifact from its source
+just check          # dry run; reports when a committed artifact is stale
 ```
 
 ## Use as git difftool
@@ -49,6 +60,6 @@ just install-cli    # copies a moor wrapper to ~/.local/bin + zsh completion
 just docs           # serve the docsify site locally
 ```
 
-The docs site deploys from `docs/` to GitHub Pages on push to `main`. `SPEC.md`
-is copied into `docs/` at build time (it stays at the repo root for the
-spec-driven tooling).
+The docs site deploys from `docs/` to GitHub Pages on push to `main`. `SPEC.md`,
+the ambient rules, and `docs/index.html` are projected into `docs/` at build time
+and gitignored — `SPEC.md` stays at the repo root for the spec-driven tooling.

@@ -33,16 +33,10 @@ and the whole changeset from the `+ comment on changeset` control on the header
 (or `c`).
 
 The composer grows as you type. `Enter` confirms, `Shift+Enter` inserts a
-newline, `Escape` confirms a non-empty comment or discards an empty one. Each
-comment carries an **action** — `Tab` cycles it down from the default through
-the tiers (`Shift+Tab` walks back up), or click one in the composer:
-
-| Action | Meaning |
-|--------|---------|
-| **must fix** | The default. Must be fixed before shipping — gates the exit code and turns the change red. |
-| **suggestion** | A recommended change. Advisory; doesn't block shipping. |
-| **nit** | A trivial / style point. Advisory. |
-| **question** | A query for the author. Advisory. |
+newline, `Escape` confirms a non-empty comment or discards an empty one. There
+is no severity to pick: a comment is something you want addressed, and any
+comment turns the change red and drives the exit code. When a note isn't worth
+blocking on, leave it and **approve anyway** from the dialog on close.
 
 To comment on a single line, **hover its right-side gutter and click the `+`**
 that appears — the visible, one-click path (changed or context line). To comment
@@ -52,7 +46,7 @@ affordance lives on the right side only. You can comment on **any** right-side
 line — including unchanged context lines, so you can flag a bug you spot in
 neighboring code (the `+`, an unchanged line's number, or long-press / right-click
 any line). Each
-comment **bands** the lines it covers with an outline in its action color, so
+comment **bands** the lines it covers with an outline, so
 it's clear at a glance what the comment applies to. To remove a comment, click
 the ✕ on its bar (it confirms before discarding a typed body). Comments travel
 back to the caller through the [feedback channel](/#review-feedback-channel).
@@ -74,16 +68,14 @@ long line.
 | `n` | Manage comments (also the `comments` control in the status strip). |
 
 The panel **manages** existing comments — on the whole changeset, the commit
-message, a file, or a line range — letting you edit the body inline, cycle the
-action, or delete it (deleting confirms first, since a typed comment is hard to
-recreate). It is no longer a target picker: you *add* a comment from its target's
+message, a file, or a line range — letting you edit the body inline or delete it
+(deleting confirms first, since a typed comment is hard to recreate). It is no longer a target picker: you *add* a comment from its target's
 own surface (a line, the file header, the commit-message control, the changeset
 control) and *manage* it here.
 
 Comments ride along in the result context as a `comments` array of
-`{ body, action, file?, startLine?, endLine? }`. A comment on the commit message
-carries `target: "commit-message"` (and no `file`). Only `must-fix` comments
-affect the exit code; `suggestion`, `nit`, and `question` are advisory.
+`{ body, file?, startLine?, endLine? }`. A comment on the commit message carries
+`target: "commit-message"` (and no `file`).
 
 ## View
 
@@ -106,9 +98,10 @@ on their own.
 | `q` / `Escape` | Close moor. |
 
 With any comments written, closing first raises a send-feedback dialog that
-reveals every comment (with its action) and defaults to sending it. With no
-comments but unreviewed changes outstanding, closing raises a quit dialog
-instead. Inside either dialog:
+reveals every comment and defaults to sending it — **approve anyway** sits
+beside it for feedback you don't want to block on. With no comments but
+unreviewed changes outstanding, closing raises a quit dialog instead. Inside
+either dialog:
 
 | Key | Action |
 |-----|--------|
@@ -117,8 +110,8 @@ instead. Inside either dialog:
 | `Enter` | Activate the focused button. |
 | `Escape` | Cancel and return to the review. |
 
-The exit code reflects the outcome (clean, must-fix comments, unreviewed, or
-early close) so the caller knows how the review ended.
+The exit code reflects the outcome (clean, comments sent, unreviewed, or early
+close) so the caller knows how the review ended.
 
 ## Mouse equivalents
 

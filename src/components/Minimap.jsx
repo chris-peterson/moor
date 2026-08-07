@@ -45,8 +45,7 @@ export function Minimap({ rows, totalHeight, contentHeight, rowOffsets, viewport
 
   const colorMap = useMemo(() => {
     return rows.map((row, i) => {
-      // A comment marker (colored by its action) takes precedence over the
-      // row's own change color.
+      // A comment marker takes precedence over the row's own change color.
       if (commentRowColors && commentRowColors.has(i)) return commentRowColors.get(i);
       return typeToColor[row.type] || 'transparent';
     });

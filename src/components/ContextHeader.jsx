@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { actionChipStyle, actionLabel } from '../engine/comments.js';
+import { COMMENT_COLOR } from '../engine/comments.js';
 
 // IM.IN-02: the change region reads as a changeset header, not a labeled data
 // channel. Collapsed it answers where (the location eyebrow) and what (the
@@ -109,7 +109,6 @@ export function ContextHeader({
   onOpenComments,
   onApprove,
   onReject,
-  approveDisabled = false,
 }) {
   // CO-10: inline commit-message editing. `editing` swaps the message display
   // for a textarea; the draft lives in the textarea until saved so a cancel
@@ -226,7 +225,7 @@ export function ContextHeader({
                     style={styles.messageComment}
                     title="Manage in the comments panel"
                   >
-                    <span style={actionChipStyle(c.action, { flexShrink: 0, fontSize: '9px', letterSpacing: '0.06em', padding: '1px 5px' })}>{actionLabel(c.action)}</span>
+                    <span style={styles.messageCommentMarker} aria-hidden="true">▪</span>
                     <span style={styles.messageCommentBody}>{(c.body || '').trim() || 'comment on the commit message…'}</span>
                   </button>
                 ))}
@@ -387,9 +386,8 @@ export function ContextHeader({
             <div style={styles.verdictGroup}>
               <VerdictButton
                 kind="approve"
-                disabled={approveDisabled}
                 onClick={() => onApprove?.()}
-                title={approveDisabled ? 'Resolve must-fix comments before approving' : 'Approve — finalize the review clean'}
+                title="Approve — finalize the review clean"
               >✓ Approve</VerdictButton>
               <VerdictButton
                 kind="reject"
@@ -684,6 +682,11 @@ const styles = {
     lineHeight: 1.45,
   },
 
+  messageCommentMarker: {
+    color: COMMENT_COLOR,
+    flexShrink: 0,
+  },
+
   messageCommentBody: {
     color: 'var(--text-secondary)',
     whiteSpace: 'pre-wrap',
@@ -858,7 +861,7 @@ const styles = {
   },
 
   // The comments control (NV-19) reads as a status chip in the accent color —
-  // distinct from the red must-fix badges. Doubles as the "+ comment" CTA when
+  // distinct from the red per-file comment badges. Doubles as the "+ comment" CTA when
   // there are none yet.
   noteChip: {
     display: 'inline-flex',

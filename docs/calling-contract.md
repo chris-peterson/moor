@@ -122,14 +122,12 @@ time on exit. A representative finalized `output`:
     "comments": [
       {
         "body": "This still races with a concurrent read — invalidate under the lock.",
-        "action": "must-fix",
         "file": "src/cache.js",
         "startLine": 42,
         "endLine": 45
       },
       {
         "body": "A metric here would help.",
-        "action": "suggestion",
         "file": "src/cache.js"
       }
     ],
@@ -153,27 +151,21 @@ time on exit. A representative finalized `output`:
 
 ### Comment objects
 
-Each comment is `{ body, action, target?, file?, startLine?, endLine? }`
-(`IM.OUT-02a`). The optional fields together encode the comment's target:
+Each comment is `{ body, target?, file?, startLine?, endLine? }` (`IM.OUT-02a`).
+The optional fields together encode the comment's target:
 
 | Target | Fields present |
 |--------|----------------|
-| Whole changeset | `body`, `action` (no `file`, no `target`) |
-| Commit message | `body`, `action`, `target: "commit-message"` (no `file`) |
-| A file | `body`, `action`, `file` |
-| A line range in a file | `body`, `action`, `file`, `startLine`, `endLine` |
+| Whole changeset | `body` (no `file`, no `target`) |
+| Commit message | `body`, `target: "commit-message"` (no `file`) |
+| A file | `body`, `file` |
+| A line range in a file | `body`, `file`, `startLine`, `endLine` |
 
-**`action`** is one of:
-
-| `action` | Meaning | Effect on exit code |
-|----------|---------|---------------------|
-| `must-fix` | Must be addressed before shipping | Gates the exit code (drives `1`) |
-| `suggestion` | A recommended change | None |
-| `nit` | A trivial / style point | None |
-| `question` | A query for the author | None |
-
-The caller interprets the comments — for an agent caller, `must-fix` comments
-read as concrete, line-anchored instructions to address before the change ships.
+Comments carry no severity, priority, or disposition field. Every comment is
+feedback the reviewer wants addressed, and the exit code says whether any were
+sent — for an agent caller, they read as concrete, line-anchored instructions to
+address before the change ships. A reviewer who wants a comment delivered without
+blocking approves anyway on close, which sends the same comments with exit `0`.
 
 ### Commit-message rewrite
 
@@ -202,15 +194,15 @@ matches the `exitCode` written into the sidecar:
 
 | Code | Outcome | Requirement |
 |------|---------|-------------|
-| `0` | All changes reviewed, no `must-fix` comments — clean approve | `EC-01` |
-| `1` | One or more `must-fix` comments | `EC-02` |
-| `2` | One or more unreviewed changes, no `must-fix` comments | `EC-03` |
+| `0` | All changes reviewed, no comments — clean approve, or an explicit approve-anyway | `EC-01` |
+| `1` | One or more comments | `EC-02` |
+| `2` | One or more unreviewed changes, no comments | `EC-03` |
 | `3` | Closed before review began (no interaction) | `EC-04` |
 
 A caller branches on the code:
 
 - **`0`** — proceed; the change is approved.
-- **`1`** — do not ship as-is; read the `must-fix` comments and address them, then
+- **`1`** — do not ship as-is; read the comments and address them, then
   re-review.
 - **`2`** — the review is incomplete; the caller decides whether to treat an
   incomplete review as a block or to re-launch for another pass.
@@ -251,7 +243,7 @@ sequenceDiagram
 3. **moor reads the input** on launch and renders the header from `title` and
    `details`.
 4. **The reviewer works.** They walk each change, mark hunks reviewed, and leave
-   comments with `must-fix` / `suggestion` / `nit` / `question` actions.
+   comments.
 5. **moor flushes output continuously.** After every review-state or comment
    change it rewrites the `output` section (comments, and `commitMessage` if the
    message was edited) — without `exitCode`, since the review is still open.
@@ -259,7 +251,7 @@ sequenceDiagram
    `exitCode`, and the process exits with the matching code.
 7. **Caller reads the output back and acts.** It reads `output` from the sidecar
    (or observes the process exit code), branches on the code, and applies the
-   `must-fix` comments and any `commitMessage.edited` rewrite.
+   comments and any `commitMessage.edited` rewrite.
 
 ## Reference
 
