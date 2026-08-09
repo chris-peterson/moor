@@ -134,7 +134,7 @@ cat > "$SAMPLE_DIR/sample-context.json" << 'EOF'
       { "label": "branch", "value": "strict-iso-parsing" },
       { "label": "task", "value": "stop accepting ambiguous, locale-dependent date strings" },
       { "label": "commit", "value": "a1b2c3d" },
-      { "label": "author", "value": "Chris Peterson <chris.peterson@gettyimages.com>" },
+      { "label": "author", "value": "Chris Peterson <chrispeterson@fastmail.com>" },
       { "label": "date", "value": "Fri Jun 6 12:29:25 2026 -0700" },
       { "label": "range", "value": "HEAD~1..HEAD" },
       { "label": "body", "value": "`new Date(s)` accepts locale-dependent, ambiguous formats — '01/02/2026' parses as Jan 2 or Feb 1 depending on the runtime, and invalid strings quietly become Invalid Date instead of failing.\n\nThis routes every caller through parseISO, which accepts only ISO-8601, so the same string parses the same way everywhere. `parse()` now delegates to it, and `diffInDays` is renamed `daysBetween` to match the rest of the API." }

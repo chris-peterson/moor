@@ -50,7 +50,7 @@ diff-context: sample-data build
     cp {{sample_dir}}/sample-context.json /tmp/moor-sample-context.json
     REVIEW_CONTEXT=/tmp/moor-sample-context.json ./bin/moor {{sample_dir}}/left.js {{sample_dir}}/right.js
 
-gitconfig_repo := home_directory() / "src/getty/cpeterson/gitconfig"
+gitconfig_repo := home_directory() / "src/github/chris-peterson/gitconfig"
 
 git-install: build
     git config --global diff.tool moor
