@@ -1,9 +1,5 @@
 # Changelog
 
-## 0.16.0
-
-**Full Changelog**: https://github.com/chris-peterson/moor/compare/v0.15.0...v0.16.0
-
 ## Unreleased
 
 ### Breaking Changes
@@ -34,6 +30,28 @@
   — the output document, the exit codes, the transports — is now documented
   standalone, with moor as the reference implementation, so the return channel
   isn't pinned to one tool.
+
+### Fixed
+- **Comment bars and the composer push the diff down instead of covering it.**
+  Rows below an overlay shift by its measured height, so typing in the composer
+  or a bar that wraps to a second line reflows the code beneath rather than
+  hiding it. Hunk navigation, the band outlines, and the minimap all read the
+  same row geometry, so they stay aligned with what's on screen.
+- **The gutter `+` is easier to hit.** It spans the full row height and appears
+  on CSS hover rather than waiting on React state, so a fast press — or one
+  slightly above or below the old chip — comments the line instead of falling
+  through to the review toggle.
+
+### Changed
+- The quit, feedback, and approve dialogs share one set of chrome tokens and
+  hover-aware buttons, so they read as the same surface.
+- The docs site documents the calling contract — how a caller wires the sidecar,
+  launches the viewer, and reads each exit code — and serves the spec at a stable
+  `/spec` route.
+
+## 0.16.0
+
+### Features
 - **Edit the commit message directly.** Rather than describing message changes
   as a series of comments, click **✎ edit message** in the change header and
   rewrite it inline — revertable, and it coexists with message comments. The
@@ -48,28 +66,19 @@
   as text anyway.
 
 ### Fixed
-- **Comment bars and the composer push the diff down instead of covering it.**
-  Rows below an overlay shift by its measured height, so typing in the composer
-  or a bar that wraps to a second line reflows the code beneath rather than
-  hiding it. Hunk navigation, the band outlines, and the minimap all read the
-  same row geometry, so they stay aligned with what's on screen.
-- **The gutter `+` is easier to hit.** It spans the full row height and appears
-  on CSS hover rather than waiting on React state, so a fast press — or one
-  slightly above or below the old chip — comments the line instead of falling
-  through to the review toggle.
 - **Moved-and-edited files are recognized as moves.** Directory diffs now detect
   a rename/move by content *similarity*, not just identical content, so a file
   that moved and picked up a few edits shows as one renamed entry instead of a
   separate delete and create.
 
 ### Changed
-- The quit, feedback, and approve dialogs share one set of chrome tokens and
-  hover-aware buttons, so they read as the same surface.
 - Binary detection scans only the first 8000 bytes for a null byte, the way git
   does, instead of the whole file.
 - The approve-without-viewing confirmation now states how many hunks are
   unreviewed (no viewed/total percentage) and defaults to resuming the
   review — finalizing a clean approve is the secondary, deliberate action.
+
+**Full Changelog**: https://github.com/chris-peterson/moor/compare/v0.15.0...v0.16.0
 
 ## 0.15.0
 
