@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.0
 
 ### Breaking Changes
 - **The sidecar is named by `REVIEW_CONTEXT`, not `MOOR_CONTEXT`.** The variable
