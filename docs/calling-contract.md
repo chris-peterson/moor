@@ -10,7 +10,7 @@ The contract is caller-agnostic. Any script, CLI, or agent that can write a
 file, spawn a process, and read the file back can drive moor. This page
 describes the contract itself, independent of any particular caller.
 
-The normative source is [`SPEC.md`](/SPEC.md) — the requirements referenced here
+The normative source is [`SPEC.md`](/spec) — the requirements referenced here
 (`IM-*`, `IM.IN-*`, `IM.OUT-*`, `EC-*`) define the behavior; this page shows how
 a caller uses it.
 
@@ -255,6 +255,6 @@ sequenceDiagram
 
 ## Reference
 
-The full behavioral contract lives in [`SPEC.md`](/SPEC.md) — the Interaction
+The full behavioral contract lives in [`SPEC.md`](/spec) — the Interaction
 Model (`IM`) and Exit Codes (`EC`) sections are the normative source for
 everything on this page.

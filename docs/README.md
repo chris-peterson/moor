@@ -151,4 +151,4 @@ banner and still works as a plain viewer.
 ## Reference
 
 The full behavioral contract — every requirement, keybinding, and exit code —
-lives in the [Requirements](/SPEC.md).
+lives in the [Requirements](/spec).
