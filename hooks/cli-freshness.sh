@@ -1,36 +1,75 @@
 #!/usr/bin/env bash
-# SessionStart hook: detect CLI wrapper drift after a plugin update.
+# SessionStart hook: report a PATH wrapper left behind by a plugin update.
 #
-# `moor install-cli` drops a wrapper at ~/.local/bin/moor whose path is
-# hardcoded at install time. When the plugin updates, the wrapper does NOT
-# auto-update — it still points at wherever install-cli last ran from. This
-# hook fires on each Claude Code session start, compares `moor --version`
-# against plugin.json#version, and emits an additionalContext nudge when they
-# differ. Silent when versions match, silent when moor isn't on PATH, never
-# blocks the session.
+# `install-cli` writes the wrapper with the plugin path it was generated from
+# baked in, and plugin directories are version-pinned, so an update leaves the
+# wrapper running the previous build. Nothing else notices: the slash command
+# and the skills resolve CLAUDE_PLUGIN_ROOT and stay current, while a plain
+# shell keeps the stale CLI. Comparing the two versions once per session catches
+# it for every consumer rather than only for whoever invokes a skill that checks.
+#
+# Never blocks, and stays silent when the CLI is not on PATH: the plugin works
+# without the wrapper, so its absence is not drift.
 
 set -euo pipefail
 
 NAME="moor"
-PLUGIN_JSON="${CLAUDE_PLUGIN_ROOT:-}/.claude-plugin/plugin.json"
+REFRESH_COMMAND="/moor:install-moor"
 
-[ -f "$PLUGIN_JSON" ] || exit 0
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
+[ -n "$PLUGIN_ROOT" ] || exit 0
 command -v "$NAME" >/dev/null 2>&1 || exit 0
 
-# No `| head -1` — a closed pipe would trip pipefail. plugin.json has one
-# version line; trim any trailing lines with parameter expansion instead.
-PLUGIN_VERSION=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_JSON")
-PLUGIN_VERSION=${PLUGIN_VERSION%%$'\n'*}
-[ -z "$PLUGIN_VERSION" ] && exit 0
+# Parsed in the shell rather than with `jq` or a `python3` spawn: this runs at
+# every session start, on machines that have neither, and a spawn there is
+# charged to startup.
+plugin_version() {
+  local manifest="$1/.claude-plugin/plugin.json" line value
+  [ -r "$manifest" ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      *'"version"'*)
+        value="${line#*\"version\"}"
+        value="${value#*:}"
+        value="${value#*\"}"
+        value="${value%%\"*}"
+        [ -n "$value" ] || return 1
+        printf '%s\n' "$value"
+        return 0
+        ;;
+    esac
+  done < "$manifest"
+  return 1
+}
 
-# Unset CLAUDE_PLUGIN_ROOT so the wrapper's target resolves its own bundled
-# plugin.json (its __file__ root) rather than this hook's env — otherwise a
-# stale wrapper would read the current plugin's version and drift never shows.
-CLI_VERSION=$(env -u CLAUDE_PLUGIN_ROOT "$NAME" --version 2>/dev/null | awk '{print $NF}') || exit 0
-[ -z "$CLI_VERSION" ] && exit 0
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf '%s' "$s"
+}
 
-[ "$PLUGIN_VERSION" = "$CLI_VERSION" ] && exit 0
+plugin_ver=$(plugin_version "$PLUGIN_ROOT") || exit 0
 
-msg="PLEASE TELL THE USER (do not skip): the moor CLI on PATH reports version ${CLI_VERSION}, but the moor plugin is at ${PLUGIN_VERSION}. Refresh the shell wrapper before relying on the CLI — run \`moor install-cli\` (or \`git pull\` in the local source checkout if the wrapper points there). Until refreshed, CLI invocations may run stale code."
+# CLAUDE_PLUGIN_ROOT is cleared for this one call on purpose: the CLI prefers it
+# over its own location, so an inherited one makes the old build read the
+# *current* manifest and report a version that always matches — the comparison
+# below could never come out unequal. Cleared, the wrapper resolves from the
+# path it baked in, which is the build it actually runs.
+#
+# A wrapper that cannot report a version is not drift this hook can prove, so
+# swallow the failure rather than letting pipefail surface it as a hook error on
+# every session start.
+wrapper_out=$(env -u CLAUDE_PLUGIN_ROOT "$NAME" --version 2>/dev/null) || wrapper_out=""
+case "${wrapper_out%%$'\n'*}" in
+  "$NAME "*) wrapper_ver="${wrapper_out#"$NAME "}" ;;
+  *)         exit 0 ;;
+esac
+wrapper_ver="${wrapper_ver%%$'\n'*}"
+[ -n "$wrapper_ver" ] || exit 0
 
-printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$msg"
+[ "$wrapper_ver" = "$plugin_ver" ] && exit 0
+
+msg="PLEASE TELL THE USER (do not skip): the $NAME CLI on PATH reports version $wrapper_ver, but the installed $NAME plugin is $plugin_ver. The wrapper was written by a past install and points at where the plugin lived then, so a plain shell runs the old build. Run $REFRESH_COMMAND to refresh it, or \`git pull\` in the local source checkout if the wrapper points there. Running the bootstrap from a shell will not fix it: the stale wrapper re-installs itself from the version it already names. Skills and slash commands are unaffected."
+
+printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$(json_escape "$msg")"

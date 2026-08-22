@@ -54,6 +54,10 @@ just git-uninstall  # removes the difftool config
 just install-cli    # copies a moor wrapper to ~/.local/bin + zsh completion
 ```
 
+After a plugin update the wrapper points at the previous version's directory. A
+SessionStart hook reports the drift; `/moor:install-moor` is what clears it,
+because only a slash command runs against the newly installed plugin root.
+
 ## Docs
 
 ```bash

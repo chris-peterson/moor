@@ -215,9 +215,10 @@ moor ships as a Claude Code plugin. These requirements cover the surfaces that m
 - **[PD-02]** The launcher shall provide an `install-cli` subcommand that writes a wrapper to `~/.local/bin/moor` (overridable with `--dir <path>`) which execs the plugin's launcher, and shall warn when the target directory is not on `$PATH`.
 - **[PD-03]** `install-cli` shall also install zsh tab completion.
 - **[PD-04]** The launcher shall provide a `completions zsh` subcommand that installs the zsh completion to `~/.zsh/completions/_moor` (configuring `fpath` and `compinit` in `~/.zshrc` when absent), or prints it to stdout when given `--print`.
-- **[PD-05]** On each Claude Code session start, the plugin shall compare the on-PATH `moor` wrapper's reported version against `.claude-plugin/plugin.json`; when they differ, it shall instruct the user to re-run `install-cli`. When `moor` is not on `$PATH`, the check shall be silent.
+- **[PD-05]** On each Claude Code session start, the plugin shall compare the on-PATH `moor` wrapper's reported version against `.claude-plugin/plugin.json`; when they differ, it shall instruct the user to refresh the wrapper through the bootstrap command (PD-09), never through the on-PATH wrapper. The comparison shall ask the wrapper for its own build's version rather than the session's. When `moor` is not on `$PATH`, the check shall be silent.
 - **[PD-07]** On each Claude Code session start (all sources, including after context compaction), the plugin shall emit its ambient rules (`rules/*.md`) into the session context, so the sidecar launch contract (IM.OUT-*) holds even when no skill is invoked.
 - **[PD-08]** The launcher shall accept `--help` (`-h`, `help`) and print the usage text to stdout, exiting zero. When invoked with no arguments, the launcher shall print the same usage text to stderr and exit non-zero rather than launching the viewer with nothing to diff.
+- **[PD-09]** The plugin shall expose a bootstrap slash command at `commands/install-moor.md` that runs `install-cli` against the plugin root of the version currently installed. The command shall set `disable-model-invocation`, since a model that wants the launcher makes a shell call instead.
 
 ---
 

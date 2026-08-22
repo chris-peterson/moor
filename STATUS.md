@@ -213,6 +213,7 @@ The 2026-06-15 change reworked comment classification and the close confirmation
 | [PD-05] | SessionStart hook warns on wrapper/plugin version drift | Done |
 | [PD-07] | SessionStart hook emits ambient rules (`rules/*.md`) into context | Done |
 | [PD-08] | `--help` / `-h` / `help` prints usage and exits zero; no args prints usage to stderr and exits non-zero | Done |
+| [PD-09] | `/moor:install-moor` bootstraps the wrapper against the installed plugin root | Done |
 
 ## Resolved in the 2026-05-31 audit
 

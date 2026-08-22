@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Features
+- **`/moor:install-moor` refreshes the wrapper on your `PATH`.** moor shipped no
+  slash command, so a session had no door to the plugin root of the version it
+  was actually running. The command runs `install-cli` against that root and
+  reports what it wrote. ([PD-09])
+
+### Fixes
+- **The stale-wrapper report now names something that can clear the drift.** The
+  SessionStart hook told you to run `moor install-cli` from a shell, which cannot
+  work: plugin directories are version-pinned, and the stale wrapper points the
+  bootstrap back at the version it already names, so the next session reported
+  identical drift. It names `/moor:install-moor` instead, and a `moor` user is no
+  longer stuck. ([PD-05])
+
 ## 0.17.0
 
 ### Breaking Changes

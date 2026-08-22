@@ -42,6 +42,8 @@ suite:
       cli-freshness: SessionStart — Detect CLI wrapper drift after a plugin update.
       emit-rules: SessionStart — Emit this plugin's ambient rules into context.
       hooks: 'Hook wiring: SessionStart→cli-freshness, emit-rules.'
+    commands:
+      install-moor: Bootstrap or refresh moor's PATH wrapper and zsh completions
   # <<< shipyard:describe <<<
   examples:
     - label: "review a diff"

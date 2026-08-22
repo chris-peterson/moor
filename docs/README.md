@@ -80,7 +80,10 @@ just install-cli   # copies a wrapper to ~/.local/bin/moor + installs completion
 ```
 
 The plugin checks on each session start whether the on-PATH wrapper has drifted
-from the installed plugin version and reminds you to re-run it after an update.
+from the installed plugin version. Refresh it with **`/moor:install-moor`** from
+inside a Claude session. Running `moor install-cli` from a shell will not clear
+the drift: plugin directories are version-pinned, and the stale wrapper points
+the bootstrap back at the version it already names.
 
 ## Updating
 
