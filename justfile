@@ -1,4 +1,5 @@
 sample_dir := justfile_directory() / "sample_data"
+shipyard := "uvx --from 'git+https://github.com/chris-peterson/shipyard@v2' shipyard"
 
 install:
     npm install
@@ -6,26 +7,19 @@ install:
 install-cli:
     ./bin/moor install-cli
 
-# regenerate all generated artifacts from source (describe, plugin.json, docs)
-generate:
-    scripts/shipyard generate
+# Writes into the tree; `git restore .` throws the result away.
+# Run the generators the way CI does and show what it would commit
+preview-generated:
+    {{shipyard}} generate
+    git --no-pager diff --stat
 
-# validate source projects cleanly and preview the pending projection (no write)
-check:
-    scripts/shipyard generate --dry-run
-
-# preview the docsify docs site locally
+# render the docs site
 docs:
-    scripts/shipyard build-docs
-    docsify serve docs --open
+    {{shipyard}} build-docs
 
-# regenerate .claude-plugin/plugin.json from plugin.yml (the canonical descriptor)
-plugin-json:
-    scripts/shipyard gen-plugin-json
-
-# resync plugin.yml suite.describe from the skills/rules/hooks sources
-describe:
-    scripts/shipyard gen-describe
+# preview the docs site locally
+docs-preview: docs
+    npx docsify-cli serve docs --open
 
 build:
     ./node_modules/.bin/vite build

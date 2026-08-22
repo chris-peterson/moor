@@ -37,13 +37,15 @@ just dir-diff       # build sample data and open a directory diff
 just diff-context   # same, with a sample REVIEW_CONTEXT sidecar so the header renders
 ```
 
-Generated artifacts — `.claude-plugin/plugin.json`, `plugin.yml`'s describe
-block, and the projected docs pages — come from `shipyard` rather than being
-hand-edited:
+Generated artifacts — `.claude-plugin/plugin.json`, `hooks/hooks.json`, and
+`plugin.yml`'s describe block — are written by CI, never by hand. The Project
+workflow runs shipyard's generators on every push and commits the result back
+to the branch, so a committed artifact matches its source at all times and the
+diff a reviewer approves is the change that lands. Editing `plugin.yml`,
+`hooks/hooks.yml`, a rule, or a command needs no local regeneration step.
 
 ```bash
-just generate       # rewrite every generated artifact from its source
-just check          # dry run; reports when a committed artifact is stale
+just preview-generated   # run the generators as CI does; git restore . to discard
 ```
 
 ## Use as git difftool
@@ -61,9 +63,26 @@ because only a slash command runs against the newly installed plugin root.
 ## Docs
 
 ```bash
-just docs           # serve the docsify site locally
+just docs           # render the site into docs/
+just docs-preview   # render, then serve it locally
 ```
 
 The docs site deploys from `docs/` to GitHub Pages on push to `main`. `SPEC.md`,
 the ambient rules, and `docs/index.html` are projected into `docs/` at build time
 and gitignored — `SPEC.md` stays at the repo root for the spec-driven tooling.
+
+## Releasing
+
+Releasing is one `workflow_dispatch` on the Release workflow whose only input is
+the bump level. Write the notes first — reading what landed is what tells you the
+bump, so the two are one judgment:
+
+```bash
+git log $(git describe --tags --abbrev=0)..main --no-merges
+```
+
+Commit that under `## Unreleased` in `CHANGELOG.md`, then dispatch with the bump
+the notes imply. A missing or empty `## Unreleased` section fails the run.
+shipyard derives the version from `plugin.yml`, retitles the section, commits,
+tags that commit, publishes the GitHub Release from the section, and notifies the
+marketplace. Don't bump the version, retitle the section, or cut the tag by hand.
