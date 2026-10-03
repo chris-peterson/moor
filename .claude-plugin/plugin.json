@@ -14,5 +14,6 @@
     "code-review",
     "electron"
   ],
-  "homepage": "https://chris-peterson.github.io/moor/#/"
+  "homepage": "https://chris-peterson.github.io/moor/#/",
+  "documentationUrl": "https://chris-peterson.github.io/moor/#/"
 }
