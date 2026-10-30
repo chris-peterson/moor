@@ -15,5 +15,6 @@
     "electron"
   ],
   "homepage": "https://chris-peterson.github.io/moor/#/",
+  "icon": "docs/favicon.svg",
   "documentationUrl": "https://chris-peterson.github.io/moor/#/"
 }
